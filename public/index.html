@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Scout MLB players in Atlas Harbor, a supply-chain strategy game." />
+    <title>Player Market · Atlas Harbor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div id="game-canvas" aria-hidden="true"></div>
+    <header class="topbar">
+      <a class="brand" href="/baseball/players" aria-label="Atlas Harbor home"><span class="brand-mark">AH</span><span>Atlas Harbor</span></a>
+      <nav><a href="#market">Player market</a><span class="locked">League room <b>Soon</b></span></nav>
+      <div class="season"><span>SEASON 01</span><strong>Spring Training</strong></div>
+    </header>
+
+    <main>
+      <section class="hero" id="market">
+        <p class="eyebrow"><span>●</span> LIVE MLB DATA</p>
+        <h1>Build your<br /><em>winning roster.</em></h1>
+        <p class="intro">Search the player market. Study the numbers. Make the call.</p>
+
+        <div class="search-shell">
+          <label for="player-search">Find an MLB player</label>
+          <div class="search-box">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+            <input id="player-search" type="search" autocomplete="off" placeholder="Try “Shohei Ohtani”" aria-autocomplete="list" aria-controls="search-results" />
+            <kbd>⌘ K</kbd>
+          </div>
+          <div id="search-results" class="results" role="listbox" hidden></div>
+          <p id="search-status" class="hint" aria-live="polite">Type at least 2 letters to scout the league</p>
+        </div>
+      </section>
+
+      <section id="player-card" class="player-card" hidden aria-live="polite"></section>
+
+      <section class="how-it-works">
+        <p class="eyebrow">YOUR SCOUTING LOOP</p>
+        <h2>Good decisions compound.</h2>
+        <div class="steps">
+          <article><span>01</span><div class="icon">⌕</div><h3>Scout</h3><p>Find active players across every MLB roster.</p></article>
+          <article><span>02</span><div class="icon">▥</div><h3>Compare</h3><p>Read season and career performance at a glance.</p></article>
+          <article><span>03</span><div class="icon">✓</div><h3>Decide</h3><p>Turn the signal into your next roster move.</p></article>
+        </div>
+      </section>
+    </main>
+
+    <footer><span>Atlas Harbor</span><p>Every complex decision is a system waiting to be mapped.</p><small>Data provided by MLB Stats API</small></footer>
+    <script src="/vendor/phaser.min.js"></script>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
