@@ -1,64 +1,8 @@
-const input = document.querySelector("#player-search");
-const results = document.querySelector("#search-results");
-const status = document.querySelector("#search-status");
-const playerCard = document.querySelector("#player-card");
-let timer;
-
-const escapeHtml = (value) => String(value ?? "—").replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
-const initials = (name) => name.split(" ").map((part) => part[0]).slice(0, 2).join("");
-
-input.addEventListener("input", () => {
-  clearTimeout(timer);
-  const query = input.value.trim();
-  if (query.length < 2) { results.hidden = true; status.textContent = "Type at least 2 letters to scout the league"; return; }
-  status.textContent = "Scouting MLB rosters…";
-  timer = setTimeout(() => search(query), 250);
-});
-
-async function search(query) {
-  try {
-    const response = await fetch(`/api/baseball/players?q=${encodeURIComponent(query)}`);
-    if (!response.ok) throw new Error();
-    const { players } = await response.json();
-    results.innerHTML = players.length ? players.map((player) => `
-      <button class="result" role="option" data-id="${player.id}">
-        <span class="avatar">${escapeHtml(initials(player.name))}</span>
-        <span><strong>${escapeHtml(player.name)}</strong><small>${escapeHtml(player.team)} · ${escapeHtml(player.position)}</small></span><span class="arrow">→</span>
-      </button>`).join("") : `<div class="result"><span>No players found. Try a full name.</span></div>`;
-    results.hidden = false;
-    status.textContent = `${players.length} player${players.length === 1 ? "" : "s"} found`;
-  } catch { results.hidden = true; status.textContent = "The player market is unavailable. Try again shortly."; }
-}
-
-results.addEventListener("click", async (event) => {
-  const button = event.target.closest("[data-id]");
-  if (!button) return;
-  results.hidden = true; status.textContent = "Loading player report…";
-  try {
-    const response = await fetch(`/api/baseball/players/${button.dataset.id}`);
-    if (!response.ok) throw new Error();
-    const { player } = await response.json();
-    input.value = player.name; renderPlayer(player); status.textContent = "Player report ready";
-  } catch { status.textContent = "That player report could not be loaded."; }
-});
-
-function renderPlayer(player) {
-  const pitching = player.stats["pitching:season"] ?? player.stats["pitching:career"];
-  const hitting = player.stats["hitting:season"] ?? player.stats["hitting:career"];
-  const stat = pitching && Object.keys(pitching).length ? ["Pitching", pitching, [["era","ERA"],["whip","WHIP"],["wins","Wins"],["losses","Losses"],["strikeOuts","Strikeouts"],["inningsPitched","Innings"]]] : ["Hitting", hitting ?? {}, [["avg","Average"],["ops","OPS"],["homeRuns","Home runs"],["rbi","RBI"],["hits","Hits"],["stolenBases","Stolen bases"]]];
-  playerCard.innerHTML = `<div class="player-head"><div class="jersey">${escapeHtml(player.number ?? initials(player.name))}</div><div><h2>${escapeHtml(player.name)}</h2><p>${escapeHtml(player.team)} · ${escapeHtml(player.position)}</p></div><div class="player-meta">Bats ${escapeHtml(player.bats)} · Throws ${escapeHtml(player.throws)}<br>Age ${escapeHtml(player.age)} · Debut ${escapeHtml(player.debut)}</div></div><p class="stat-title">${stat[0]} · current season</p><div class="stat-grid">${stat[2].map(([key,label]) => `<div class="stat"><span>${label}</span><strong>${escapeHtml(stat[1][key])}</strong></div>`).join("")}</div>`;
-  playerCard.hidden = false; playerCard.scrollIntoView({ behavior:"smooth", block:"center" });
-}
-
-document.addEventListener("keydown", (event) => { if ((event.metaKey || event.ctrlKey) && event.key === "k") { event.preventDefault(); input.focus(); } if (event.key === "Escape") results.hidden = true; });
-document.addEventListener("click", (event) => { if (!event.target.closest(".search-shell")) results.hidden = true; });
-
-if (window.Phaser) {
-  new Phaser.Game({ type:Phaser.CANVAS, parent:"game-canvas", transparent:true, scale:{mode:Phaser.Scale.RESIZE}, scene:{create(){
-    const g=this.add.graphics(); const w=this.scale.width, h=this.scale.height;
-    g.fillStyle(0xadc9a5,.55); g.fillEllipse(w*.82,h*.52,560,270); g.fillStyle(0x91b18e,.7); g.fillEllipse(w*.86,h*.62,430,190);
-    const bx=w*.72, by=h*.25; g.fillStyle(0xf7e2b2,1); g.fillRect(bx,by,225,145); g.fillStyle(0xd75f3d,1); g.fillTriangle(bx-25,by,bx+112,by-85,bx+250,by); g.fillStyle(0x345b4e,1); g.fillRect(bx+88,by+65,48,80); g.fillStyle(0xffffff,.7); g.fillRect(bx+25,by+42,38,35); g.lineStyle(3,0x537665,.7); g.strokeRect(bx+25,by+42,38,35);
-    g.lineStyle(5,0xe9e2cb,1); for(let x=w*.56;x<w;x+=46){g.beginPath();g.moveTo(x,h*.72);g.lineTo(x-75,h);g.strokePath()} g.lineStyle(3,0x88a47f,.75); g.strokeRect(w*.54,h*.7,w*.43,95);
-    for(let i=0;i<18;i++){const x=w*.55+(i%9)*50,y=h*.76+Math.floor(i/9)*53;g.fillStyle(i%2?0xe1a83a:0xef7445,1);g.fillCircle(x,y,7);g.fillStyle(0x56815b,1);g.fillTriangle(x,y-4,x-8,y-15,x,y-11)}
-  }}} });
-}
+const input=document.querySelector('#baseball-search'),results=document.querySelector('#search-results'),status=document.querySelector('#search-status'),detail=document.querySelector('#detail'),games=document.querySelector('#games');let timer;const esc=v=>String(v??'—').replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':'&quot;'})[c]);const fmtDate=v=>new Intl.DateTimeFormat(undefined,{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date(v));
+input.addEventListener('input',()=>{clearTimeout(timer);const q=input.value.trim();if(q.length<2){results.hidden=true;status.textContent='Type at least 2 letters';return}status.textContent='Searching teams, games, and players…';timer=setTimeout(()=>search(q),250)});
+async function search(q){try{const r=await fetch(`/api/baseball/search?q=${encodeURIComponent(q)}`);if(!r.ok)throw Error();const data=await r.json();results.innerHTML=data.results.length?data.results.map(item=>`<button class="result" data-type="${item.type}" data-id="${item.id}"><span class="type-badge">${esc(item.type)}</span><span><strong>${esc(item.name)}</strong><small>${esc(item.subtitle)}</small></span><span class="arrow">→</span></button>`).join(''):'<div class="result">No matching teams, games, or players.</div>';results.hidden=false;status.textContent=`${data.results.length} result${data.results.length===1?'':'s'}`}catch{results.hidden=true;status.textContent='Search is temporarily unavailable.'}}
+results.addEventListener('click',e=>{const b=e.target.closest('[data-id]');if(!b)return;results.hidden=true;if(b.dataset.type==='team')loadTeam(b.dataset.id);else if(b.dataset.type==='player')loadPlayer(b.dataset.id);else document.querySelector(`[data-game-id="${b.dataset.id}"]`)?.scrollIntoView({behavior:'smooth',block:'center'})});
+async function loadGames(){try{const r=await fetch('/api/baseball/games');const {games:list}=await r.json();games.innerHTML=list.map(game=>`<article class="game-card" data-game-id="${game.id}"><div class="game-date">${esc(fmtDate(game.date))}</div><h3>${esc(game.name)}</h3><p>${esc(game.venue)}</p><div class="matchup"><span>${esc(game.awayPitcher)}</span><b>vs</b><span>${esc(game.homePitcher)}</span></div><div class="weather">${game.weather?`${esc(game.weather.condition)} · ${esc(game.weather.temperature)}° · ${esc(game.weather.wind)}`:'Weather projection unavailable'}</div></article>`).join('')||'<p>No upcoming games found.</p>'}catch{games.innerHTML='<p>Upcoming games are unavailable.</p>'}}
+async function loadTeam(id){status.textContent='Loading team report…';const r=await fetch(`/api/baseball/teams/${id}`);if(!r.ok)return status.textContent='Team report unavailable.';const {team}=await r.json();const h=team.stats.hitting,p=team.stats.pitching,f=team.stats.fielding;const metrics=[['W',p.wins],['L',p.losses],['AVG',h.avg],['OPS',h.ops],['HR',h.homeRuns],['R',h.runs],['ERA',p.era],['WHIP',p.whip],['SO',p.strikeOuts],['SV',p.saves],['FLD%',f.fielding],['E',f.errors]];detail.innerHTML=`<div class="detail-head"><div><p class="eyebrow">TEAM REPORT</p><h2>${esc(team.name)}</h2><p>${esc(team.league)} · ${esc(team.division)} · ${esc(team.venue)}</p></div><strong>${esc(team.abbreviation)}</strong></div><div class="stat-grid">${metrics.map(([l,v])=>`<div class="stat"><span>${l}</span><strong>${esc(v)}</strong></div>`).join('')}</div><h3>Active roster</h3><div class="roster">${team.roster.map(player=>`<button data-player-id="${player.id}"><b>${esc(player.number)}</b>${esc(player.name)}<small>${esc(player.position)}</small></button>`).join('')}</div>`;detail.hidden=false;detail.scrollIntoView({behavior:'smooth',block:'start'});status.textContent='Team report ready';detail.querySelectorAll('[data-player-id]').forEach(b=>b.addEventListener('click',()=>loadPlayer(b.dataset.playerId)))}
+async function loadPlayer(id){status.textContent='Loading player report…';const r=await fetch(`/api/baseball/players/${id}`);if(!r.ok)return status.textContent='Player report unavailable.';const {player}=await r.json();const pitching=player.stats['pitching:season']??player.stats['pitching:career'],hitting=player.stats['hitting:season']??player.stats['hitting:career'];const isPitcher=pitching&&Object.keys(pitching).length;const stat=isPitcher?pitching:hitting??{};const keys=isPitcher?[['ERA','era'],['WHIP','whip'],['W','wins'],['L','losses'],['SO','strikeOuts'],['IP','inningsPitched']]:[['AVG','avg'],['OPS','ops'],['HR','homeRuns'],['RBI','rbi'],['H','hits'],['SB','stolenBases']];detail.innerHTML=`<div class="detail-head"><div><p class="eyebrow">PLAYER REPORT</p><h2>${esc(player.name)}</h2><p>${esc(player.team)} · ${esc(player.position)} · Bats ${esc(player.bats)} · Throws ${esc(player.throws)}</p></div><strong>${esc(player.number)}</strong></div><div class="stat-grid">${keys.map(([l,k])=>`<div class="stat"><span>${l}</span><strong>${esc(stat[k])}</strong></div>`).join('')}</div><h3>Last 8 games</h3><div class="table-wrap"><table><thead><tr><th>Date</th><th>Opponent</th><th>${isPitcher?'IP':'AB'}</th><th>${isPitcher?'SO':'H'}</th><th>${isPitcher?'ER':'HR'}</th><th>${isPitcher?'Pitches':'RBI'}</th></tr></thead><tbody>${player.recentGames.map(g=>`<tr><td>${esc(g.date)}</td><td>${g.isHome?'vs':'at'} ${esc(g.opponent)}</td><td>${esc(g.stat[isPitcher?'inningsPitched':'atBats'])}</td><td>${esc(g.stat[isPitcher?'strikeOuts':'hits'])}</td><td>${esc(g.stat[isPitcher?'earnedRuns':'homeRuns'])}</td><td>${esc(g.stat[isPitcher?'numberOfPitches':'rbi'])}</td></tr>`).join('')}</tbody></table></div>`;detail.hidden=false;detail.scrollIntoView({behavior:'smooth',block:'start'});status.textContent='Player report ready'}
+document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();input.focus()}if(e.key==='Escape')results.hidden=true});document.addEventListener('click',e=>{if(!e.target.closest('.search-shell'))results.hidden=true});loadGames();
