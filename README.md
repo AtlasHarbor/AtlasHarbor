@@ -1,19 +1,39 @@
 # Atlas Harbor
 
-Atlas Harbor is a decision platform built around a calm logistics game. It turns complicated real-world choices into systems people can see, play, and improve.
+Atlas Harbor is a logistics simulation and decision platform. It turns complicated real-world choices into systems people can operate, inspect, and improve.
 
 ## The premise
 
-Many hard problems share the same shape: limited resources, incomplete information, sequencing, bottlenecks, deadlines, competing authorities, and uncertain downstream effects. Atlas Harbor maps those structures onto a playable third-party-logistics network of clients, warehouses, routes, cargo, capacity, risk, and service levels.
+Many hard problems share the same shape: limited resources, incomplete information, sequencing, bottlenecks, deadlines, competing authorities, and uncertain downstream effects. Atlas Harbor maps those structures onto a playable third-party-logistics network of clients, routes, cargo, trucks, drivers, outside carriers, capacity, risk, cash, and service levels.
 
-The goal is not to claim that litigation or baseball is literally logistics. The logistics layer is a legible model for examining how a person allocates attention, protects optionality, reacts to new evidence, and chooses among constrained routes.
+The goal is not to claim that litigation or baseball is literally logistics. The logistics layer is a legible model for examining how a person allocates resources, protects optionality, reacts to new evidence, and chooses among constrained routes.
 
 ## Application surfaces
 
-- `/` explains Atlas Harbor and the logistics translation model.
-- `/game` is the playable 3PL scenario.
+- `/` explains Atlas Harbor with an animated logistics-to-domain transfer sequence.
+- `/game` is the playable ten-day 3PL operating scenario.
+- `/game/docs` explains objectives, resources, routes, providers, economics, and strategy.
+- `/blog` discusses recent research and limitations around AI-assisted analogical transfer.
 - `/baseball` provides MLB players, teams, games, lineups, weather, injuries, and scouting-oriented statistics.
 - `/legal` tracks lawsuits, procedural events, party positions, source provenance, uncertainties, and logistics-system translations.
+
+## Logistics game
+
+The game begins with an operating map rather than an empty construction grid. Roads, shipping lanes, suppliers, a port, the Atlas Harbor cross-dock, and client locations are already visible. Trucks, ships, forklifts, cargo, weather, and facility activity animate so the network can be understood by looking at it.
+
+The operating loop is:
+
+1. Select a client contract.
+2. Choose a route with an explicit time, cost, and risk profile.
+3. Assign owned trucks or buy capacity from a third-party provider.
+4. Dispatch freight and commit operating cash.
+5. Advance the day, receive delivery results, release resources, and respond to disruptions.
+
+Owned fleet protects margin but is constrained by trucks and drivers. Third-party carriers cost more but can protect deadlines, diversify route risk, and preserve internal resources. Contract values and balances use six-figure operating amounts rather than arcade-scale money.
+
+A guided overlay tutorial opens on first play and remains available from the help control. Capacity shortages, insufficient cash, missing route assignments, disruptions, deliveries, and end-of-cycle results appear in prominent lightboxes that explain the constraint and available next actions.
+
+The interaction model uses established transport-management conventions: visible vehicles and cargo flow, fixed locations and infrastructure, route assignment, vehicle capacity, cargo chains, operating economics, and escalating scenario objectives. Atlas Harbor adds a translation layer that explains reusable strategy principles beneath those mechanics.
 
 ## Legal tracker architecture
 
@@ -32,8 +52,6 @@ The first record is **The People of the State of New York v. KalshiEX LLC**, fil
 
 ### OpenRouter refresh
 
-The protected endpoint is:
-
 ```text
 POST /api/legal/cases/:slug/refresh
 Authorization: Bearer $LEGAL_ADMIN_TOKEN
@@ -48,21 +66,7 @@ OPENROUTER_LEGAL_MODEL=openai/gpt-5.2
 PUBLIC_APP_URL=https://your-deployment.example
 ```
 
-The service calls OpenRouter's Chat Completions API with the `openrouter:web_search` server tool, domain filters derived from the case's approved sources, and a strict JSON Schema response. The prompt instructs the model to search only for developments after `lastVerifiedAt`, prefer primary sources, distinguish allegations from holdings, avoid outcome predictions, and return no change when nothing material is verified.
-
-To add a lawsuit, copy the existing case JSON structure, use a unique lowercase slug, add at least one primary source, and set uncertain identifiers to `null` rather than guessing. After reviewing an AI proposal, manually update the canonical case record and its `lastVerifiedAt` timestamp in a normal pull request so the history remains auditable.
-
-## How legal analysis maps to logistics
-
-- **Cargo** is the claim, right, or legal characterization moving through the system.
-- **Routes** are procedural and substantive strategies.
-- **Ports** are courts, agencies, and appellate forums with authority to receive or redirect the dispute.
-- **Capacity** is research time, briefing space, evidence, and institutional attention.
-- **Bottlenecks** are threshold issues that control everything downstream, such as jurisdiction or preemption.
-- **Disruptions** are stays, removal, new precedent, factual revelations, or conflicting rulings.
-- **Service level** is the quality, timeliness, and reliability of the resulting legal decision process.
-
-This translation is a thinking aid, not a substitute for legal judgment or counsel.
+The service calls OpenRouter with web search and a strict JSON Schema response. The prompt prioritizes primary sources, distinguishes allegations from holdings, and returns no change when nothing material is verified.
 
 ## Run locally
 
@@ -71,23 +75,19 @@ Requires Node.js 20 or later.
 ```bash
 npm install
 npm start
-```
-
-Open `http://localhost:3000/`, `http://localhost:3000/game`, `http://localhost:3000/baseball`, or `http://localhost:3000/legal`.
-
-```bash
 npm test
 ```
+
+Open `http://localhost:3000/`.
 
 ## Architecture
 
 - `src/server.js` starts Express.
-- `src/app.js` defines baseball and legal APIs plus page routing.
+- `src/app.js` defines APIs and page routing.
 - `src/mlb.js` normalizes MLB data.
 - `src/legal.js` reads canonical cases and creates reviewable OpenRouter proposals.
-- `data/legal/cases/` contains approved case records.
-- `data/legal/proposals/` contains generated update proposals and should be reviewed before promotion.
-- `public/` contains the landing page, game, baseball dashboard, and legal tracker.
+- `public/game.js` runs the logistics operating simulation.
+- `public/landing.js` controls the homepage transfer sequence.
 
 ## Responsible use
 
