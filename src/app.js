@@ -23,8 +23,10 @@ export function createApp({ mlb = createMlbClient(), legal = createLegalService(
   app.post("/api/legal/cases/:slug/refresh", async (req,res)=>{if(!process.env.LEGAL_ADMIN_TOKEN||req.get("authorization")!==`Bearer ${process.env.LEGAL_ADMIN_TOKEN}`)return res.status(401).json({error:"Unauthorized."});try{const proposal=await legal.refreshCase(req.params.slug);return proposal?res.json({proposal}):res.status(404).json({error:"Case not found."})}catch(e){console.error(e);return res.status(502).json({error:e.message})}});
 
   app.get(["/baseball", "/baseball/players", "/baseball/{*path}"], (_req,res)=>res.sendFile(page("baseball.html")));
+  app.get("/game/docs", (_req,res)=>res.sendFile(page("game-docs.html")));
   app.get(["/game", "/game/{*path}"], (_req,res)=>res.sendFile(page("game.html")));
   app.get(["/legal", "/legal/{*path}"], (_req,res)=>res.sendFile(page("legal.html")));
+  app.get(["/blog", "/blog/{*path}"], (_req,res)=>res.sendFile(page("blog.html")));
   app.use("/vendor", express.static(path.join(directory,"../node_modules/phaser/dist")));
   app.use(express.static(path.join(directory,"../public")));
   app.get("/{*path}",(_req,res)=>res.sendFile(page("index.html")));
