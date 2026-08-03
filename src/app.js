@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createMlbClient } from "./mlb.js";
 import { createLegalService } from "./legal.js";
+import { gameSlug, renderBaseballGamePage, renderGameNotFoundPage } from "./baseball-game-page.js";
 
 const directory = path.dirname(fileURLToPath(import.meta.url));
 const page = (name) => path.join(directory, `../public/${name}`);
@@ -22,6 +23,22 @@ export function createApp({ mlb = createMlbClient(), legal = createLegalService(
   app.get("/api/legal/cases/:slug", async (req,res)=>{try{const item=await legal.getCase(req.params.slug);return item?res.json(item):res.status(404).json({error:"Case not found."})}catch(e){console.error(e);return res.status(500).json({error:"Case record is temporarily unavailable."})}});
   app.post("/api/legal/cases/:slug/refresh", async (req,res)=>{if(!process.env.LEGAL_ADMIN_TOKEN||req.get("authorization")!==`Bearer ${process.env.LEGAL_ADMIN_TOKEN}`)return res.status(401).json({error:"Unauthorized."});try{const proposal=await legal.refreshCase(req.params.slug);return proposal?res.json({proposal}):res.status(404).json({error:"Case not found."})}catch(e){console.error(e);return res.status(502).json({error:e.message})}});
 
+  app.get(["/baseball/games/:id", "/baseball/games/:id/:slug"], async (req,res)=>{
+    if(!/^\d+$/.test(req.params.id)) return res.status(404).type("html").send(renderGameNotFoundPage());
+    try {
+      const game = await mlb.getGame(req.params.id);
+      if(!game) return res.status(404).type("html").send(renderGameNotFoundPage());
+      const slug = gameSlug(game);
+      const baseUrl = (process.env.PUBLIC_APP_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, "");
+      const canonicalPath = `/baseball/games/${game.id}/${slug}`;
+      if(req.path !== canonicalPath) return res.redirect(301, canonicalPath);
+      res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+      return res.type("html").send(renderBaseballGamePage(game, `${baseUrl}${canonicalPath}`));
+    } catch(e) {
+      console.error(e);
+      return res.status(503).type("html").send(renderGameNotFoundPage());
+    }
+  });
   app.get(["/baseball", "/baseball/players", "/baseball/{*path}"], (_req,res)=>res.sendFile(page("baseball.html")));
   app.get("/game/docs", (_req,res)=>res.sendFile(page("game-docs.html")));
   app.get(["/game", "/game/{*path}"], (_req,res)=>res.sendFile(page("game.html")));
