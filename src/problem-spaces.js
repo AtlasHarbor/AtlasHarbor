@@ -1,0 +1,19 @@
+const seededSpaces=[
+ {slug:'logistics-control-tower',title:'Logistics Control Tower',description:'Coordinate purchase orders, plants, packaging, inventory, and multimodal transportation on an hourly map.',url:'/game',status:'approved',requester_name:'Atlas Harbor'},
+ {slug:'baseball-intelligence',title:'Baseball Intelligence',description:'Explore games, teams, players, injuries, projections, notes, and published analysis.',url:'/baseball',status:'approved',requester_name:'Atlas Harbor'},
+ {slug:'legal-systems',title:'Legal Systems Tracker',description:'Track litigation, sources, procedural events, projections, and independent analysis.',url:'/legal',status:'approved',requester_name:'Atlas Harbor'}
+];
+const memory=[];
+const slugify=v=>String(v||'').toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,80);
+export function createProblemSpacesService({fetchImpl=globalThis.fetch,env=process.env}={}){
+ const enabled=Boolean(env.SUPABASE_URL&&env.SUPABASE_SECRET_KEY);
+ const headers=enabled?{apikey:env.SUPABASE_SECRET_KEY,Authorization:`Bearer ${env.SUPABASE_SECRET_KEY}`,'Content-Type':'application/json'}:{};
+ async function request(path,options={}){const response=await fetchImpl(`${env.SUPABASE_URL}/rest/v1/${path}`,{...options,headers:{...headers,...options.headers}});const text=await response.text();let data=null;try{data=text?JSON.parse(text):null}catch{}if(!response.ok)throw new Error(data?.message||data?.error||text||`Supabase request failed (${response.status})`);return data}
+ return{
+  enabled,
+  async listPublic(){if(!enabled)return[...seededSpaces,...memory.filter(x=>x.status!=='rejected')].sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')));try{const rows=await request('problem_space_requests?status=neq.rejected&select=*&order=created_at.desc');return[...seededSpaces,...(rows||[])]}catch{return[...seededSpaces,...memory.filter(x=>x.status!=='rejected')] }},
+  async listAdmin(){if(!enabled)return memory.slice().sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)));return request('problem_space_requests?select=*&order=created_at.desc')},
+  async create(input){const title=String(input.title||'').trim().slice(0,120),description=String(input.description||'').trim().slice(0,1200),requester_name=String(input.requesterName||input.requester_name||'').trim().slice(0,100),requested_url=String(input.requestedUrl||input.requested_url||'').trim().slice(0,240);if(title.length<3)throw new Error('A title of at least 3 characters is required.');if(description.length<20)throw new Error('Please provide a description of at least 20 characters.');if(requester_name.length<2)throw new Error('Your name or organization is required.');const row={id:crypto.randomUUID(),slug:slugify(title),title,description,requester_name,requested_url:requested_url||null,status:'pending',created_at:new Date().toISOString(),updated_at:new Date().toISOString()};if(!enabled){memory.push(row);return row}const rows=await request('problem_space_requests',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(row)});return rows?.[0]||row},
+  async update(id,status){if(!['approved','rejected','pending'].includes(status))throw new Error('Invalid status.');if(!enabled){const row=memory.find(x=>x.id===id);if(!row)return null;row.status=status;row.updated_at=new Date().toISOString();return row}const rows=await request(`problem_space_requests?id=eq.${encodeURIComponent(id)}`,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({status,updated_at:new Date().toISOString()})});return rows?.[0]||null}
+ }
+}
