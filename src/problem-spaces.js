@@ -2,7 +2,8 @@ const seededSpaces=[
  {slug:'logistics-control-tower',title:'Logistics Control Tower',description:'Coordinate purchase orders, plants, packaging, inventory, and multimodal transportation on an hourly map.',url:'/game',status:'approved',requester_name:'Atlas Harbor'},
  {slug:'baseball-intelligence',title:'Baseball Intelligence',description:'Explore games, teams, players, injuries, projections, notes, and published analysis.',url:'/baseball',status:'approved',requester_name:'Atlas Harbor'},
  {slug:'legal-systems',title:'Legal Systems Tracker',description:'Track litigation, sources, procedural events, projections, and independent analysis.',url:'/legal',status:'approved',requester_name:'Atlas Harbor'},
- {slug:'food-discovery',title:'Food Discovery',description:'Find the best place to eat for a particular location, group, time, mood, budget, and set of constraints.',url:'/food',status:'approved',requester_name:'Atlas Harbor'}
+ {slug:'food-discovery',title:'Food Discovery',description:'Find the best place to eat for a particular location, group, time, mood, budget, and set of constraints.',url:'/food',status:'approved',requester_name:'Atlas Harbor'},
+ {slug:'dropshipping-advertising',title:'Dropshipping & Advertising',description:'Select products, design audience and advertising strategies, publish test plans and results, invite comments, and connect with potential collaborators or funders.',url:'/dropshipping',status:'approved',requester_name:'Atlas Harbor'}
 ];
 const memory=[];
 const slugify=v=>String(v||'').toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,80);
