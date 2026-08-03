@@ -1,4 +1,4 @@
-import{signUp,signIn,signOut,user,rest,config,ai}from'./supabase-client.js';
+import'./problem-nav.js';import{signUp,signIn,signOut,user,rest,config,ai}from'./supabase-client.js';
 const q=s=>document.querySelector(s),auth=q('#auth-card'),settings=q('#settings-card'),status=q('#auth-status'),settingsStatus=q('#settings-status');
 async function readJson(response,label){const type=response.headers.get('content-type')||'',text=await response.text();if(!type.includes('application/json'))throw new Error(`${label} returned ${type||'an unknown content type'} instead of JSON.`);let data;try{data=JSON.parse(text)}catch{throw new Error(`${label} returned invalid JSON.`)}if(!response.ok)throw new Error(data.error?.message||data.error||`${label} failed with status ${response.status}.`);return data}
 const dollarsPerMillion=value=>{const n=Number(value);return Number.isFinite(n)?`$${(n*1_000_000).toLocaleString(undefined,{maximumFractionDigits:4})}/M`:'—'};
