@@ -1,121 +1,111 @@
 # Atlas Harbor
 
-Atlas Harbor is a decision platform built around inspectable **Problem Spaces**. Each space turns a difficult real-world question into structured data, explicit tradeoffs, user notes, AI-assisted analysis, projections, collaboration, and optional public publishing.
+Atlas Harbor is a decision platform organized around inspectable **Problem Spaces**. Each space turns a difficult real-world question into structured data, explicit tradeoffs, user notes, AI-assisted analysis, collaboration, and optional public publishing.
 
 ## Problem Spaces
 
-- `/game` — logistics control tower: coordinate purchase orders, plants, packaging, inventory, transport, exceptions, and customer satisfaction.
-- `/baseball` — baseball intelligence: explore games, teams, players, injuries, lineups, statistics, projections, and fantasy/betting-oriented analysis.
-- `/legal` — legal systems tracker: follow litigation, procedural events, sources, likely outcomes, and independent analysis.
-- `/food` — food discovery: identify the best place to eat for a specific location, group, time, mood, budget, and set of constraints.
-- `/dropshipping` — product and advertising strategy: publish products, keywords, audiences, geographies, bids, budgets, campaign plans, results, comments, funding interest, and private collaboration.
-- `/life-sciences` — research questions, evidence maps, experimental plans, translational hypotheses, reproducibility, uncertainty, and safety constraints.
-- `/featured` — public work promoted by the global quality system.
-- `/problems` — directory of available spaces plus publicly visible requests for future spaces.
-- `/published` — newest public user analyses across spaces.
-- `/account` — authentication, personal AI endpoint/model settings, sharing defaults, connection health, and direct messages.
-- `/admin` — first-admin bootstrap, user roles, master-admin transfer, global AI providers, quality instructions, cadence, and budget.
+- `/economics` — economics: converts current publication stories into decision problems, stakeholders, constraints, tradeoffs, and open questions.
+- `/game` — logistics control tower.
+- `/baseball` — baseball intelligence.
+- `/legal` — legal systems tracker.
+- `/food` — restaurant and food discovery.
+- `/dropshipping` — product and advertising strategy.
+- `/life-sciences` — research questions, evidence, experiments, and translation.
+- `/featured` — work selected by the global quality system.
+- `/published` — public user analysis.
+- `/problems` — directory and public requests for future spaces.
 
-## Global in-house AI and featured work
+The shared **Problem Spaces** navigation is loaded on desktop and mobile. The label links to `/problems`; the adjacent arrow opens the complete menu. On desktop the menu also supports hover.
 
-Atlas Harbor has a separate administrator-controlled AI layer in addition to each user’s personal AI settings. Its initial purpose is quality moderation and discovery rather than silently rewriting user content.
+## Economics publication feed
 
-The first signed-in Supabase user who visits `/admin` may initialize administration when no administrator exists. That user:
+Economics introduces a live-feed pattern that can later be reused by other Problem Spaces.
 
-1. chooses and repeats an administrator password,
-2. becomes `master_admin`,
-3. can grant or remove ordinary `admin` roles,
-4. can transfer master ownership to another user.
+The default operating model is:
 
-The admin password is salted and hashed in Supabase. It is not committed to the repository. A valid Supabase user session is also required, so possession of the password alone is insufficient.
+1. An administrator selects a publication or feed URL.
+2. The source is checked every 12 hours by default.
+3. Up to 20 recent headlines are selected.
+4. The global AI converts each headline into a separate structured problem.
+5. The source headline, publication name, date, and link remain attached for attribution.
+6. Users and their AIs can work through the resulting decision problem without Atlas Harbor copying or republishing the full article.
 
-The master administrator or another administrator can configure:
+The conversion instruction should identify:
 
-- a primary OpenAI-compatible endpoint, model, and provider key,
-- a backup endpoint, model, and provider key,
-- a repeatable quality-review instruction set,
-- a review cadence, defaulting to every 10 minutes,
-- a monthly AI budget,
-- whether scheduled review is enabled.
+- the actual decision,
+- stakeholders,
+- constraints,
+- competing objectives,
+- uncertainty,
+- questions that need evidence,
+- relevant economic topics.
 
-Provider keys entered in `/admin` are encrypted by the Node server before being stored in Supabase. Set a stable, private `ADMIN_ENCRYPTION_KEY` in the deployment environment. Changing that value makes previously stored provider keys unreadable.
+The administrator can change the source name, URL, feed type, cadence, item limit, instruction, and enabled state from `/admin`.
 
-The worker scores public submissions for:
+Until an automated source is enabled, `/economics` includes a dated manual seed for August 3, 2026 covering digital-economic fragmentation, coordinated yen intervention, and recession risk from an energy shock. These are summaries framed as problems and link back to their publications.
 
-- overall quality,
-- novelty,
-- evidence,
-- clarity,
-- meaningful human–AI collaboration,
-- spam probability.
-
-The default instructions penalize copied boilerplate, unsupported certainty, low-effort repetition, and generic output that an AI could produce without meaningful human contribution. The score is a ranking and anti-spam aid, not proof that the content is true, safe, lawful, or scientifically valid.
-
-High-scoring, low-spam work can appear at `/featured`. The system stores the rationale and component scores so promotion remains inspectable. The scheduler uses the backup provider when the primary fails and stops running when the configured monthly budget is reached. Provider-reported cost data is used when available; deployments should still monitor billing directly because not every compatible endpoint reports cost consistently.
-
-The schema also includes view events for future non-AI recommendations based on recently viewed spaces and topics. Personalized recommendation logic is intentionally not enabled yet.
-
-Install this system with:
+Run:
 
 ```text
-supabase/admin-ai-featured.sql
+supabase/economics-feed.sql
 ```
 
-and configure:
+This creates `economics_feed_settings` and `economic_problems`.
+
+A publication feed must be used in accordance with its terms. Atlas Harbor should retain attribution and links, ingest only metadata or permitted summaries, and avoid storing or reproducing paywalled article text. A publication homepage or licensed feed can be used when an official RSS endpoint is unavailable.
+
+## Global AI and administration
+
+The first signed-in Supabase user to initialize `/admin` becomes `master_admin`. The master administrator can grant admin roles, transfer master ownership, and configure:
+
+- primary and backup OpenAI-compatible providers,
+- encrypted provider keys,
+- quality-review instructions,
+- review cadence,
+- monthly budget,
+- Economics feed settings.
+
+Provider keys stored by the admin control plane are encrypted using:
 
 ```bash
-ADMIN_ENCRYPTION_KEY=GENERATE_A_LONG_RANDOM_ENCRYPTION_SECRET
+ADMIN_ENCRYPTION_KEY=YOUR_LONG_STABLE_RANDOM_SECRET
 ```
 
-## Life Sciences
+The global quality AI scores novelty, evidence, clarity, collaboration, quality, and spam probability. Strong work can appear at `/featured`.
 
-The Life Sciences space begins with a structured model for:
+## Direct messaging
 
-- defining a mechanism, population, intervention, comparator, outcome, and time horizon,
-- separating primary data, replicated findings, preprints, reviews, assumptions, and contradictions,
-- planning controls, assays, sample-size assumptions, sequencing, bottlenecks, stop criteria, and safety constraints,
-- mapping the path from an interesting result to a diagnostic, therapy, platform, or operational change.
+Dropshipping funding interest can open private threads between signed-in users. The account page lists the user’s conversations and supports replies.
 
-This initial page establishes the scope and shared problem model. Future iterations can add protocol templates, literature and dataset connectors, reproducibility checklists, structured evidence ingestion, and reviewable AI critique. It is not a clinical decision system and does not replace qualified scientific, medical, biosafety, ethics, or regulatory review.
-
-## Dropshipping & Advertising
-
-This space asks:
-
-> Which product, offer, audience, geography, platform, creative approach, bid strategy, and test plan should be used—and what evidence would justify scaling or stopping it?
-
-Any signed-in user can create a strategy without administrator approval. A strategy can include product and supplier information, keywords, platform, geography, audience interests, bids, budget, creative and funnel plans, AI-assisted critique, reported results, optional comments, optional funding interest, and private messages.
-
-Comments are **off by default**. The creator must explicitly enable them. Funding-interest and messaging features only connect users; Atlas Harbor does not process payments, investments, securities, or escrow.
-
-Install the database objects with:
+After installing `supabase/dropshipping-space.sql`, also run:
 
 ```text
-supabase/dropshipping-space.sql
+supabase/direct-messaging-fix.sql
+```
+
+The second migration replaces recursive membership policies with security-definer membership checks. This allows thread members to list their threads, read messages, and reply while keeping non-members out.
+
+## Comments and publishing
+
+Comments are off by default. A creator must explicitly enable them for a dropshipping strategy or shared publication. Canonical legal, baseball, and other source pages remain separate from user publications.
+
+Public analysis uses separate links:
+
+```text
+/published/<share-token>
 ```
 
 ## Food Discovery
 
-Food Discovery asks what restaurant is best for a particular person or group, place, time, mood, budget, and set of constraints. The default discovery path uses Nominatim and OpenStreetMap/Overpass without an API key. Optional `GOOGLE_PLACES_API_KEY` enrichment adds ratings, review counts, hours, excerpts, summaries, and Google Maps links where available. Signed-in users can add Atlas Harbor community notes after running `supabase/food-discovery.sql`.
+Food Discovery uses Nominatim and OpenStreetMap/Overpass without credentials. Optional Google Places enrichment can add ratings, review counts, hours, excerpts, and maps links:
 
-## Publishing workspaces
+```bash
+GOOGLE_PLACES_API_KEY=YOUR_SERVER_SIDE_GOOGLE_PLACES_KEY
+```
 
-Legal and baseball detail pages include a reusable rich editor. Signed-in users can write analysis, add optional projection scenarios, run their selected AI model with an explicit prompt, save drafts, publish, and create separate public links. Canonical pages remain unchanged for other visitors.
+## Required Supabase migrations
 
-Published analysis lives at `/published/<share-token>`. The creator may separately enable comments for that publication. Commenting never turns on automatically when something is published.
-
-## Accounts and personal AI
-
-Atlas Harbor uses Supabase Auth and Row Level Security. User API keys remain in browser local storage and are sent only when an AI action is requested. The account page supports manually entered model IDs, OpenRouter model search and pricing, custom OpenAI-compatible endpoints, save-time connection testing, sharing preferences, and direct-message threads.
-
-Personal AI and global administrator AI are separate:
-
-- personal AI acts only when the user explicitly requests it,
-- global AI runs the administrator’s repeatable quality-review workflow on public content.
-
-## Supabase setup
-
-Run the applicable SQL files in the Supabase SQL editor:
+Run the applicable files in the Supabase SQL editor:
 
 ```text
 supabase/schema.sql
@@ -125,10 +115,14 @@ supabase/published-analysis.sql
 supabase/workspace-projections-placement.sql
 supabase/food-discovery.sql
 supabase/dropshipping-space.sql
+supabase/direct-messaging-fix.sql
 supabase/admin-ai-featured.sql
+supabase/economics-feed.sql
 ```
 
-Then configure a local `.env` or deployment secrets:
+## Environment
+
+Copy `.env.example` to `.env` and keep real values out of Git:
 
 ```bash
 SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
@@ -136,10 +130,10 @@ SUPABASE_PUBLISHABLE_KEY=YOUR_SUPABASE_PUBLISHABLE_KEY
 SUPABASE_SECRET_KEY=YOUR_SUPABASE_SECRET_KEY
 SUPABASE_JWKS_URL=https://YOUR_PROJECT_REF.supabase.co/auth/v1/.well-known/jwks.json
 PUBLIC_APP_URL=http://localhost:3000
-ADMIN_ENCRYPTION_KEY=GENERATE_A_LONG_RANDOM_ENCRYPTION_SECRET
+ADMIN_ENCRYPTION_KEY=YOUR_LONG_STABLE_RANDOM_SECRET
 ```
 
-Never commit real credentials.
+Optional mapping and restaurant settings are documented in `.env.example`.
 
 ## Run locally
 
@@ -154,22 +148,6 @@ npm test
 
 Open `http://localhost:3000/`.
 
-## Architecture
-
-- `src/app.js` wires APIs and page routes.
-- `src/admin-control.js` implements first-admin bootstrap, role management, encrypted global AI settings, scheduled quality scoring, budgets, view events, and the featured API.
-- `public/admin.html` and `public/admin.js` implement the administrator control plane.
-- `public/featured.html` and `public/featured.js` render the featured feed.
-- `public/life-sciences.html` establishes the Life Sciences problem model.
-- `public/dropshipping.html`, `public/dropshipping.js`, and `public/dropshipping.css` implement product and advertising strategies.
-- `public/messages.js` implements the first account-based direct-message inbox.
-- `src/food.js` performs location resolution, OpenStreetMap restaurant discovery, and optional Google Places enrichment.
-- `src/problem-spaces.js` defines built-in spaces and public space requests.
-- `public/workspace.js` provides analysis, projections, AI drafting, publishing, and sharing.
-- `src/mlb.js` normalizes MLB data.
-- `src/legal.js` loads canonical cases and legal update proposals.
-- `supabase/*.sql` defines persistence and Row Level Security.
-
 ## Responsible use
 
-Atlas Harbor is experimental decision support. AI quality scores can be biased, incomplete, gamed, or wrong. Featured status does not establish factual accuracy, scientific validity, legal merit, investment quality, safety, originality, or endorsement. Administrators should periodically audit scores, instructions, budgets, and provider behavior. Verify suppliers, claims, experiments, protocols, rights, platform rules, legal records, sports data, and consequential decisions with qualified humans and primary sources.
+Atlas Harbor is experimental decision support. News-derived problems, restaurant data, sports data, legal records, product claims, scientific evidence, model output, quality scores, and projections may be incomplete, stale, biased, manipulated, or wrong. Verify consequential information with primary sources. User publications and comments are personal views, not official records, legal advice, medical advice, investment advice, or guaranteed recommendations.
