@@ -10,56 +10,12 @@ const directory=path.dirname(fileURLToPath(import.meta.url));
 const page=name=>path.join(directory,`../public/${name}`);
 
 export function createApp({mlb=createMlbClient(),legal=createLegalService()}={}){
-  const app=express();
-  app.use(express.json({limit:"64kb"}));
+  const app=express();app.use(express.json({limit:"64kb"}));
+  const enrichGame=async game=>{const sides=["away","home"];const profiles=await Promise.all(sides.map(s=>game[s]?.id?mlb.getTeam(game[s].id).catch(()=>null):null));game.teamProfiles={away:profiles[0],home:profiles[1]};const ids=sides.map(s=>game.probablePitcherIds?.[s]??game[`${s}PitcherId`]??game.teams?.[s]?.pitchers?.[0]?.id);const starters=await Promise.all(ids.map(id=>id?mlb.getPlayer(id).catch(()=>null):null));game.starterProfiles={away:starters[0],home:starters[1]};for(const s of sides){if(!game.teams?.[s]?.battingOrder?.length&&game.teamProfiles?.[s]?.lineup?.players?.length){game.teams[s].battingOrder=game.teamProfiles[s].lineup.players;game.teams[s].lineupSource="Most recently available MLB lineup"}else if(game.teams?.[s])game.teams[s].lineupSource="Confirmed for this game"}return game};
 
-  const enrichGame=async game=>{
-    const sides=["away","home"];
-    const teamProfiles=await Promise.all(sides.map(side=>game[side]?.id?mlb.getTeam(game[side].id).catch(()=>null):null));
-    game.teamProfiles={away:teamProfiles[0],home:teamProfiles[1]};
-    const ids=sides.map(side=>game.probablePitcherIds?.[side]??game[`${side}PitcherId`]??game.teams?.[side]?.pitchers?.[0]?.id);
-    const starters=await Promise.all(ids.map(id=>id?mlb.getPlayer(id).catch(()=>null):null));
-    game.starterProfiles={away:starters[0],home:starters[1]};
-    for(const side of sides){
-      if(!game.teams?.[side]?.battingOrder?.length&&game.teamProfiles?.[side]?.lineup?.players?.length){
-        game.teams[side].battingOrder=game.teamProfiles[side].lineup.players;
-        game.teams[side].lineupSource="Most recently available MLB lineup";
-      }else if(game.teams?.[side]) game.teams[side].lineupSource="Confirmed for this game";
-    }
-    return game;
-  };
-
-  app.get("/api/config",(_req,res)=>{
-    const configured=Boolean(process.env.SUPABASE_URL&&process.env.SUPABASE_PUBLISHABLE_KEY);
-    res.set("Cache-Control","no-store");
-    if(!configured) return res.json({configured:false,error:"Supabase is not configured."});
-    return res.json({configured:true,supabaseUrl:process.env.SUPABASE_URL,supabasePublishableKey:process.env.SUPABASE_PUBLISHABLE_KEY});
-  });
-
-  app.get("/api/status",(_req,res)=>{
-    const supabase=Boolean(process.env.SUPABASE_URL&&process.env.SUPABASE_PUBLISHABLE_KEY);
-    let supabaseUrlHost=null;
-    try{supabaseUrlHost=supabase?new URL(process.env.SUPABASE_URL).host:null}catch{}
-    res.set("Cache-Control","no-store");
-    return res.json({ok:true,supabase,supabaseUrlHost,aiProxy:true,environment:process.env.NODE_ENV||"development",time:new Date().toISOString()});
-  });
-
-  app.post("/api/ai/chat",async(req,res)=>{
-    const supabaseUrl=process.env.SUPABASE_URL,publishable=process.env.SUPABASE_PUBLISHABLE_KEY,token=String(req.get("authorization")||"").replace(/^Bearer\s+/i,""),openrouterKey=req.get("x-openrouter-key");
-    if(!supabaseUrl||!publishable)return res.status(503).json({error:"Supabase is not configured."});
-    if(!token||!openrouterKey)return res.status(401).json({error:"Sign in and provide an OpenRouter key."});
-    try{
-      const userResponse=await fetch(`${supabaseUrl}/auth/v1/user`,{headers:{apikey:publishable,Authorization:`Bearer ${token}`}});
-      if(!userResponse.ok)return res.status(401).json({error:"Invalid or expired session."});
-      const messages=Array.isArray(req.body?.messages)?req.body.messages.slice(-20):[];
-      if(!messages.length)return res.status(400).json({error:"Messages are required."});
-      const model=String(req.body?.model||"openrouter/auto").slice(0,120);
-      const response=await fetch("https://openrouter.ai/api/v1/chat/completions",{method:"POST",headers:{Authorization:`Bearer ${openrouterKey}`,"Content-Type":"application/json","HTTP-Referer":process.env.PUBLIC_APP_URL||"http://localhost:3000","X-Title":"Atlas Harbor"},body:JSON.stringify({model,messages,temperature:.3})});
-      const data=await response.json();
-      if(!response.ok)return res.status(response.status).json({error:data.error?.message||"OpenRouter request failed."});
-      return res.json({content:data.choices?.[0]?.message?.content||"",model:data.model||model,usage:data.usage||null});
-    }catch(e){console.error(e);return res.status(502).json({error:"AI request failed."})}
-  });
+  app.get("/api/config",(_req,res)=>{const configured=Boolean(process.env.SUPABASE_URL&&process.env.SUPABASE_PUBLISHABLE_KEY);res.set("Cache-Control","no-store");return res.json({configured,supabaseUrl:configured?process.env.SUPABASE_URL:null,supabasePublishableKey:configured?process.env.SUPABASE_PUBLISHABLE_KEY:null,error:configured?null:"Supabase is not configured.",mapProvider:String(process.env.MAP_PROVIDER||"openstreetmap").toLowerCase(),googleMapsApiKey:process.env.GOOGLE_MAPS_BROWSER_API_KEY||null,mapTileUrl:process.env.MAP_TILE_URL||"https://tile.openstreetmap.org/{z}/{x}/{y}.png"})});
+  app.get("/api/status",(_req,res)=>{const supabase=Boolean(process.env.SUPABASE_URL&&process.env.SUPABASE_PUBLISHABLE_KEY);let supabaseUrlHost=null;try{supabaseUrlHost=supabase?new URL(process.env.SUPABASE_URL).host:null}catch{}res.set("Cache-Control","no-store");return res.json({ok:true,supabase,supabaseUrlHost,aiProxy:true,mapProvider:String(process.env.MAP_PROVIDER||"openstreetmap").toLowerCase(),googleMapsConfigured:Boolean(process.env.GOOGLE_MAPS_BROWSER_API_KEY),environment:process.env.NODE_ENV||"development",time:new Date().toISOString()})});
+  app.post("/api/ai/chat",async(req,res)=>{const supabaseUrl=process.env.SUPABASE_URL,publishable=process.env.SUPABASE_PUBLISHABLE_KEY,token=String(req.get("authorization")||"").replace(/^Bearer\s+/i,""),openrouterKey=req.get("x-openrouter-key");if(!supabaseUrl||!publishable)return res.status(503).json({error:"Supabase is not configured."});if(!token||!openrouterKey)return res.status(401).json({error:"Sign in and provide an OpenRouter key."});try{const userResponse=await fetch(`${supabaseUrl}/auth/v1/user`,{headers:{apikey:publishable,Authorization:`Bearer ${token}`}});if(!userResponse.ok)return res.status(401).json({error:"Invalid or expired session."});const messages=Array.isArray(req.body?.messages)?req.body.messages.slice(-20):[];if(!messages.length)return res.status(400).json({error:"Messages are required."});const model=String(req.body?.model||"openrouter/auto").slice(0,120);const response=await fetch("https://openrouter.ai/api/v1/chat/completions",{method:"POST",headers:{Authorization:`Bearer ${openrouterKey}`,"Content-Type":"application/json","HTTP-Referer":process.env.PUBLIC_APP_URL||"http://localhost:3000","X-Title":"Atlas Harbor"},body:JSON.stringify({model,messages,temperature:.3})});const data=await response.json();if(!response.ok)return res.status(response.status).json({error:data.error?.message||"OpenRouter request failed."});return res.json({content:data.choices?.[0]?.message?.content||"",model:data.model||model,usage:data.usage||null})}catch(e){console.error(e);return res.status(502).json({error:"AI request failed."})}});
 
   app.get("/api/baseball/search",async(req,res)=>{const q=String(req.query.q??"").trim();if(q.length<2)return res.json({results:[]});try{return res.json({results:await mlb.search(q)})}catch(e){console.error(e);return res.status(502).json({error:"Baseball search is temporarily unavailable."})}});
   app.get("/api/baseball/games",async(_req,res)=>{try{return res.json({games:await mlb.getUpcomingGames(14)})}catch(e){console.error(e);return res.status(502).json({error:"Upcoming games are temporarily unavailable."})}});
@@ -67,22 +23,11 @@ export function createApp({mlb=createMlbClient(),legal=createLegalService()}={})
   app.get("/api/baseball/teams/:id",async(req,res)=>{if(!/^\d+$/.test(req.params.id))return res.status(400).json({error:"Invalid team ID."});try{const team=await mlb.getTeam(req.params.id);return team?res.json({team}):res.status(404).json({error:"Team not found."})}catch(e){console.error(e);return res.status(502).json({error:"Team statistics are temporarily unavailable."})}});
   app.get("/api/baseball/players",async(req,res)=>{const q=String(req.query.q??"").trim();if(q.length<2)return res.json({players:[]});try{const found=await mlb.search(q);return res.json({players:found.filter(i=>i.type==="player").map(i=>({id:i.id,name:i.name,team:i.subtitle.split(" · ")[0],position:i.subtitle.split(" · ")[1]}))})}catch(e){console.error(e);return res.status(502).json({error:"Player search is temporarily unavailable."})}});
   app.get("/api/baseball/players/:id",async(req,res)=>{if(!/^\d+$/.test(req.params.id))return res.status(400).json({error:"Invalid player ID."});try{const player=await mlb.getPlayer(req.params.id);return player?res.json({player}):res.status(404).json({error:"Player not found."})}catch(e){console.error(e);return res.status(502).json({error:"Player statistics are temporarily unavailable."})}});
-
   app.get("/api/legal/cases",async(_req,res)=>{try{return res.json({cases:await legal.listCases()})}catch(e){console.error(e);return res.status(500).json({error:"Legal cases are temporarily unavailable."})}});
   app.get("/api/legal/cases/:slug",async(req,res)=>{try{const item=await legal.getCase(req.params.slug);return item?res.json(item):res.status(404).json({error:"Case not found."})}catch(e){console.error(e);return res.status(500).json({error:"Case record is temporarily unavailable."})}});
   app.post("/api/legal/cases/:slug/refresh",async(req,res)=>{if(!process.env.LEGAL_ADMIN_TOKEN||req.get("authorization")!==`Bearer ${process.env.LEGAL_ADMIN_TOKEN}`)return res.status(401).json({error:"Unauthorized."});try{const proposal=await legal.refreshCase(req.params.slug);return proposal?res.json({proposal}):res.status(404).json({error:"Case not found."})}catch(e){console.error(e);return res.status(502).json({error:e.message})}});
 
   app.get(["/baseball/games/:id","/baseball/games/:id/:slug"],async(req,res)=>{if(!/^\d+$/.test(req.params.id))return res.status(404).type("html").send(renderGameNotFoundPage());try{let game=await mlb.getGame(req.params.id);if(!game)return res.status(404).type("html").send(renderGameNotFoundPage());game=await enrichGame(game);const slug=gameSlug(game),base=(process.env.PUBLIC_APP_URL||`${req.protocol}://${req.get("host")}`).replace(/\/$/,""),canonicalPath=`/baseball/games/${game.id}/${slug}`;if(req.path!==canonicalPath)return res.redirect(301,canonicalPath);res.set("Cache-Control","public,max-age=60,stale-while-revalidate=300");return res.type("html").send(renderBaseballGamePage(game,`${base}${canonicalPath}`))}catch(e){console.error(e);return res.status(503).type("html").send(renderGameNotFoundPage())}});
   app.get(["/baseball/players/:id","/baseball/players/:id/:slug"],async(req,res)=>{if(!/^\d+$/.test(req.params.id))return res.status(404).send("Player not found");try{const player=await mlb.getPlayer(req.params.id);if(!player)return res.status(404).send("Player not found");const slug=playerSlug(player),base=(process.env.PUBLIC_APP_URL||`${req.protocol}://${req.get("host")}`).replace(/\/$/,""),canonicalPath=`/baseball/players/${player.id}/${slug}`;if(req.path!==canonicalPath)return res.redirect(301,canonicalPath);res.set("Cache-Control","public,max-age=120,stale-while-revalidate=600");return res.type("html").send(renderBaseballPlayerPage(player,`${base}${canonicalPath}`))}catch(e){console.error(e);return res.status(503).send("Player temporarily unavailable")}});
-
-  app.get("/account",(_req,res)=>res.sendFile(page("account.html")));
-  app.get(["/baseball","/baseball/players","/baseball/{*path}"],(_req,res)=>res.sendFile(page("baseball.html")));
-  app.get("/game/docs",(_req,res)=>res.sendFile(page("game-docs.html")));
-  app.get(["/game","/game/{*path}"],(_req,res)=>res.sendFile(page("game.html")));
-  app.get(["/legal","/legal/{*path}"],(_req,res)=>res.sendFile(page("legal.html")));
-  app.get(["/blog","/blog/{*path}"],(_req,res)=>res.sendFile(page("blog.html")));
-  app.use("/vendor",express.static(path.join(directory,"../node_modules/phaser/dist")));
-  app.use(express.static(path.join(directory,"../public")));
-  app.get("/{*path}",(_req,res)=>res.sendFile(page("index.html")));
-  return app;
+  app.get("/account",(_req,res)=>res.sendFile(page("account.html")));app.get(["/baseball","/baseball/players","/baseball/{*path}"],(_req,res)=>res.sendFile(page("baseball.html")));app.get("/game/docs",(_req,res)=>res.sendFile(page("game-docs.html")));app.get(["/game","/game/{*path}"],(_req,res)=>res.sendFile(page("game.html")));app.get(["/legal","/legal/{*path}"],(_req,res)=>res.sendFile(page("legal.html")));app.get(["/blog","/blog/{*path}"],(_req,res)=>res.sendFile(page("blog.html")));app.use("/vendor",express.static(path.join(directory,"../node_modules/phaser/dist")));app.use(express.static(path.join(directory,"../public")));app.get("/{*path}",(_req,res)=>res.sendFile(page("index.html")));return app;
 }
