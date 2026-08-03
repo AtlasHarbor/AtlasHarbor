@@ -1,82 +1,113 @@
 # Atlas Harbor
 
-Atlas Harbor is a logistics simulation and decision platform. It turns complicated real-world choices into systems people can operate, inspect, and improve.
+Atlas Harbor is a decision platform built around inspectable **Problem Spaces**. Each space turns a difficult real-world question into structured data, explicit tradeoffs, user notes, AI-assisted analysis, projections, and optional public publishing.
 
-## Application surfaces
+## Problem Spaces
 
-- `/` explains Atlas Harbor with an animated logistics-to-domain transfer sequence.
-- `/game` is an hourly multimodal logistics control-tower simulation.
-- `/account` provides Supabase sign-up/sign-in plus per-user AI and sharing settings.
-- `/baseball` provides MLB players, teams, games, lineups, weather, injuries, notes, projections, and scouting-oriented statistics.
-- `/legal` is a compact lawsuit index. Each case opens on a dedicated `/legal/<case-slug>` page with the full record, projections, sources, and publishing workspace.
-- `/blog` discusses research and limitations around AI-assisted analogical transfer.
+- `/game` — logistics control tower: coordinate purchase orders, plants, packaging, inventory, transport, exceptions, and customer satisfaction.
+- `/baseball` — baseball intelligence: explore games, teams, players, injuries, lineups, statistics, projections, and fantasy/betting-oriented analysis.
+- `/legal` — legal systems tracker: follow litigation, procedural events, sources, likely outcomes, and independent analysis.
+- `/food` — food discovery: identify the best place to eat for a specific location, group, time, mood, budget, and set of constraints.
+- `/problems` — directory of available spaces plus publicly visible requests for future spaces.
+- `/published` — newest public user analyses across spaces.
+- `/account` — authentication, AI endpoint/model settings, sharing defaults, and connection health.
+
+## Food Discovery
+
+Food Discovery is deliberately qualitative. Baseball asks questions such as “who is most likely to win?” and legal asks “what outcome or strategy is most likely?” Food asks:
+
+> What is the best restaurant for this particular person or group, in this place, at this time, under these constraints?
+
+The current decision model considers:
+
+- location and travel effort,
+- cuisine and dietary fit,
+- time available and opening hours,
+- atmosphere and occasion,
+- price and availability,
+- ratings and review themes,
+- Atlas Harbor community notes,
+- uncertainty and information that should be verified directly.
+
+### Restaurant data providers
+
+The default discovery path requires no API key:
+
+1. **Nominatim** resolves a typed city, neighborhood, address, or coordinates.
+2. **OpenStreetMap/Overpass** returns nearby restaurants and cafes with available names, cuisine tags, addresses, websites, phone numbers, and opening-hours tags.
+
+OpenStreetMap is global and credential-free, but it does not provide a dependable cross-platform review corpus. Provider reviews are therefore optional enrichment rather than something Atlas Harbor pretends can be freely aggregated from every review site.
+
+When `GOOGLE_PLACES_API_KEY` is configured server-side, Food Discovery can enrich results with Google Places ratings, review counts, hours, review excerpts, Google Maps links, and review summaries where available. Google attribution and source links must remain visible, and Google Places storage and display policies must be followed.
+
+```bash
+# Optional server-side restaurant review enrichment
+GOOGLE_PLACES_API_KEY=YOUR_SERVER_SIDE_GOOGLE_PLACES_KEY
+```
+
+Signed-in users can add Atlas Harbor community notes and optional 1–5 ratings after running:
+
+```text
+supabase/food-discovery.sql
+```
+
+The Food Discovery endpoint is:
+
+```text
+GET /api/food/search?location=Tokyo%2C%20Japan&q=ramen
+```
 
 ## Publishing workspaces
 
-Legal case pages and standalone baseball game/player pages include a reusable publishing workspace. It is designed to feel closer to a lightweight Ghost or WordPress editor than a plain note field.
+Legal and baseball detail pages include a reusable rich editor. Signed-in users can write analysis, add optional projection scenarios, run their selected AI model with an explicit prompt, save drafts, publish, and create separate public links. Canonical pages remain unchanged for other visitors.
 
-Signed-in users can:
+Published analysis lives at:
 
-- write a headline and long-form analysis,
-- use bold, italic, heading, list, link, unlink, undo, and redo controls,
-- place the published analysis directly below the page header or after the official information,
-- add dated projection scenarios and estimated probabilities,
-- save a private draft,
-- publish a reviewed version,
-- make that publication available through an unguessable share link,
-- decide whether AI-generated text is included in the shared version,
-- supply a custom prompt before running AI.
+```text
+/published/<share-token>
+```
 
-AI never runs automatically. The user enters instructions, clicks **Generate AI draft**, reviews the returned text, edits it, and then chooses whether to publish. Failures are shown explicitly. Typical messages identify a missing OpenRouter key, missing login, rejected model, invalid credential, or empty provider response. The account page controls the default model and sharing preferences.
+The feed is available at `/published`.
 
-A legal projection might cover likely motion dates, procedural paths, probabilities, and evidence that would change the view. A baseball projection might cover the expected game outcome, pitcher risk, lineup assumptions, weather effects, and reasons for the forecast. User analysis is kept separate from canonical legal facts and official MLB data.
+## Accounts and AI
 
-After pulling schema changes, rerun `supabase/schema.sql`. It is safe to rerun and adds the publishing fields to `workspace_notes`, including `title`, `ai_prompt`, `projections`, `placement`, and `is_published`.
+Atlas Harbor uses Supabase Auth and Row Level Security. User API keys remain in browser local storage and are sent only when an AI action is requested. The account page supports:
 
-## Logistics control-tower game
+- any manually entered model ID,
+- OpenRouter model search and pricing where supported,
+- custom OpenAI-compatible endpoints,
+- a save-time `hello` connection test,
+- saved provider/model/test status in Supabase.
 
-The player is the dispatcher inside a third-party logistics control tower. The objective is customer satisfaction: keep purchase orders supplied, packaged correctly, compliant, moving, and delivered within the current promise.
+## Supabase setup
 
-The simulated network includes:
+Run the applicable SQL files in the Supabase SQL editor:
 
-- brand-owner merchandise programs as the primary clients,
-- retailers and e-commerce fulfillment partners as consignees,
-- contract manufacturers,
-- print and media plants,
-- packaging and localization facilities,
-- ocean ports and customs gateways,
-- air-cargo hubs,
-- retailer distribution centers,
-- third-party fulfillment centers,
-- owned transportation and partner-carrier capacity.
+```text
+supabase/schema.sql
+supabase/ai-settings.sql
+supabase/problem-spaces.sql
+supabase/published-analysis.sql
+supabase/workspace-projections-placement.sql
+supabase/food-discovery.sql
+```
 
-The initial shift opens with ten major purchase orders. Each order identifies the client, consignee, product, quantity, available inventory, production origin, packaging or localization stop, final destination, compliance requirement, value, and promised delivery time.
+Then configure a local `.env` or deployment secrets:
 
-### Operating loop
+```bash
+SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+SUPABASE_PUBLISHABLE_KEY=YOUR_SUPABASE_PUBLISHABLE_KEY
+SUPABASE_SECRET_KEY=YOUR_SUPABASE_SECRET_KEY
+SUPABASE_JWKS_URL=https://YOUR_PROJECT_REF.supabase.co/auth/v1/.well-known/jwks.json
+PUBLIC_APP_URL=http://localhost:3000
+ADMIN_PASSWORD=SET_A_PRIVATE_ADMIN_PASSWORD
+```
 
-1. Inspect the purchase order and its path on the map.
-2. Confirm whether enough finished inventory exists.
-3. Release production through the plant scheduler when a shortage exists.
-4. Route work through packaging, labeling, localization, or compliance when required.
-5. Book truck, rail/intermodal, air, or ocean capacity.
-6. Watch shipments move between real geographic nodes.
-7. Respond to driver breakdowns, port holds, reduced air capacity, labor gaps, and missed appointments.
-8. Expedite, reroute, add partner capacity, or request a revised delivery promise.
-9. Communicate the current ETA and recovery plan to the buyer or consignee.
+Never commit real credentials.
 
-The simulation advances in one-hour blocks. One game hour passes automatically every 15 real minutes while the game is open. The player can pause the clock or choose **Next hour** after completing the current work queue.
+## Maps
 
-Most actions are explicit buttons. An exception-planning text box supports unusual instructions. It parses the request into a proposed plan, displays the operational steps, and requires confirmation before execution. The signed-in AI workspace can additionally use the player's selected OpenRouter model and saved notes as context.
-
-### Facilities and capacity
-
-Plants and facilities expose plausible operating information such as people on shift, daily production rate, utilization, throughput, and role in the order chain. Capacity recommendations are treated as requests to operations planning. The game generally approves reasonable temporary-capacity requests while charging the associated cost or increasing operational risk.
-
-### Map providers
-
-The game works without map credentials by default using Leaflet with OpenStreetMap tiles. Visible OpenStreetMap attribution is retained. Production deployments should respect the tile service usage policy or configure a suitable hosted or self-managed provider.
-
-Google Maps is optional. Google Maps JavaScript API production use requires a browser API key and billing-enabled Google Cloud project. Restrict the browser key by HTTP referrer and enable only the Maps JavaScript API.
+The logistics game uses OpenStreetMap by default and can optionally use Google Maps. Food Discovery uses Nominatim and Overpass for keyless global place discovery; Google Places is optional for review enrichment.
 
 ```bash
 MAP_PROVIDER=openstreetmap
@@ -85,46 +116,6 @@ MAP_TILE_URL=https://tile.openstreetmap.org/{z}/{x}/{y}.png
 MAP_PROVIDER=google
 GOOGLE_MAPS_BROWSER_API_KEY=YOUR_BROWSER_RESTRICTED_GOOGLE_MAPS_KEY
 ```
-
-Restart the Node server after changing map environment variables. `/api/status` reports the selected provider and whether a Google Maps key is configured.
-
-## Accounts and persistence
-
-Atlas Harbor uses Supabase Auth and Row Level Security. Signed-in users can save game progress, retain AI preferences, create private drafts on game/baseball/legal pages, publish selected analyses, and create share links.
-
-The OpenRouter API key is deliberately **not** stored in Supabase, committed to GitHub, or written to server logs. It stays in browser local storage and is supplied to the server only for the request that needs it.
-
-## Supabase setup
-
-1. Create a Supabase project.
-2. Open the Supabase SQL editor and run `supabase/schema.sql`.
-3. Copy `.env.example` to `.env` for local development.
-4. Add real values only to the local `.env` or deployment environment.
-5. Restart the Node process.
-
-```bash
-SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
-SUPABASE_PUBLISHABLE_KEY=YOUR_SUPABASE_PUBLISHABLE_KEY
-SUPABASE_SECRET_KEY=YOUR_SUPABASE_SECRET_KEY
-SUPABASE_JWKS_URL=https://YOUR_PROJECT_REF.supabase.co/auth/v1/.well-known/jwks.json
-```
-
-`SUPABASE_PUBLISHABLE_KEY` is exposed to the browser through `/api/config` and must be paired with correctly configured Row Level Security. `SUPABASE_SECRET_KEY` must remain server-only.
-
-### GitHub deployment configuration
-
-Open **Repository → Settings → Secrets and variables → Actions** and add sensitive values as repository or environment secrets. Add non-sensitive settings, such as `MAP_PROVIDER`, as variables when appropriate. Never paste real keys into `.env.example`, workflow YAML, issues, pull requests, or committed source files.
-
-## OpenRouter workflow
-
-1. Sign up or sign in at `/account`.
-2. Paste a personal OpenRouter API key.
-3. Select a model.
-4. Open a publishing workspace.
-5. Write the exact prompt for the analysis you want.
-6. Generate a draft, review it, revise it, and publish only when satisfied.
-
-The server validates the Supabase session and forwards the request using the browser-supplied OpenRouter key. Model output is advisory and does not silently change canonical legal records, official sports data, or operational state.
 
 ## Run locally
 
@@ -141,16 +132,15 @@ Open `http://localhost:3000/`.
 
 ## Architecture
 
-- `src/server.js` loads `.env` and starts Express.
-- `src/app.js` defines APIs, safe browser configuration, authentication checks, map-provider configuration, AI proxying, and page routing.
-- `public/game.js` runs the hourly purchase-order, inventory, production, transport, exception, and customer-service simulation.
-- `public/workspace.js` provides the reusable rich editor, projections, AI prompt, publishing, placement, and sharing workflow.
-- `public/legal.js` renders the lawsuit index and dedicated case pages.
+- `src/app.js` wires APIs and page routes.
+- `src/food.js` performs location resolution, OpenStreetMap restaurant discovery, and optional Google Places enrichment.
+- `public/food.html`, `public/food.js`, and `public/food.css` implement Food Discovery.
+- `src/problem-spaces.js` defines built-in spaces and public space requests.
+- `public/workspace.js` provides analysis, projections, AI drafting, publishing, and sharing.
 - `src/mlb.js` normalizes MLB data.
-- `src/legal.js` reads canonical cases and creates administrator review proposals.
-- `supabase/schema.sql` defines user settings, progress, publishing workspaces, sharing, indexes, and Row Level Security policies.
-- `public/supabase-client.js` performs browser authentication and protected REST calls.
+- `src/legal.js` loads canonical cases and legal update proposals.
+- `supabase/*.sql` defines persistence and Row Level Security.
 
 ## Responsible use
 
-Atlas Harbor is experimental decision support. Its scenarios, ETAs, capacities, costs, model output, data normalization, summaries, projections, and analogies can be incomplete or wrong. User publications are not official case records, legal advice, betting advice, or verified forecasts. Do not submit confidential, privileged, sealed, export-controlled, or personally sensitive information to third-party model or map providers without appropriate authorization and controls.
+Atlas Harbor is experimental decision support. Restaurant data, hours, menus, prices, accessibility, dietary information, reviews, ratings, sports data, case records, model output, and projections can be incomplete, stale, or wrong. Verify consequential information with primary sources. User publications and community comments are personal views, not official records, legal advice, medical advice, or guaranteed recommendations.
