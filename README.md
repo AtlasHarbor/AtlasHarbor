@@ -7,9 +7,31 @@ Atlas Harbor is a logistics simulation and decision platform. It turns complicat
 - `/` explains Atlas Harbor with an animated logistics-to-domain transfer sequence.
 - `/game` is an hourly multimodal logistics control-tower simulation.
 - `/account` provides Supabase sign-up/sign-in plus per-user AI and sharing settings.
-- `/baseball` provides MLB players, teams, games, lineups, weather, injuries, notes, and scouting-oriented statistics.
-- `/legal` tracks lawsuits, procedural events, sources, logistics translations, private notes, shared notes, and user-requested AI analysis.
+- `/baseball` provides MLB players, teams, games, lineups, weather, injuries, notes, projections, and scouting-oriented statistics.
+- `/legal` is a compact lawsuit index. Each case opens on a dedicated `/legal/<case-slug>` page with the full record, projections, sources, and publishing workspace.
 - `/blog` discusses research and limitations around AI-assisted analogical transfer.
+
+## Publishing workspaces
+
+Legal case pages and standalone baseball game/player pages include a reusable publishing workspace. It is designed to feel closer to a lightweight Ghost or WordPress editor than a plain note field.
+
+Signed-in users can:
+
+- write a headline and long-form analysis,
+- use bold, italic, heading, list, link, unlink, undo, and redo controls,
+- place the published analysis directly below the page header or after the official information,
+- add dated projection scenarios and estimated probabilities,
+- save a private draft,
+- publish a reviewed version,
+- make that publication available through an unguessable share link,
+- decide whether AI-generated text is included in the shared version,
+- supply a custom prompt before running AI.
+
+AI never runs automatically. The user enters instructions, clicks **Generate AI draft**, reviews the returned text, edits it, and then chooses whether to publish. Failures are shown explicitly. Typical messages identify a missing OpenRouter key, missing login, rejected model, invalid credential, or empty provider response. The account page controls the default model and sharing preferences.
+
+A legal projection might cover likely motion dates, procedural paths, probabilities, and evidence that would change the view. A baseball projection might cover the expected game outcome, pitcher risk, lineup assumptions, weather effects, and reasons for the forecast. User analysis is kept separate from canonical legal facts and official MLB data.
+
+After pulling schema changes, rerun `supabase/schema.sql`. It is safe to rerun and adds the publishing fields to `workspace_notes`, including `title`, `ai_prompt`, `projections`, `placement`, and `is_published`.
 
 ## Logistics control-tower game
 
@@ -52,16 +74,14 @@ Plants and facilities expose plausible operating information such as people on s
 
 ### Map providers
 
-The game works without map credentials by default using Leaflet with OpenStreetMap tiles. Visible OpenStreetMap attribution is retained. The standard OpenStreetMap tile service is suitable for modest interactive development use; production deployments should respect its usage policy or configure a suitable hosted/self-managed tile provider.
+The game works without map credentials by default using Leaflet with OpenStreetMap tiles. Visible OpenStreetMap attribution is retained. Production deployments should respect the tile service usage policy or configure a suitable hosted or self-managed provider.
 
 Google Maps is optional. Google Maps JavaScript API production use requires a browser API key and billing-enabled Google Cloud project. Restrict the browser key by HTTP referrer and enable only the Maps JavaScript API.
 
 ```bash
-# Credential-free development default
 MAP_PROVIDER=openstreetmap
 MAP_TILE_URL=https://tile.openstreetmap.org/{z}/{x}/{y}.png
 
-# Optional Google Maps provider
 MAP_PROVIDER=google
 GOOGLE_MAPS_BROWSER_API_KEY=YOUR_BROWSER_RESTRICTED_GOOGLE_MAPS_KEY
 ```
@@ -70,7 +90,7 @@ Restart the Node server after changing map environment variables. `/api/status` 
 
 ## Accounts and persistence
 
-Atlas Harbor uses Supabase Auth and Row Level Security. Signed-in users can save game progress, retain AI preferences, create notes on game/baseball/legal pages, and selectively publish workspace material through share links.
+Atlas Harbor uses Supabase Auth and Row Level Security. Signed-in users can save game progress, retain AI preferences, create private drafts on game/baseball/legal pages, publish selected analyses, and create share links.
 
 The OpenRouter API key is deliberately **not** stored in Supabase, committed to GitHub, or written to server logs. It stays in browser local storage and is supplied to the server only for the request that needs it.
 
@@ -100,10 +120,11 @@ Open **Repository → Settings → Secrets and variables → Actions** and add s
 1. Sign up or sign in at `/account`.
 2. Paste a personal OpenRouter API key.
 3. Select a model.
-4. Use AI from the game or a supported workspace page.
-5. Review generated actions or analysis before applying or saving them.
+4. Open a publishing workspace.
+5. Write the exact prompt for the analysis you want.
+6. Generate a draft, review it, revise it, and publish only when satisfied.
 
-The server validates the Supabase session and forwards the request using the browser-supplied OpenRouter key. Model output is advisory and does not silently change canonical legal records or operational state.
+The server validates the Supabase session and forwards the request using the browser-supplied OpenRouter key. Model output is advisory and does not silently change canonical legal records, official sports data, or operational state.
 
 ## Run locally
 
@@ -123,12 +144,13 @@ Open `http://localhost:3000/`.
 - `src/server.js` loads `.env` and starts Express.
 - `src/app.js` defines APIs, safe browser configuration, authentication checks, map-provider configuration, AI proxying, and page routing.
 - `public/game.js` runs the hourly purchase-order, inventory, production, transport, exception, and customer-service simulation.
-- `public/game.html` and `public/game.css` provide the control-tower interface and interactive map.
+- `public/workspace.js` provides the reusable rich editor, projections, AI prompt, publishing, placement, and sharing workflow.
+- `public/legal.js` renders the lawsuit index and dedicated case pages.
 - `src/mlb.js` normalizes MLB data.
 - `src/legal.js` reads canonical cases and creates administrator review proposals.
-- `supabase/schema.sql` defines user settings, progress, notes, sharing, indexes, and Row Level Security policies.
+- `supabase/schema.sql` defines user settings, progress, publishing workspaces, sharing, indexes, and Row Level Security policies.
 - `public/supabase-client.js` performs browser authentication and protected REST calls.
 
 ## Responsible use
 
-Atlas Harbor is experimental decision support. Its scenarios, ETAs, capacities, costs, model output, data normalization, summaries, and analogies can be incomplete or wrong. The named-company examples are fictional customer archetypes and do not imply affiliation. Do not submit confidential, privileged, sealed, export-controlled, or personally sensitive information to third-party model or map providers without appropriate authorization and controls.
+Atlas Harbor is experimental decision support. Its scenarios, ETAs, capacities, costs, model output, data normalization, summaries, projections, and analogies can be incomplete or wrong. User publications are not official case records, legal advice, betting advice, or verified forecasts. Do not submit confidential, privileged, sealed, export-controlled, or personally sensitive information to third-party model or map providers without appropriate authorization and controls.
