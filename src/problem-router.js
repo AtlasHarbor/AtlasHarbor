@@ -1,11 +1,13 @@
 import express from 'express';
 import {createProblemSpacesService} from './problem-spaces.js';
 import {createAdminControl} from './admin-control.js';
+import {createEconomicsRouter} from './economics.js';
 
 export function createProblemRouter({service=createProblemSpacesService(),env=process.env}={}){
  const router=express.Router();
  const adminControl=createAdminControl({env});
  router.use(adminControl.router);
+ router.use(createEconomicsRouter({env}));
  const legacyAdminOk=req=>Boolean(env.ADMIN_PASSWORD)&&req.get('x-admin-password')===env.ADMIN_PASSWORD;
  router.get('/api/problem-spaces',async(_req,res)=>{try{return res.json({spaces:await service.listPublic()})}catch(error){console.error(error);return res.status(500).json({error:'Problem spaces are temporarily unavailable.'})}});
  router.post('/api/problem-spaces/requests',async(req,res)=>{try{return res.status(201).json({request:await service.create(req.body||{})})}catch(error){return res.status(400).json({error:error.message})}});
