@@ -1,0 +1,13 @@
+let cachedConfig;
+const SESSION_KEY='atlas-harbor-session';
+export async function config(){if(!cachedConfig){const r=await fetch('/api/config');if(!r.ok)throw new Error('Supabase is not configured.');cachedConfig=await r.json()}return cachedConfig}
+export function session(){try{return JSON.parse(localStorage.getItem(SESSION_KEY)||'null')}catch{return null}}
+export function accessToken(){return session()?.access_token||null}
+export function user(){return session()?.user||null}
+export function signOut(){localStorage.removeItem(SESSION_KEY);location.reload()}
+async function auth(path,body){const c=await config();const r=await fetch(`${c.supabaseUrl}/auth/v1/${path}`,{method:'POST',headers:{apikey:c.supabasePublishableKey,'Content-Type':'application/json'},body:JSON.stringify(body)});const data=await r.json();if(!r.ok)throw new Error(data.msg||data.error_description||data.message||'Authentication failed.');if(data.access_token)localStorage.setItem(SESSION_KEY,JSON.stringify(data));return data}
+export const signUp=(email,password)=>auth('signup',{email,password});
+export const signIn=(email,password)=>auth('token?grant_type=password',{email,password});
+export async function rest(table,{method='GET',query='',body}={}){const c=await config(),token=accessToken();if(!token)throw new Error('Sign in required.');const r=await fetch(`${c.supabaseUrl}/rest/v1/${table}${query}`,{method,headers:{apikey:c.supabasePublishableKey,Authorization:`Bearer ${token}`,'Content-Type':'application/json',Prefer:method==='POST'?'return=representation,resolution=merge-duplicates':'return=representation'},body:body===undefined?undefined:JSON.stringify(body)});if(r.status===204)return null;const data=await r.json();if(!r.ok)throw new Error(data.message||data.error||'Database request failed.');return data}
+export async function publicRest(table,query=''){const c=await config();const r=await fetch(`${c.supabaseUrl}/rest/v1/${table}${query}`,{headers:{apikey:c.supabasePublishableKey,Authorization:`Bearer ${c.supabasePublishableKey}`}});const data=await r.json();if(!r.ok)throw new Error(data.message||'Request failed.');return data}
+export async function ai(messages,context={}){const key=localStorage.getItem('atlas-openrouter-key');if(!key)throw new Error('Add your OpenRouter key in Account first.');const token=accessToken();if(!token)throw new Error('Sign in required.');const model=localStorage.getItem('atlas-openrouter-model')||'openai/gpt-5.2';const r=await fetch('/api/ai/chat',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`,'X-OpenRouter-Key':key},body:JSON.stringify({model,messages,context})});const data=await r.json();if(!r.ok)throw new Error(data.error||'AI request failed.');return data}
