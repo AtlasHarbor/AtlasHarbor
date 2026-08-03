@@ -10,6 +10,7 @@ export function createMlbClient(fetchImpl = globalThis.fetch) {
     if (!response.ok) throw new Error(`MLB Stats API responded with ${response.status}`);
     return response.json();
   }
+  async function optionalRequest(path) { try { return await request(path); } catch (error) { console.warn(`Optional MLB request failed: ${path}`, error.message); return null; } }
   async function getStats(path) { const data = await request(path); return data.stats?.flatMap((entry) => entry.splits ?? []) ?? []; }
 
   return {
@@ -32,17 +33,17 @@ export function createMlbClient(fetchImpl = globalThis.fetch) {
     },
 
     async getGame(id) {
-      const [schedule, boxscore, feed] = await Promise.all([
-        request(`/schedule?sportId=1&gamePk=${id}&hydrate=team,probablePitcher,venue,weather,linescore`),
-        request(`/game/${id}/boxscore`),
-        request(`/game/${id}/feed/live`),
-      ]);
+      const schedule = await request(`/schedule?sportId=1&gamePk=${id}&hydrate=team,probablePitcher,venue,weather,linescore`);
       const game = schedule.dates?.[0]?.games?.[0];
       if (!game) return null;
       const normalized = normalizeGame(game);
+      const [boxscore, feed] = await Promise.all([
+        optionalRequest(`/game/${id}/boxscore`),
+        optionalRequest(`/game/${id}/feed/live`),
+      ]);
       const teams = {};
       for (const side of ["away", "home"]) {
-        const teamBox = boxscore.teams?.[side] ?? {};
+        const teamBox = boxscore?.teams?.[side] ?? {};
         const players = teamBox.players ?? {};
         teams[side] = {
           team: normalized[side],
@@ -53,19 +54,20 @@ export function createMlbClient(fetchImpl = globalThis.fetch) {
           totals: teamBox.teamStats ?? {},
         };
       }
-      const probable = feed.gameData?.probablePitchers ?? {};
+      const probable = feed?.gameData?.probablePitchers ?? {};
       return {
         ...normalized,
         teams,
         probablePitchers: { away: probable.away?.fullName ?? normalized.awayPitcher, home: probable.home?.fullName ?? normalized.homePitcher },
-        venueDetails: feed.gameData?.venue ?? {},
-        officials: boxscore.officials ?? [],
-        linescore: feed.liveData?.linescore ?? game.linescore ?? null,
-        decisions: feed.liveData?.decisions ?? null,
-        broadcasts: feed.gameData?.broadcasts ?? [],
-        gameInfo: feed.gameData?.gameInfo ?? {},
-        flags: feed.gameData?.flags ?? {},
-        review: feed.gameData?.review ?? {},
+        venueDetails: feed?.gameData?.venue ?? {},
+        officials: boxscore?.officials ?? [],
+        linescore: feed?.liveData?.linescore ?? game.linescore ?? null,
+        decisions: feed?.liveData?.decisions ?? null,
+        broadcasts: feed?.gameData?.broadcasts ?? [],
+        gameInfo: feed?.gameData?.gameInfo ?? {},
+        flags: feed?.gameData?.flags ?? {},
+        review: feed?.gameData?.review ?? {},
+        availability: { schedule: true, boxscore: Boolean(boxscore), liveFeed: Boolean(feed) },
       };
     },
 
