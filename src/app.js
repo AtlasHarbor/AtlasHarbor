@@ -5,6 +5,7 @@ import {createMlbClient} from "./mlb.js";
 import {createLegalService} from "./legal.js";
 import {createBaseballCache} from "./baseball-cache.js";
 import {createProblemRouter} from "./problem-router.js";
+import {createFoodRouter} from "./food.js";
 import {gameSlug,renderBaseballGamePage,renderGameNotFoundPage} from "./baseball-game-page.js";
 import {playerSlug,renderBaseballPlayerPage} from "./baseball-player-page.js";
 import {teamSlug,renderBaseballTeamPage} from "./baseball-team-page.js";
@@ -16,52 +17,15 @@ export function createApp({mlb=createMlbClient(),legal=createLegalService(),base
  const app=express();
  app.use(express.json({limit:"64kb"}));
  app.use(createProblemRouter());
+ app.use('/api/food',createFoodRouter());
  const cached=(key,loader,options)=>baseballCache.getOrFetch(key,loader,options);
  const getTeam=id=>cached(`team:${id}`,()=>mlb.getTeam(id));
  const getPlayer=id=>cached(`player:${id}`,()=>mlb.getPlayer(id));
  const getGame=id=>cached(`game:${id}`,()=>mlb.getGame(id),{ttlMs:60*60*1000});
- const enrichGame=async game=>{
-  const sides=["away","home"];
-  const profiles=await Promise.all(sides.map(side=>game[side]?.id?getTeam(game[side].id).then(x=>x.data).catch(()=>null):null));
-  game.teamProfiles={away:profiles[0],home:profiles[1]};
-  const ids=sides.map(side=>game.probablePitcherIds?.[side]??game[`${side}PitcherId`]??game.teams?.[side]?.pitchers?.[0]?.id);
-  const starters=await Promise.all(ids.map(id=>id?getPlayer(id).then(x=>x.data).catch(()=>null):null));
-  game.starterProfiles={away:starters[0],home:starters[1]};
-  for(const side of sides){
-   if(!game.teams?.[side]?.battingOrder?.length&&game.teamProfiles?.[side]?.lineup?.players?.length){game.teams[side].battingOrder=game.teamProfiles[side].lineup.players;game.teams[side].lineupSource="Most recently available MLB lineup"}
-   else if(game.teams?.[side])game.teams[side].lineupSource="Confirmed for this game";
-  }
-  return game;
- };
- app.get("/api/config",(_req,res)=>{
-  const configured=Boolean(process.env.SUPABASE_URL&&process.env.SUPABASE_PUBLISHABLE_KEY);
-  res.set("Cache-Control","no-store");
-  return res.json({configured,supabaseUrl:configured?process.env.SUPABASE_URL:null,supabasePublishableKey:configured?process.env.SUPABASE_PUBLISHABLE_KEY:null,error:configured?null:"Supabase is not configured.",mapProvider:String(process.env.MAP_PROVIDER||"openstreetmap").toLowerCase(),googleMapsApiKey:process.env.GOOGLE_MAPS_BROWSER_API_KEY||null,mapTileUrl:process.env.MAP_TILE_URL||"https://tile.openstreetmap.org/{z}/{x}/{y}.png"});
- });
- app.get("/api/status",(_req,res)=>{
-  const supabase=Boolean(process.env.SUPABASE_URL&&process.env.SUPABASE_PUBLISHABLE_KEY);let supabaseUrlHost=null;try{supabaseUrlHost=supabase?new URL(process.env.SUPABASE_URL).host:null}catch{}
-  res.set("Cache-Control","no-store");
-  return res.json({ok:true,supabase,supabaseUrlHost,baseballCache:baseballCache.enabled,aiProxy:true,problemSpaces:true,adminConfigured:Boolean(process.env.ADMIN_PASSWORD),mapProvider:String(process.env.MAP_PROVIDER||"openstreetmap").toLowerCase(),googleMapsConfigured:Boolean(process.env.GOOGLE_MAPS_BROWSER_API_KEY),environment:process.env.NODE_ENV||"development",time:new Date().toISOString()});
- });
- app.post("/api/ai/chat",async(req,res)=>{
-  const supabaseUrl=process.env.SUPABASE_URL,publishable=process.env.SUPABASE_PUBLISHABLE_KEY,token=String(req.get("authorization")||"").replace(/^Bearer\s+/i,""),apiKey=req.get("x-openrouter-key");
-  if(!supabaseUrl||!publishable)return res.status(503).json({error:"Supabase is not configured."});
-  if(!token||!apiKey)return res.status(401).json({error:"Sign in and provide an API key."});
-  try{
-   const userResponse=await fetch(`${supabaseUrl}/auth/v1/user`,{headers:{apikey:publishable,Authorization:`Bearer ${token}`}});
-   if(!userResponse.ok)return res.status(401).json({error:"Invalid or expired session."});
-   const messages=Array.isArray(req.body?.messages)?req.body.messages.slice(-20):[];
-   if(!messages.length)return res.status(400).json({error:"Messages are required."});
-   const model=String(req.body?.model||"openrouter/auto").slice(0,160);
-   const baseUrl=String(req.body?.baseUrl||"https://openrouter.ai/api/v1").replace(/\/$/,"").slice(0,500);
-   const headers={Authorization:`Bearer ${apiKey}`,"Content-Type":"application/json"};
-   if(baseUrl.includes("openrouter.ai")){headers["HTTP-Referer"]=process.env.PUBLIC_APP_URL||"http://localhost:3000";headers["X-Title"]="Atlas Harbor"}
-   const response=await fetch(`${baseUrl}/chat/completions`,{method:"POST",headers,body:JSON.stringify({model,messages,temperature:.3})});
-   const data=await response.json().catch(()=>({}));
-   if(!response.ok)return res.status(response.status).json({error:data.error?.message||data.message||"AI request failed."});
-   return res.json({content:data.choices?.[0]?.message?.content||"",model:data.model||model,usage:data.usage||null});
-  }catch(error){console.error(error);return res.status(502).json({error:"AI request failed."})}
- });
+ const enrichGame=async game=>{const sides=["away","home"];const profiles=await Promise.all(sides.map(side=>game[side]?.id?getTeam(game[side].id).then(x=>x.data).catch(()=>null):null));game.teamProfiles={away:profiles[0],home:profiles[1]};const ids=sides.map(side=>game.probablePitcherIds?.[side]??game[`${side}PitcherId`]??game.teams?.[side]?.pitchers?.[0]?.id);const starters=await Promise.all(ids.map(id=>id?getPlayer(id).then(x=>x.data).catch(()=>null):null));game.starterProfiles={away:starters[0],home:starters[1]};for(const side of sides){if(!game.teams?.[side]?.battingOrder?.length&&game.teamProfiles?.[side]?.lineup?.players?.length){game.teams[side].battingOrder=game.teamProfiles[side].lineup.players;game.teams[side].lineupSource="Most recently available MLB lineup"}else if(game.teams?.[side])game.teams[side].lineupSource="Confirmed for this game"}return game};
+ app.get("/api/config",(_req,res)=>{const configured=Boolean(process.env.SUPABASE_URL&&process.env.SUPABASE_PUBLISHABLE_KEY);res.set("Cache-Control","no-store");return res.json({configured,supabaseUrl:configured?process.env.SUPABASE_URL:null,supabasePublishableKey:configured?process.env.SUPABASE_PUBLISHABLE_KEY:null,error:configured?null:"Supabase is not configured.",mapProvider:String(process.env.MAP_PROVIDER||"openstreetmap").toLowerCase(),googleMapsApiKey:process.env.GOOGLE_MAPS_BROWSER_API_KEY||null,mapTileUrl:process.env.MAP_TILE_URL||"https://tile.openstreetmap.org/{z}/{x}/{y}.png"})});
+ app.get("/api/status",(_req,res)=>{const supabase=Boolean(process.env.SUPABASE_URL&&process.env.SUPABASE_PUBLISHABLE_KEY);let supabaseUrlHost=null;try{supabaseUrlHost=supabase?new URL(process.env.SUPABASE_URL).host:null}catch{}res.set("Cache-Control","no-store");return res.json({ok:true,supabase,supabaseUrlHost,baseballCache:baseballCache.enabled,aiProxy:true,problemSpaces:true,foodDiscovery:true,foodReviewsProvider:process.env.GOOGLE_PLACES_API_KEY?'google':'community-only',adminConfigured:Boolean(process.env.ADMIN_PASSWORD),mapProvider:String(process.env.MAP_PROVIDER||"openstreetmap").toLowerCase(),googleMapsConfigured:Boolean(process.env.GOOGLE_MAPS_BROWSER_API_KEY),environment:process.env.NODE_ENV||"development",time:new Date().toISOString()})});
+ app.post("/api/ai/chat",async(req,res)=>{const supabaseUrl=process.env.SUPABASE_URL,publishable=process.env.SUPABASE_PUBLISHABLE_KEY,token=String(req.get("authorization")||"").replace(/^Bearer\s+/i,""),apiKey=req.get("x-openrouter-key");if(!supabaseUrl||!publishable)return res.status(503).json({error:"Supabase is not configured."});if(!token||!apiKey)return res.status(401).json({error:"Sign in and provide an API key."});try{const userResponse=await fetch(`${supabaseUrl}/auth/v1/user`,{headers:{apikey:publishable,Authorization:`Bearer ${token}`}});if(!userResponse.ok)return res.status(401).json({error:"Invalid or expired session."});const messages=Array.isArray(req.body?.messages)?req.body.messages.slice(-20):[];if(!messages.length)return res.status(400).json({error:"Messages are required."});const model=String(req.body?.model||"openrouter/auto").slice(0,160),baseUrl=String(req.body?.baseUrl||"https://openrouter.ai/api/v1").replace(/\/$/,"").slice(0,500),headers={Authorization:`Bearer ${apiKey}`,"Content-Type":"application/json"};if(baseUrl.includes("openrouter.ai")){headers["HTTP-Referer"]=process.env.PUBLIC_APP_URL||"http://localhost:3000";headers["X-Title"]="Atlas Harbor"}const response=await fetch(`${baseUrl}/chat/completions`,{method:"POST",headers,body:JSON.stringify({model,messages,temperature:.3})});const data=await response.json().catch(()=>({}));if(!response.ok)return res.status(response.status).json({error:data.error?.message||data.message||"AI request failed."});return res.json({content:data.choices?.[0]?.message?.content||"",model:data.model||model,usage:data.usage||null})}catch(error){console.error(error);return res.status(502).json({error:"AI request failed."})}});
  app.get("/api/baseball/search",async(req,res)=>{const query=String(req.query.q??"").trim();if(query.length<2)return res.json({results:[]});try{return res.json({results:await mlb.search(query)})}catch(error){console.error(error);return res.status(502).json({error:"Baseball search is temporarily unavailable."})}});
  app.get("/api/baseball/games",async(_req,res)=>{try{return res.json({games:await mlb.getUpcomingGames(14)})}catch(error){console.error(error);return res.status(502).json({error:"Upcoming games are temporarily unavailable."})}});
  app.get("/api/baseball/games/:id",async(req,res)=>{if(!/^\d+$/.test(req.params.id))return res.status(400).json({error:"Invalid game ID."});try{const result=await getGame(req.params.id);return result.data?res.json({game:await enrichGame(result.data),cache:result.cache,fetchedAt:result.fetchedAt}):res.status(404).json({error:"Game not found."})}catch(error){console.error(error);return res.status(502).json({error:"Game details are temporarily unavailable."})}});
@@ -76,6 +40,7 @@ export function createApp({mlb=createMlbClient(),legal=createLegalService(),base
  app.get(["/baseball/players/:id","/baseball/players/:id/:slug"],async(req,res)=>{if(!/^\d+$/.test(req.params.id))return res.status(404).send("Player not found");try{const result=await getPlayer(req.params.id),player=result.data;if(!player)return res.status(404).send("Player not found");const slug=playerSlug(player),base=(process.env.PUBLIC_APP_URL||`${req.protocol}://${req.get("host")}`).replace(/\/$/,""),canonicalPath=`/baseball/players/${player.id}/${slug}`;if(req.path!==canonicalPath)return res.redirect(301,canonicalPath);res.set("Cache-Control","public,max-age=300,stale-while-revalidate=86400");return res.type("html").send(renderBaseballPlayerPage(player,`${base}${canonicalPath}`))}catch(error){console.error(error);return res.status(503).send("Player temporarily unavailable")}});
  app.get("/account",(_req,res)=>res.sendFile(page("account.html")));
  app.get(["/baseball","/baseball/players"],(_req,res)=>res.sendFile(page("baseball.html")));
+ app.get(["/food","/food/{*path}"],(_req,res)=>res.sendFile(page("food.html")));
  app.get("/game/docs",(_req,res)=>res.sendFile(page("game-docs.html")));
  app.get(["/game","/game/{*path}"],(_req,res)=>res.sendFile(page("game.html")));
  app.get(["/legal","/legal/{*path}"],(_req,res)=>res.sendFile(page("legal.html")));
