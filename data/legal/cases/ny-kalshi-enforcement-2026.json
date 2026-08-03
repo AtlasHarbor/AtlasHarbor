@@ -1,0 +1,67 @@
+{
+  "slug": "ny-kalshi-enforcement-2026",
+  "title": "The People of the State of New York v. KalshiEX LLC",
+  "shortTitle": "New York v. KalshiEX",
+  "status": "newly filed",
+  "lastVerifiedAt": "2026-08-02T23:55:00Z",
+  "jurisdiction": "New York",
+  "court": "Supreme Court of the State of New York, New York County",
+  "indexNumber": null,
+  "filedAt": "2026-07-31",
+  "matterType": "Verified Petition under Executive Law § 63(12)",
+  "parties": {
+    "plaintiffs": ["The People of the State of New York", "New York Attorney General Letitia James"],
+    "defendants": ["KalshiEX LLC"]
+  },
+  "coreQuestion": "Does the Commodity Exchange Act preempt New York gambling law as applied to event contracts offered on Kalshi's CFTC-designated contract market?",
+  "requestedRelief": ["injunction", "restitution", "disgorgement", "civil penalties", "permanent prohibition on operating in New York"],
+  "positions": {
+    "newYork": [
+      "Kalshi operates an unlicensed sportsbook because users stake money on uncertain future events.",
+      "Federal labeling does not displace New York's authority over gambling activity within the state."
+    ],
+    "kalshi": [
+      "Kalshi is a federally designated contract market regulated by the CFTC.",
+      "Event contracts are federally regulated derivatives and the Commodity Exchange Act supplies exclusive federal jurisdiction."
+    ]
+  },
+  "timeline": [
+    {"date":"2025-10-27","event":"Kalshi filed KalshiEX LLC v. Williams et al. in SDNY, No. 25-cv-08846-AT."},
+    {"date":"2026-07-07","event":"Judge Analisa Torres denied Kalshi's motion for a preliminary injunction."},
+    {"date":"2026-07-08","event":"Second Circuit appeal docketed as No. 26-1835."},
+    {"date":"2026-07-27","event":"Judge Torres denied an injunction pending appeal."},
+    {"date":"2026-07-31","event":"New York filed the affirmative enforcement petition against KalshiEX LLC."}
+  ],
+  "relatedCases": [
+    {"caption":"KalshiEX LLC v. Williams et al.","court":"U.S. District Court, Southern District of New York","number":"25-cv-08846-AT","judge":"Analisa Torres","appeal":"Second Circuit No. 26-1835"},
+    {"caption":"KalshiEX LLC v. Flaherty","court":"U.S. Court of Appeals for the Third Circuit","number":"25-1922","note":"Third Circuit affirmed preliminary relief for Kalshi on April 6, 2026; this is persuasive, not controlling, in New York."}
+  ],
+  "nextWatchItems": [
+    "New York County index number",
+    "service and response deadline",
+    "possible federal removal",
+    "motion to dismiss or preemption briefing",
+    "Second Circuit activity in No. 26-1835"
+  ],
+  "analysis": {
+    "importance": "The dispute tests the boundary between federal derivatives regulation and state gambling enforcement for prediction markets.",
+    "uncertainties": [
+      "No final merits ruling has been entered in the New York federal case.",
+      "The state-court index number and any removal docket were not publicly confirmed when this record was last verified.",
+      "Preliminary-injunction rulings do not finally decide the merits."
+    ],
+    "logisticsTranslation": {
+      "cargo": "the legal characterization of event contracts",
+      "routes": "state gambling enforcement and federal commodities regulation",
+      "ports": "state court, SDNY, Second Circuit, and potentially the Supreme Court",
+      "bottleneck": "the preemption question",
+      "disruptions": "removal, injunction motions, appellate stays, and conflicting circuit authority",
+      "decisionLesson": "Track which forum controls each decision, which route can block another, and which facts are authoritative versus merely persuasive."
+    }
+  },
+  "sources": [
+    {"type":"primary","title":"New York Attorney General publications and enforcement library","url":"https://ag.ny.gov/libraries-documents/advocacy-and-enforcement-actions","verifiedAt":"2026-08-02"},
+    {"type":"primary","title":"KalshiEX LLC v. Flaherty, Third Circuit opinion","url":"https://law.justia.com/cases/federal/appellate-courts/ca3/25-1922/25-1922-2026-04-06.html","verifiedAt":"2026-08-02"}
+  ],
+  "disclaimer": "This tracker is informational and is not legal advice. Court dockets and primary filings control over summaries."
+}
