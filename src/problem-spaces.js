@@ -1,4 +1,5 @@
 const seededSpaces=[
+ {slug:'economics',title:'Economics',description:'Convert current economic publication stories into explicit decision problems, stakeholders, constraints, tradeoffs, and open questions.',url:'/economics',status:'approved',requester_name:'Atlas Harbor'},
  {slug:'logistics-control-tower',title:'Logistics Control Tower',description:'Coordinate purchase orders, plants, packaging, inventory, and multimodal transportation on an hourly map.',url:'/game',status:'approved',requester_name:'Atlas Harbor'},
  {slug:'baseball-intelligence',title:'Baseball Intelligence',description:'Explore games, teams, players, injuries, projections, notes, and published analysis.',url:'/baseball',status:'approved',requester_name:'Atlas Harbor'},
  {slug:'legal-systems',title:'Legal Systems Tracker',description:'Track litigation, sources, procedural events, projections, and independent analysis.',url:'/legal',status:'approved',requester_name:'Atlas Harbor'},
