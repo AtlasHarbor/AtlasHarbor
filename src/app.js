@@ -25,6 +25,7 @@ export function createApp({ mlb = createMlbClient(), legal = createLegalService(
   app.get(["/baseball", "/baseball/players", "/baseball/{*path}"], (_req,res)=>res.sendFile(page("baseball.html")));
   app.get(["/game", "/game/{*path}"], (_req,res)=>res.sendFile(page("game.html")));
   app.get(["/legal", "/legal/{*path}"], (_req,res)=>res.sendFile(page("legal.html")));
+  app.get(["/blog", "/blog/{*path}"], (_req,res)=>res.sendFile(page("blog.html")));
   app.use("/vendor", express.static(path.join(directory,"../node_modules/phaser/dist")));
   app.use(express.static(path.join(directory,"../public")));
   app.get("/{*path}",(_req,res)=>res.sendFile(page("index.html")));
