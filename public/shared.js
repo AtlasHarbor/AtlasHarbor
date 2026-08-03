@@ -1,0 +1,1 @@
+import{renderSharedWorkspace}from'./workspace-notes.js';const token=location.pathname.split('/').filter(Boolean).pop();renderSharedWorkspace(token,'#shared-workspace');
