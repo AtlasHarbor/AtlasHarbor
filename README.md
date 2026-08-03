@@ -2,77 +2,105 @@
 
 Atlas Harbor is a logistics simulation and decision platform. It turns complicated real-world choices into systems people can operate, inspect, and improve.
 
-## The premise
-
-Many hard problems share the same shape: limited resources, incomplete information, sequencing, bottlenecks, deadlines, competing authorities, and uncertain downstream effects. Atlas Harbor maps those structures onto a playable third-party-logistics network of clients, routes, cargo, trucks, drivers, outside carriers, capacity, risk, cash, and service levels.
-
-The goal is not to claim that litigation or baseball is literally logistics. The logistics layer is a legible model for examining how a person allocates resources, protects optionality, reacts to new evidence, and chooses among constrained routes.
-
 ## Application surfaces
 
 - `/` explains Atlas Harbor with an animated logistics-to-domain transfer sequence.
-- `/game` is the playable ten-day 3PL operating scenario.
-- `/game/docs` explains objectives, resources, routes, providers, economics, and strategy.
-- `/blog` discusses recent research and limitations around AI-assisted analogical transfer.
+- `/game` is the playable competitive trade-lane simulation.
+- `/account` provides Supabase sign-up/sign-in plus per-user AI model settings.
 - `/baseball` provides MLB players, teams, games, lineups, weather, injuries, and scouting-oriented statistics.
-- `/legal` tracks lawsuits, procedural events, party positions, source provenance, uncertainties, and logistics-system translations.
+- `/legal` tracks lawsuits, procedural events, sources, logistics translations, private notes, shared notes, and user-requested AI analysis.
+- `/blog` discusses research and limitations around AI-assisted analogical transfer.
 
-## Logistics game
+## Accounts and persistence
 
-The game begins with an operating map rather than an empty construction grid. Roads, shipping lanes, suppliers, a port, the Atlas Harbor cross-dock, and client locations are already visible. Trucks, ships, forklifts, cargo, weather, and facility activity animate so the network can be understood by looking at it.
+Atlas Harbor uses Supabase Auth and Row Level Security. Signed-in users can:
 
-The operating loop is:
+- save game progress summaries,
+- retain their selected OpenRouter model,
+- create private notes on legal cases,
+- selectively publish a note through an unguessable share URL,
+- send case context to their own OpenRouter account for analysis.
 
-1. Select a client contract.
-2. Choose a route with an explicit time, cost, and risk profile.
-3. Assign owned trucks or buy capacity from a third-party provider.
-4. Dispatch freight and commit operating cash.
-5. Advance the day, receive delivery results, release resources, and respond to disruptions.
+The OpenRouter API key is deliberately **not** stored in Supabase, committed to GitHub, or written to server logs. It stays in browser local storage and is supplied to the server only for the request that needs it. The selected model is stored in both local storage and the user's protected `user_settings` row.
 
-Owned fleet protects margin but is constrained by trucks and drivers. Third-party carriers cost more but can protect deadlines, diversify route risk, and preserve internal resources. Contract values and balances use six-figure operating amounts rather than arcade-scale money.
+## Supabase setup
 
-A guided overlay tutorial opens on first play and remains available from the help control. Capacity shortages, insufficient cash, missing route assignments, disruptions, deliveries, and end-of-cycle results appear in prominent lightboxes that explain the constraint and available next actions.
+1. Create a Supabase project.
+2. Open the Supabase SQL editor and run `supabase/schema.sql`.
+3. Copy `.env.example` to `.env` for local development.
+4. Add the real values only to your local `.env` or deployment environment.
+5. Never commit `.env`.
 
-The interaction model uses established transport-management conventions: visible vehicles and cargo flow, fixed locations and infrastructure, route assignment, vehicle capacity, cargo chains, operating economics, and escalating scenario objectives. Atlas Harbor adds a translation layer that explains reusable strategy principles beneath those mechanics.
-
-## Legal tracker architecture
-
-Canonical lawsuit records live in `data/legal/cases/*.json`. Each record contains stable identifiers, parties, court, filing date, procedural timeline, requested relief, party positions, related cases, watch items, analysis, logistics translation, and a source list.
-
-The first record is **The People of the State of New York v. KalshiEX LLC**, filed July 31, 2026. The record deliberately leaves the New York index number `null` until a primary source confirms it. Preliminary rulings, allegations, and final holdings are labeled separately.
-
-### Source and review policy
-
-1. Primary sources control: court dockets, filed pleadings and orders, statutes, agency publications, and official releases.
-2. Secondary reporting can identify leads but should not by itself establish a procedural fact.
-3. Every update records URLs, source type, verification time, confidence, and warnings.
-4. AI output never silently overwrites a canonical case file.
-5. An OpenRouter refresh creates `data/legal/proposals/<slug>.json`, which remains a review proposal until a human validates and promotes the changes.
-6. The tracker is informational and is not legal advice.
-
-### OpenRouter refresh
-
-```text
-POST /api/legal/cases/:slug/refresh
-Authorization: Bearer $LEGAL_ADMIN_TOKEN
-```
-
-Configure:
+Required variables:
 
 ```bash
-OPENROUTER_API_KEY=...
-LEGAL_ADMIN_TOKEN=use-a-long-random-secret
-OPENROUTER_LEGAL_MODEL=openai/gpt-5.2
-PUBLIC_APP_URL=https://your-deployment.example
+SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+SUPABASE_PUBLISHABLE_KEY=YOUR_SUPABASE_PUBLISHABLE_KEY
+SUPABASE_SECRET_KEY=YOUR_SUPABASE_SECRET_KEY
+SUPABASE_JWKS_URL=https://YOUR_PROJECT_REF.supabase.co/auth/v1/.well-known/jwks.json
 ```
 
-The service calls OpenRouter with web search and a strict JSON Schema response. The prompt prioritizes primary sources, distinguishes allegations from holdings, and returns no change when nothing material is verified.
+`SUPABASE_PUBLISHABLE_KEY` is exposed to the browser through `/api/config` and is safe only in combination with correctly configured Row Level Security. `SUPABASE_SECRET_KEY` must remain server-only. The current implementation does not send the secret key to the browser.
+
+### GitHub deployment configuration
+
+For GitHub Actions, repository environments, or a connected hosting platform:
+
+1. Open the repository on GitHub.
+2. Go to **Settings → Secrets and variables → Actions**.
+3. Add each sensitive value as a repository or environment secret.
+4. Add non-sensitive deployment settings as variables when appropriate.
+5. Configure the hosting workflow or platform to expose those values to the Node process.
+
+Never paste real keys into `.env.example`, workflow YAML, issue comments, pull requests, or committed source files. Rotate any credential that has been shared in chat, logs, screenshots, or a public repository.
+
+## OpenRouter user workflow
+
+1. Sign up or sign in at `/account`.
+2. Paste a personal OpenRouter API key.
+3. Select a model.
+4. Open a legal case and choose **Ask AI to analyze this case**.
+5. Review the generated text before saving it into a note.
+
+The server validates the Supabase session, then forwards the request to OpenRouter using the user-supplied key. The key is never written to the database. Model output is user-requested analysis, not a verified update to the canonical legal record.
+
+## Legal notes and sharing
+
+Canonical lawsuit records remain in `data/legal/cases/*.json`. Personal notes live in Supabase and are separate from canonical case facts.
+
+- Notes are private by default.
+- A signed-in user can mark a note shareable.
+- Shared notes are readable through `/legal?note=<share-token>`.
+- Disabling sharing removes public access under the database policy.
+- AI-generated text is added to the editable note and must be reviewed before saving.
+
+The tracker is informational and is not legal advice. Primary filings and official sources control over user notes or model output.
+
+## Game progress
+
+The game continues to run entirely in the browser. When a user is signed in, `public/progress.js` observes the visible game state and saves a compact progress snapshot containing week, cash, market share, reputation, network scores, and the latest event. This provides cross-session history without exposing internal game implementation details to the database.
+
+## Environment template
+
+`.env.example` contains placeholders only. `.gitignore` excludes `.env` and all `.env.*` files except `.env.example`.
+
+Additional optional variables:
+
+```bash
+PUBLIC_APP_URL=http://localhost:3000
+OPENROUTER_LEGAL_MODEL=openai/gpt-5.2
+LEGAL_ADMIN_TOKEN=GENERATE_A_LONG_RANDOM_SECRET
+OPENROUTER_API_KEY=OPTIONAL_SERVER_MANAGED_KEY
+```
+
+The server-managed OpenRouter key remains available for the administrator-only legal refresh workflow. User-initiated AI calls use the user's browser-held OpenRouter key instead.
 
 ## Run locally
 
 Requires Node.js 20 or later.
 
 ```bash
+cp .env.example .env
 npm install
 npm start
 npm test
@@ -83,11 +111,14 @@ Open `http://localhost:3000/`.
 ## Architecture
 
 - `src/server.js` starts Express.
-- `src/app.js` defines APIs and page routing.
+- `src/app.js` defines APIs, Supabase-safe configuration, authentication checks, AI proxying, and page routing.
 - `src/mlb.js` normalizes MLB data.
-- `src/legal.js` reads canonical cases and creates reviewable OpenRouter proposals.
-- `public/game.js` runs the logistics operating simulation.
-- `public/landing.js` controls the homepage transfer sequence.
+- `src/legal.js` reads canonical cases and creates administrator review proposals.
+- `supabase/schema.sql` defines user settings, game progress, legal notes, indexes, and Row Level Security policies.
+- `public/supabase-client.js` performs browser authentication and RLS-protected REST calls.
+- `public/account.js` manages sign-up, sign-in, OpenRouter key storage, and model selection.
+- `public/progress.js` persists signed-in game progress summaries.
+- `public/legal.js` renders cases and manages private/shared notes and user-requested AI analysis.
 
 ## Responsible use
 
