@@ -27,8 +27,13 @@ create table if not exists public.workspace_notes (
   resource_type text not null check (resource_type in ('baseball_game','baseball_team','baseball_player','legal_case','logistics_game')),
   resource_id text not null,
   resource_title text not null,
+  title text not null default 'Analysis',
   body text not null default '',
   ai_analysis text,
+  ai_prompt text,
+  projections jsonb not null default '[]'::jsonb,
+  placement text not null default 'bottom' check (placement in ('top','bottom')),
+  is_published boolean not null default false,
   is_shared boolean not null default false,
   share_scope text not null default 'page' check (share_scope in ('page','everything')),
   share_ai_analysis boolean not null default true,
@@ -37,6 +42,11 @@ create table if not exists public.workspace_notes (
   updated_at timestamptz not null default now(),
   unique(user_id, resource_type, resource_id)
 );
+alter table public.workspace_notes add column if not exists title text not null default 'Analysis';
+alter table public.workspace_notes add column if not exists ai_prompt text;
+alter table public.workspace_notes add column if not exists projections jsonb not null default '[]'::jsonb;
+alter table public.workspace_notes add column if not exists placement text not null default 'bottom';
+alter table public.workspace_notes add column if not exists is_published boolean not null default false;
 create index if not exists workspace_notes_resource_idx on public.workspace_notes(resource_type,resource_id);
 create unique index if not exists workspace_notes_share_token_idx on public.workspace_notes(share_token);
 
@@ -68,7 +78,7 @@ drop policy if exists "Users insert own workspace notes" on public.workspace_not
 drop policy if exists "Users update own workspace notes" on public.workspace_notes;
 drop policy if exists "Users delete own workspace notes" on public.workspace_notes;
 create policy "Users read own workspace notes" on public.workspace_notes for select to authenticated using (auth.uid()=user_id or is_shared=true);
-create policy "Public reads shared workspace notes" on public.workspace_notes for select to anon using (is_shared=true);
+create policy "Public reads shared workspace notes" on public.workspace_notes for select to anon using (is_shared=true and is_published=true);
 create policy "Users insert own workspace notes" on public.workspace_notes for insert to authenticated with check (auth.uid()=user_id);
 create policy "Users update own workspace notes" on public.workspace_notes for update to authenticated using (auth.uid()=user_id) with check (auth.uid()=user_id);
 create policy "Users delete own workspace notes" on public.workspace_notes for delete to authenticated using (auth.uid()=user_id);
