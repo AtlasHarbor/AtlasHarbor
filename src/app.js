@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { createMlbClient } from "./mlb.js";
 import { createLegalService } from "./legal.js";
 import { gameSlug, renderBaseballGamePage, renderGameNotFoundPage } from "./baseball-game-page.js";
+import { playerSlug, renderBaseballPlayerPage } from "./baseball-player-page.js";
 
 const directory = path.dirname(fileURLToPath(import.meta.url));
 const page = (name) => path.join(directory, `../public/${name}`);
@@ -25,19 +26,11 @@ export function createApp({ mlb = createMlbClient(), legal = createLegalService(
 
   app.get(["/baseball/games/:id", "/baseball/games/:id/:slug"], async (req,res)=>{
     if(!/^\d+$/.test(req.params.id)) return res.status(404).type("html").send(renderGameNotFoundPage());
-    try {
-      const game = await mlb.getGame(req.params.id);
-      if(!game) return res.status(404).type("html").send(renderGameNotFoundPage());
-      const slug = gameSlug(game);
-      const baseUrl = (process.env.PUBLIC_APP_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, "");
-      const canonicalPath = `/baseball/games/${game.id}/${slug}`;
-      if(req.path !== canonicalPath) return res.redirect(301, canonicalPath);
-      res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
-      return res.type("html").send(renderBaseballGamePage(game, `${baseUrl}${canonicalPath}`));
-    } catch(e) {
-      console.error(e);
-      return res.status(503).type("html").send(renderGameNotFoundPage());
-    }
+    try { const game=await mlb.getGame(req.params.id); if(!game)return res.status(404).type("html").send(renderGameNotFoundPage()); const slug=gameSlug(game); const base=(process.env.PUBLIC_APP_URL||`${req.protocol}://${req.get("host")}`).replace(/\/$/,""); const canonicalPath=`/baseball/games/${game.id}/${slug}`; if(req.path!==canonicalPath)return res.redirect(301,canonicalPath); res.set("Cache-Control","public, max-age=60, stale-while-revalidate=300"); return res.type("html").send(renderBaseballGamePage(game,`${base}${canonicalPath}`)); } catch(e){console.error(e);return res.status(503).type("html").send(renderGameNotFoundPage())}
+  });
+  app.get(["/baseball/players/:id", "/baseball/players/:id/:slug"], async (req,res)=>{
+    if(!/^\d+$/.test(req.params.id)) return res.status(404).send("Player not found");
+    try { const player=await mlb.getPlayer(req.params.id); if(!player)return res.status(404).send("Player not found"); const slug=playerSlug(player); const base=(process.env.PUBLIC_APP_URL||`${req.protocol}://${req.get("host")}`).replace(/\/$/,""); const canonicalPath=`/baseball/players/${player.id}/${slug}`; if(req.path!==canonicalPath)return res.redirect(301,canonicalPath); res.set("Cache-Control","public, max-age=120, stale-while-revalidate=600"); return res.type("html").send(renderBaseballPlayerPage(player,`${base}${canonicalPath}`)); } catch(e){console.error(e);return res.status(503).send("Player temporarily unavailable")}
   });
   app.get(["/baseball", "/baseball/players", "/baseball/{*path}"], (_req,res)=>res.sendFile(page("baseball.html")));
   app.get("/game/docs", (_req,res)=>res.sendFile(page("game-docs.html")));
