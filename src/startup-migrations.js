@@ -29,21 +29,13 @@ export async function runStartupMigrations({env=process.env,root=process.cwd()}=
  const client=new Client(clientConfig(databaseUrl));
  try{
   await client.connect();
-  const check=await client.query("select to_regclass('public.admin_system') is not null as exists");
+  const check=await client.query("select to_regclass('public.site_admin') is not null as exists");
   if(check.rows[0]?.exists)return{enabled:true,status:'ready',created:false};
-  const migrationPath=path.join(root,'supabase','admin-ai-featured.sql');
+  const migrationPath=path.join(root,'supabase','site-admin.sql');
   const sql=await fs.readFile(migrationPath,'utf8');
   await client.query('begin');
-  try{
-   await client.query(sql);
-   await client.query('commit');
-  }catch(error){
-   await client.query('rollback').catch(()=>{});
-   throw error;
-  }
+  try{await client.query(sql);await client.query('commit')}catch(error){await client.query('rollback').catch(()=>{});throw error}
   await client.query("select pg_notify('pgrst','reload schema')").catch(()=>{});
-  return{enabled:true,status:'ready',created:true,migration:'supabase/admin-ai-featured.sql'};
- }finally{
-  await client.end().catch(()=>{});
- }
+  return{enabled:true,status:'ready',created:true,migration:'supabase/site-admin.sql'};
+ }finally{await client.end().catch(()=>{})}
 }
