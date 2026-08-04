@@ -3,6 +3,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createProblemSpacesService} from './problem-spaces.js';
 import {createAdminMetadataControl} from './admin-metadata-control.js';
+import {createAdminResearchRouter} from './admin-research.js';
 import {createEconomicsRouter} from './economics.js';
 import {createPublishedFeedRouter} from './published-feed.js';
 
@@ -12,6 +13,7 @@ export function createProblemRouter({service=createProblemSpacesService(),env=pr
  router.get(['/economics','/economics/{*path}'],(_req,res)=>res.sendFile(path.join(directory,'../public/economics.html')));
  router.get(['/users/:slug','/users/:slug/{*path}'],(_req,res)=>res.sendFile(path.join(directory,'../public/profile.html')));
  router.use(createAdminMetadataControl({env}));
+ router.use(createAdminResearchRouter({env}));
  router.use(createEconomicsRouter({env}));
  router.use(createPublishedFeedRouter({env}));
  const legacyAdminOk=req=>Boolean(env.ADMIN_PASSWORD)&&req.get('x-admin-password')===env.ADMIN_PASSWORD;
