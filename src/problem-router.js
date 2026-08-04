@@ -10,6 +10,7 @@ const directory=path.dirname(fileURLToPath(import.meta.url));
 export function createProblemRouter({service=createProblemSpacesService(),env=process.env}={}){
  const router=express.Router();
  router.get(['/economics','/economics/{*path}'],(_req,res)=>res.sendFile(path.join(directory,'../public/economics.html')));
+ router.get(['/users/:slug','/users/:slug/{*path}'],(_req,res)=>res.sendFile(path.join(directory,'../public/profile.html')));
  router.use(createAdminMetadataControl({env}));
  router.use(createEconomicsRouter({env}));
  router.use(createPublishedFeedRouter({env}));
