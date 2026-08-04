@@ -1,28 +1,49 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import {spawn} from 'node:child_process';
+import pg from 'pg';
 
-function runPsql(databaseUrl,args,input){
- return new Promise((resolve,reject)=>{
-  const child=spawn(process.env.PSQL_BIN||'psql',['--no-psqlrc','--set','ON_ERROR_STOP=1','--dbname',databaseUrl,...args],{stdio:['pipe','pipe','pipe']});
-  let stdout='',stderr='';
-  child.stdout.on('data',chunk=>stdout+=chunk);
-  child.stderr.on('data',chunk=>stderr+=chunk);
-  child.on('error',error=>reject(new Error(error.code==='ENOENT'?'The psql executable is not installed. Install PostgreSQL client tools or disable AUTO_MIGRATE.':error.message)));
-  child.on('close',code=>code===0?resolve(stdout):reject(new Error(stderr.trim()||`psql exited with code ${code}`)));
-  if(input)child.stdin.end(input);else child.stdin.end();
- });
+const {Client}=pg;
+
+function databaseUrlFromEnv(env){
+ if(env.DATABASE_URL||env.SUPABASE_DATABASE_URL)return env.DATABASE_URL||env.SUPABASE_DATABASE_URL;
+ if(!env.SUPABASE_URL||!env.SUPABASE_DB_PASSWORD)return null;
+ try{
+  const projectRef=new URL(env.SUPABASE_URL).hostname.split('.')[0];
+  const host=env.SUPABASE_DB_HOST||`db.${projectRef}.supabase.co`;
+  const user=env.SUPABASE_DB_USER||'postgres';
+  const port=env.SUPABASE_DB_PORT||'5432';
+  return `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(env.SUPABASE_DB_PASSWORD)}@${host}:${port}/postgres?sslmode=require`;
+ }catch{return null}
+}
+
+function clientConfig(connectionString){
+ const ssl=/sslmode=require/i.test(connectionString)||/supabase\.(co|com)/i.test(connectionString);
+ return{connectionString,ssl:ssl?{rejectUnauthorized:false}:undefined,connectionTimeoutMillis:15000,statement_timeout:60000,query_timeout:60000};
 }
 
 export async function runStartupMigrations({env=process.env,root=process.cwd()}={}){
- const databaseUrl=env.DATABASE_URL||env.SUPABASE_DATABASE_URL;
+ const databaseUrl=databaseUrlFromEnv(env);
  const enabled=String(env.AUTO_MIGRATE??'true').toLowerCase()!=='false';
  if(!enabled)return{enabled:false,status:'disabled'};
- if(!databaseUrl)return{enabled:true,status:'skipped',reason:'DATABASE_URL is not configured'};
- const exists=(await runPsql(databaseUrl,['--tuples-only','--no-align','--command',"select to_regclass('public.admin_system') is not null;"])).trim()==='t';
- if(exists)return{enabled:true,status:'ready',created:false};
- const migrationPath=path.join(root,'supabase','admin-ai-featured.sql');
- const sql=await fs.readFile(migrationPath,'utf8');
- await runPsql(databaseUrl,[],sql);
- return{enabled:true,status:'ready',created:true,migration:'supabase/admin-ai-featured.sql'};
+ if(!databaseUrl)return{enabled:true,status:'skipped',reason:'Set DATABASE_URL, SUPABASE_DATABASE_URL, or SUPABASE_DB_PASSWORD so startup can create tables.'};
+ const client=new Client(clientConfig(databaseUrl));
+ try{
+  await client.connect();
+  const check=await client.query("select to_regclass('public.admin_system') is not null as exists");
+  if(check.rows[0]?.exists)return{enabled:true,status:'ready',created:false};
+  const migrationPath=path.join(root,'supabase','admin-ai-featured.sql');
+  const sql=await fs.readFile(migrationPath,'utf8');
+  await client.query('begin');
+  try{
+   await client.query(sql);
+   await client.query('commit');
+  }catch(error){
+   await client.query('rollback').catch(()=>{});
+   throw error;
+  }
+  await client.query("select pg_notify('pgrst','reload schema')").catch(()=>{});
+  return{enabled:true,status:'ready',created:true,migration:'supabase/admin-ai-featured.sql'};
+ }finally{
+  await client.end().catch(()=>{});
+ }
 }
