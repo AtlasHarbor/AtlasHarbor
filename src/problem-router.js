@@ -1,11 +1,11 @@
 import express from 'express';
 import {createProblemSpacesService} from './problem-spaces.js';
-import {createLocalAdmin} from './admin-local.js';
+import {createAdminMetadataControl} from './admin-metadata-control.js';
 import {createEconomicsRouter} from './economics.js';
 
 export function createProblemRouter({service=createProblemSpacesService(),env=process.env}={}){
  const router=express.Router();
- router.use(createLocalAdmin({env}));
+ router.use(createAdminMetadataControl({env}));
  router.use(createEconomicsRouter({env}));
  const legacyAdminOk=req=>Boolean(env.ADMIN_PASSWORD)&&req.get('x-admin-password')===env.ADMIN_PASSWORD;
  router.get('/api/problem-spaces',async(_req,res)=>{try{return res.json({spaces:await service.listPublic()})}catch(error){console.error(error);return res.status(500).json({error:'Problem spaces are temporarily unavailable.'})}});
