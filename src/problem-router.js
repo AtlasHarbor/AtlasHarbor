@@ -1,10 +1,12 @@
 import express from 'express';
 import {createProblemSpacesService} from './problem-spaces.js';
 import {createAdminControl} from './admin-control.js';
+import {createAdminFallback} from './admin-fallback.js';
 import {createEconomicsRouter} from './economics.js';
 
 export function createProblemRouter({service=createProblemSpacesService(),env=process.env}={}){
  const router=express.Router();
+ router.use(createAdminFallback({env}));
  const adminControl=createAdminControl({env});
  router.use(adminControl.router);
  router.use(createEconomicsRouter({env}));
