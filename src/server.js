@@ -15,24 +15,11 @@ if (fs.existsSync(envPath)) {
   }
 }
 
-const {runStartupMigrations}=await import('./startup-migrations.js');
-let migrationStatus;
-try{
-  migrationStatus=await runStartupMigrations();
-  if(migrationStatus.created)console.log(`Database migration applied: ${migrationStatus.migration}`);
-  else if(migrationStatus.status==='skipped')console.warn(`Database migration skipped: ${migrationStatus.reason}`);
-}catch(error){
-  migrationStatus={status:'failed',error:error.message};
-  console.error(`Database migration failed: ${error.message}`);
-  if(String(process.env.MIGRATION_FAILURE_MODE||'continue').toLowerCase()==='exit')process.exit(1);
-}
-process.env.STARTUP_MIGRATION_STATUS=JSON.stringify(migrationStatus||{});
-
 const { createApp } = await import("./app.js");
 const port = Number(process.env.PORT) || 3000;
 createApp().listen(port, () => {
-  const supabaseConfigured = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_PUBLISHABLE_KEY);
+  const dataConfigured = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_PUBLISHABLE_KEY);
   console.log(`Atlas Harbor is running at http://localhost:${port}`);
-  console.log(`Supabase: ${supabaseConfigured ? "configured" : "not configured"}`);
-  console.log(`Startup migrations: ${migrationStatus?.status||'unknown'}`);
+  console.log(`Account data: ${dataConfigured ? "configured" : "not configured"}`);
+  console.log('Admin storage uses the existing authenticated game_progress data store.');
 });
