@@ -10,21 +10,31 @@ export function parsePublicationFeed(raw,type='rss',limit=20){
  return blocks.slice(0,limit).map(block=>({title:tag(block,'title'),url:tag(block,'link')||block.match(/<link[^>]+href=["']([^"']+)/i)?.[1]||'',summary:tag(block,'description')||tag(block,'summary')||tag(block,'content'),publishedAt:tag(block,'pubDate')||tag(block,'published')||tag(block,'updated')||null})).filter(item=>item.title&&item.url);
 }
 
+async function responseText(response){
+ response=await response;
+ if(!response)throw new TypeError('The request returned no HTTP response.');
+ if(typeof response.text==='function')return await response.text();
+ if(typeof response.json==='function')return JSON.stringify(await response.json());
+ if(typeof response.body==='string')return response.body;
+ throw new TypeError('The request did not return a readable HTTP response.');
+}
+
 async function requestJSON(fetchImpl,url,options){
- const started=Date.now(),response=await fetchImpl(url,options),text=await response.text();let data;
+ const started=Date.now(),response=await fetchImpl(url,options),text=await responseText(response);let data;
  try{data=text?JSON.parse(text):{}}catch{data={raw:text}}
  if(!response.ok)throw new Error(data.error?.message||data.error||data.message||text||`Provider returned ${response.status}`);
  return{data,elapsedMs:Date.now()-started};
 }
 
-export async function runAIHealthCheck({fetchImpl,providers,instruction}){
+export async function runAIHealthCheck({fetchImpl,providers}){
  let lastError;
  for(const provider of providers){
   if(!provider.endpoint||!provider.model||!provider.key)continue;
   try{
-   const {data,elapsedMs}=await requestJSON(fetchImpl,`${provider.endpoint.replace(/\/$/,'')}/chat/completions`,{method:'POST',headers:{Authorization:`Bearer ${provider.key}`,'Content-Type':'application/json'},body:JSON.stringify({model:provider.model,temperature:0,response_format:{type:'json_object'},messages:[{role:'system',content:'Return strict JSON only.'},{role:'user',content:`Test the Atlas Harbor quality-review configuration. ${instruction}\nReturn {"status":"ok","sample_quality_score":75,"note":"brief confirmation"}.`} ]})});
-   const content=data.choices?.[0]?.message?.content||'';let parsed;try{parsed=JSON.parse(content)}catch{parsed={response:content}}
-   return{ok:true,provider:provider.name,model:data.model||provider.model,elapsedMs,usage:data.usage||null,result:parsed};
+   const {data,elapsedMs}=await requestJSON(fetchImpl,`${provider.endpoint.replace(/\/$/,'')}/chat/completions`,{method:'POST',headers:{Authorization:`Bearer ${provider.key}`,'Content-Type':'application/json'},body:JSON.stringify({model:provider.model,temperature:.2,messages:[{role:'system',content:'Be cordial and concise. This is a connectivity test.'},{role:'user',content:'Hello, how are you? Please reply with a friendly one- or two-sentence response.'}]})});
+   const content=String(data.choices?.[0]?.message?.content||'').trim();
+   if(!content)throw new Error('The provider returned no assistant message.');
+   return{ok:true,provider:provider.name,model:data.model||provider.model,elapsedMs,usage:data.usage||null,response:content};
   }catch(error){lastError=error}
  }
  return{ok:false,reason:lastError?.message||'No configured provider has an endpoint, model, and API key.',elapsedMs:0};
@@ -35,8 +45,8 @@ export async function runEconomicsNow({fetchImpl,settings,providers,instruction}
  if(!settings.source_url)return{ok:false,reason:'Add a feed URL before running the Economics feed.',fetched:0,converted:0,skipped:0,elapsedMs:Date.now()-started};
  if(settings.source_type==='manual')return{ok:false,reason:'Manual sources cannot be fetched. Choose RSS, Atom, or JSON.',fetched:0,converted:0,skipped:0,elapsedMs:Date.now()-started};
  const response=await fetchImpl(settings.source_url,{headers:{Accept:'application/rss+xml,application/atom+xml,application/xml,text/xml,application/json;q=.8,*/*;q=.5','User-Agent':'AtlasHarbor/1.0'}});
- if(!response.ok)throw new Error(`Feed returned HTTP ${response.status}.`);
- const raw=await response.text(),items=parsePublicationFeed(raw,settings.source_type,settings.max_items||20),problems=[];let skipped=0,lastError;
+ if(!response?.ok)throw new Error(`Feed returned HTTP ${response?.status||'unknown'}.`);
+ const raw=await responseText(response),items=parsePublicationFeed(raw,settings.source_type,settings.max_items||20),problems=[];let skipped=0,lastError;
  for(const item of items){
   let converted=false;
   for(const provider of providers){
