@@ -1,11 +1,15 @@
 import express from 'express';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {createProblemSpacesService} from './problem-spaces.js';
 import {createAdminMetadataControl} from './admin-metadata-control.js';
 import {createEconomicsRouter} from './economics.js';
 import {createPublishedFeedRouter} from './published-feed.js';
 
+const directory=path.dirname(fileURLToPath(import.meta.url));
 export function createProblemRouter({service=createProblemSpacesService(),env=process.env}={}){
  const router=express.Router();
+ router.get(['/economics','/economics/{*path}'],(_req,res)=>res.sendFile(path.join(directory,'../public/economics.html')));
  router.use(createAdminMetadataControl({env}));
  router.use(createEconomicsRouter({env}));
  router.use(createPublishedFeedRouter({env}));
