@@ -2,7 +2,7 @@ import'./problem-nav.js';
 import{accessToken,user}from'./supabase-client.js';
 const q=s=>document.querySelector(s),signedOut=q('#signed-out'),bootstrap=q('#bootstrap'),unlock=q('#unlock'),dashboard=q('#dashboard');
 let password=sessionStorage.getItem('atlas-admin-password')||'',role=null;
-function friendlyError(message=''){if(/admin_system|schema cache|PGRST205/i.test(message))return 'Admin database setup is incomplete. Run supabase/admin-ai-featured.sql in the Supabase SQL editor, wait a few seconds for the schema cache to refresh, then reload this page.';return message}
+function friendlyError(message=''){if(/site_admin|schema cache|PGRST205|Admin storage table is missing/i.test(message))return 'The administrator table is not available yet. Atlas Harbor now uses one table only: public.site_admin. Run supabase/site-admin.sql once, or configure DATABASE_URL so startup creates it automatically, then reload this page.';return message}
 async function json(response){const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(friendlyError(data.error||`Request failed (${response.status}).`));return data}
 const headers=()=>({Accept:'application/json',Authorization:`Bearer ${accessToken()||''}`,'x-admin-password':password});
 function show(id){[signedOut,bootstrap,unlock,dashboard].forEach(x=>x.hidden=x.id!==id)}
