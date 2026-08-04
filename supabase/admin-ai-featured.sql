@@ -84,5 +84,10 @@ alter table public.content_view_events enable row level security;
 grant select on public.content_quality_scores to anon,authenticated;
 grant insert on public.content_view_events to anon,authenticated;
 
+drop policy if exists "Public reads featured quality scores" on public.content_quality_scores;
 create policy "Public reads featured quality scores" on public.content_quality_scores for select using (is_featured=true);
+drop policy if exists "Anyone records views" on public.content_view_events;
 create policy "Anyone records views" on public.content_view_events for insert with check (auth.uid() is null or user_id is null or auth.uid()=user_id);
+
+-- Ask PostgREST to reload its schema immediately after this migration.
+select pg_notify('pgrst','reload schema');
