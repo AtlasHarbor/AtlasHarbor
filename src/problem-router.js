@@ -6,12 +6,14 @@ import {createAdminMetadataControl} from './admin-metadata-control.js';
 import {createAdminResearchRouter} from './admin-research.js';
 import {createEconomicsRouter} from './economics.js';
 import {createPublishedFeedRouter} from './published-feed.js';
+import {createBaseballLevelRouter} from './baseball-level-router.js';
 
 const directory=path.dirname(fileURLToPath(import.meta.url));
 export function createProblemRouter({service=createProblemSpacesService(),env=process.env}={}){
  const router=express.Router();
  router.get(['/economics','/economics/{*path}'],(_req,res)=>res.sendFile(path.join(directory,'../public/economics.html')));
  router.get(['/users/:slug','/users/:slug/{*path}'],(_req,res)=>res.sendFile(path.join(directory,'../public/profile.html')));
+ router.use(createBaseballLevelRouter({env}));
  router.use(createAdminMetadataControl({env}));
  router.use(createAdminResearchRouter({env}));
  router.use(createEconomicsRouter({env}));
