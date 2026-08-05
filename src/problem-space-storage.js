@@ -10,7 +10,7 @@ async function readJson(response){
 
 export function createProblemSpaceStorage({env=process.env,fetchImpl=globalThis.fetch}={}){
  const base=env.SUPABASE_URL,key=env.SUPABASE_PUBLISHABLE_KEY,secret=env.SUPABASE_SECRET_KEY;
- let writeQueue=Promise.resolve();
+ let writeQueue=Promise.resolve(),cachedHostId=null;
  const configured=Boolean(base&&key&&secret);
  const authHeaders=token=>({apikey:key,Authorization:`Bearer ${token}`,...JSON_HEADERS});
  const serviceHeaders=()=>({apikey:secret,Authorization:`Bearer ${secret}`,...JSON_HEADERS});
@@ -19,7 +19,8 @@ export function createProblemSpaceStorage({env=process.env,fetchImpl=globalThis.
  async function userForToken(token){if(!base||!key||!token)return null;const response=await fetchImpl(`${base}/auth/v1/user`,{headers:authHeaders(token)});return response.ok?response.json():null}
  async function requestUser(req,{required=true}={}){const token=bearer(req),current=await userForToken(token);if(!current&&required)throw Object.assign(new Error('Sign in required.'),{status:401});return{token,current}}
  async function listAccounts(){if(!configured)throw Object.assign(new Error('Supabase server persistence is not configured.'),{status:503});const data=await readJson(await fetchImpl(`${base}/auth/v1/admin/users?per_page=1000`,{headers:serviceHeaders()}));return data.users||[]}
- async function hostAccount({fallbackCurrent=null}={}){const users=await listAccounts();let account=users.find(item=>item?.user_metadata?.atlas_admin?.masterUserId===item.id)||users.find(item=>item?.user_metadata?.atlas_admin)||users.find(item=>item?.user_metadata?.atlas_problem_spaces);if(!account&&fallbackCurrent){account=users.find(item=>item.id===fallbackCurrent.id)||fallbackCurrent}return account||null}
+ async function accountById(id){if(!id)return null;try{return await readJson(await fetchImpl(`${base}/auth/v1/admin/users/${id}`,{headers:serviceHeaders()}))}catch{return null}}
+ async function hostAccount({fallbackCurrent=null}={}){if(cachedHostId){const cached=await accountById(cachedHostId);if(cached)return cached;cachedHostId=null}const users=await listAccounts();let account=users.find(item=>item?.user_metadata?.atlas_admin?.masterUserId===item.id)||users.find(item=>item?.user_metadata?.atlas_admin)||users.find(item=>item?.user_metadata?.atlas_problem_spaces);if(!account&&fallbackCurrent)account=users.find(item=>item.id===fallbackCurrent.id)||fallbackCurrent;if(account)cachedHostId=account.id;return account||null}
  async function updateAccount(accountId,metadata){return readJson(await fetchImpl(`${base}/auth/v1/admin/users/${accountId}`,{method:'PUT',headers:serviceHeaders(),body:JSON.stringify({user_metadata:metadata})}))}
  async function updateOwn(token,metadata){return readJson(await fetchImpl(`${base}/auth/v1/user`,{method:'PUT',headers:authHeaders(token),body:JSON.stringify({data:metadata})}))}
  async function readHost({fallbackCurrent=null}={}){if(!configured)return null;return hostAccount({fallbackCurrent})}
