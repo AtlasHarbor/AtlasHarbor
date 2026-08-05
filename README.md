@@ -4,90 +4,118 @@ Atlas Harbor is a decision platform organized around inspectable **Problem Space
 
 ## Problem Spaces
 
-- `/economics` — economics: converts current publication stories into decision problems, stakeholders, constraints, tradeoffs, and open questions.
-- `/game` — logistics control tower.
-- `/baseball` — baseball intelligence.
-- `/legal` — legal systems tracker.
-- `/food` — restaurant and food discovery.
-- `/dropshipping` — product and advertising strategy.
+- `/economics` — current economic headlines converted into decision problems and discussion surfaces.
+- `/game` — an exception-driven logistics control-tower game.
+- `/baseball` — professional, minor-league, and college baseball intelligence.
+- `/legal` — cases, dockets, timelines, sources, and legal analysis.
+- `/food` — restaurant and food discovery under real constraints.
+- `/dropshipping` — product hypotheses, unit economics, advertising experiments, and measured results.
 - `/life-sciences` — research questions, evidence, experiments, and translation.
 - `/featured` — work selected by the global quality system.
 - `/published` — public user analysis.
 - `/problems` — directory and public requests for future spaces.
 
-The shared **Problem Spaces** navigation is loaded on desktop and mobile. The label links to `/problems`; the adjacent arrow opens the complete menu. On desktop the menu also supports hover.
+## Problem Space persistence standard
+
+New Problem Spaces must **work after deployment without requiring a person to open the Supabase SQL editor**.
+
+The standard implementation is:
+
+1. The browser talks to an Atlas Harbor API route. It must not reference a Supabase table name directly.
+2. The API authenticates the Supabase bearer token when a write or private read is required.
+3. Shared Problem Space data is stored through `src/problem-space-storage.js` under the host account’s `user_metadata.atlas_problem_spaces` object.
+4. User-only preferences, categories, drafts, and filters are stored under that user’s own `user_metadata.atlas_problem_spaces` object.
+5. Shared writes are serialized in the application process to reduce metadata overwrite races.
+6. Collections are bounded and trimmed. A dedicated database adapter can replace metadata storage when a space grows beyond the bootstrap scale, without changing its public API.
+7. Missing optional tables must never produce an instruction telling an ordinary user to run SQL.
+
+This pattern is now used by Economics and Dropshipping. The existing Admin control plane uses the related `user_metadata.atlas_admin` store.
+
+A dedicated Supabase table remains appropriate for high-volume records, complex joins, realtime subscriptions, or large public archives. That is a scaling implementation detail, not a prerequisite for the feature to function.
 
 ## Economics publication feed
 
-Economics introduces a live-feed pattern that can later be reused by other Problem Spaces.
+Economics is **headline-first**. A slow or incompatible model can no longer prevent stories from appearing.
 
-The default operating model is:
+The run sequence is:
 
-1. An administrator selects a publication or feed URL.
-2. The source is checked every 12 hours by default.
-3. Up to 20 recent headlines are selected.
-4. The global AI converts each headline into a separate structured problem.
-5. The source headline, publication name, date, and link remain attached for attribution.
-6. Users and their AIs can work through the resulting decision problem without Atlas Harbor copying or republishing the full article.
+1. Fetch the configured RSS, Atom, or JSON feed.
+2. Parse only the publication title, URL, permitted feed summary, and publication date.
+3. Deduplicate against previously stored source URLs.
+4. Save every new headline immediately as a usable decision problem with baseline questions and topics.
+5. Enrich a bounded number of new stories in batches of three using the primary OpenAI-compatible provider saved in Admin; use the saved backup provider if needed.
+6. Keep the original headline as the displayed title. AI supplies decision framing, questions, and topics rather than rewriting the source title.
+7. If a Perplexity key is saved in Admin Research, optionally add brief current-source context and citations. If no Perplexity key exists, that step is skipped.
+8. Record the start time, completion time, trigger, counts, models, warnings, elapsed time, and recent run history.
 
-The conversion instruction should identify:
+The default is eight fetched stories and up to six AI enrichments per run. Existing Admin values are preserved, and the maximum remains configurable.
 
-- the actual decision,
-- stakeholders,
-- constraints,
-- competing objectives,
-- uncertainty,
-- questions that need evidence,
-- relevant economic topics.
-
-The administrator can change the source name, URL, feed type, cadence, item limit, instruction, and enabled state from `/admin`.
-
-Until an automated source is enabled, `/economics` includes a dated manual seed for August 3, 2026 covering digital-economic fragmentation, coordinated yen intervention, and recession risk from an energy shock. These are summaries framed as problems and link back to their publications.
-
-Run:
+### Economics endpoints
 
 ```text
-supabase/economics-feed.sql
+GET  /api/economics/problems   public story feed
+GET  /api/economics/status     current run, last result, errors, and recent run log
+POST /api/economics/run        public asynchronous trigger
 ```
 
-This creates `economics_feed_settings` and `economic_problems`.
+The trigger is limited to one accepted run per minute and returns immediately with a `runId`. Clients poll the status endpoint instead of holding a request open while OpenRouter or Perplexity works.
 
-A publication feed must be used in accordance with its terms. Atlas Harbor should retain attribution and links, ingest only metadata or permitted summaries, and avoid storing or reproducing paywalled article text. A publication homepage or licensed feed can be used when an official RSS endpoint is unavailable.
+Admin uses the same pipeline:
+
+```text
+GET  /api/admin/economics/settings
+PUT  /api/admin/economics/settings
+POST /api/admin/economics/run
+```
+
+The background scheduler checks once per minute and starts a run when the saved cadence is due. Enabling a 12-hour cadence therefore performs real work; it is not an empty timer.
+
+The feed and run history are stored in the initialized Admin account metadata. `supabase/economics-feed.sql` is now a **legacy optional migration**, not a requirement.
+
+Use publication feeds in accordance with their terms. Retain attribution and links, ingest only metadata or permitted summaries, and do not reproduce paywalled article text.
+
+## Dropshipping & Advertising
+
+Dropshipping no longer calls `dropship_strategies`, `strategy_comments`, or other PostgREST tables from the browser. It works without `supabase/dropshipping-space.sql`.
+
+The page is organized as a decision workspace:
+
+- searchable product-type lens near the top,
+- shared Atlas Harbor product-type defaults,
+- private product types added only to the signed-in user’s account,
+- product evidence and fulfillment risk,
+- selling price, supplier cost, shipping, target CPA, budget, and contribution preview,
+- a human decision thesis,
+- a separately stored AI challenge,
+- explicit success and kill criteria,
+- measured results added after the experiment,
+- optional comments, funding interest, and private creator contact requests.
+
+Published decision briefs and their discussion records use shared application-managed metadata. Personal categories and filters use the individual user’s metadata. A creator can see funding and contact requests in the strategy’s creator inbox.
+
+`supabase/dropshipping-space.sql` and `supabase/direct-messaging-fix.sql` remain available only for legacy installations that intentionally retain the old table-backed implementation.
 
 ## Global AI and administration
 
-The first signed-in Supabase user to initialize `/admin` becomes `master_admin`. The master administrator can grant admin roles, transfer master ownership, and configure:
+The first signed-in Supabase user to initialize `/admin` becomes `master_admin`. The administrator can configure:
 
-- primary and backup OpenAI-compatible providers,
-- encrypted provider keys,
-- quality-review instructions,
-- review cadence,
-- monthly budget,
-- Economics feed settings.
+- primary and backup OpenAI-compatible endpoints, models, and encrypted keys,
+- quality-review instructions and budget,
+- Economics feed settings and cadence,
+- Perplexity Legal/Economics research settings,
+- legal case recommendations.
 
-Provider keys stored by the admin control plane are encrypted using:
+Provider keys are encrypted using:
 
 ```bash
 ADMIN_ENCRYPTION_KEY=YOUR_LONG_STABLE_RANDOM_SECRET
 ```
 
-The global quality AI scores novelty, evidence, clarity, collaboration, quality, and spam probability. Strong work can appear at `/featured`.
-
-## Direct messaging
-
-Dropshipping funding interest can open private threads between signed-in users. The account page lists the user’s conversations and supports replies.
-
-After installing `supabase/dropshipping-space.sql`, also run:
-
-```text
-supabase/direct-messaging-fix.sql
-```
-
-The second migration replaces recursive membership policies with security-definer membership checks. This allows thread members to list their threads, read messages, and reply while keeping non-members out.
+Economics always uses the provider and model saved in Admin, not the AI model selected in an ordinary user’s Account page.
 
 ## Comments and publishing
 
-Comments are off by default. A creator must explicitly enable them for a dropshipping strategy or shared publication. Canonical legal, baseball, and other source pages remain separate from user publications.
+Comments are off by default. A creator must explicitly enable them. Canonical legal, baseball, Economics, and other source pages remain separate from user publications.
 
 Public analysis uses separate links:
 
@@ -97,32 +125,15 @@ Public analysis uses separate links:
 
 ## Food Discovery
 
-Food Discovery uses Nominatim and OpenStreetMap/Overpass without credentials. Optional Google Places enrichment can add ratings, review counts, hours, excerpts, and maps links:
+Food Discovery can use public map data without credentials. Optional Google Places enrichment adds ratings, review counts, hours, excerpts, and maps links:
 
 ```bash
 GOOGLE_PLACES_API_KEY=YOUR_SERVER_SIDE_GOOGLE_PLACES_KEY
 ```
 
-## Required Supabase migrations
+## Supabase setup
 
-Run the applicable files in the Supabase SQL editor:
-
-```text
-supabase/schema.sql
-supabase/ai-settings.sql
-supabase/problem-spaces.sql
-supabase/published-analysis.sql
-supabase/workspace-projections-placement.sql
-supabase/food-discovery.sql
-supabase/dropshipping-space.sql
-supabase/direct-messaging-fix.sql
-supabase/admin-ai-featured.sql
-supabase/economics-feed.sql
-```
-
-## Environment
-
-Copy `.env.example` to `.env` and keep real values out of Git:
+The application requires Supabase Auth credentials and a server secret for shared metadata persistence:
 
 ```bash
 SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
@@ -133,7 +144,7 @@ PUBLIC_APP_URL=http://localhost:3000
 ADMIN_ENCRYPTION_KEY=YOUR_LONG_STABLE_RANDOM_SECRET
 ```
 
-Optional mapping and restaurant settings are documented in `.env.example`.
+Some older or high-volume features still have SQL migrations in `supabase/`. They are deployment-specific adapters. Economics and Dropshipping do not require their legacy migrations.
 
 ## Run locally
 
@@ -150,4 +161,4 @@ Open `http://localhost:3000/`.
 
 ## Responsible use
 
-Atlas Harbor is experimental decision support. News-derived problems, restaurant data, sports data, legal records, product claims, scientific evidence, model output, quality scores, and projections may be incomplete, stale, biased, manipulated, or wrong. Verify consequential information with primary sources. User publications and comments are personal views, not official records, legal advice, medical advice, investment advice, or guaranteed recommendations.
+Atlas Harbor is experimental decision support. News-derived problems, product claims, restaurant data, sports data, legal records, scientific evidence, model output, quality scores, and projections may be incomplete, stale, biased, manipulated, or wrong. Verify consequential information with primary sources. User publications and comments are personal views, not official records, legal advice, medical advice, investment advice, or guaranteed recommendations.
