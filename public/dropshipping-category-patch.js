@@ -1,0 +1,1 @@
+document.addEventListener('click',event=>{const option=event.target.closest('#category-options [data-category]');if(!option)return;setTimeout(()=>document.querySelector('#product-type-filter')?.dispatchEvent(new Event('change',{bubbles:true})),0)});
