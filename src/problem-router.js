@@ -2,22 +2,29 @@ import express from 'express';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createProblemSpacesService} from './problem-spaces.js';
+import {createProblemSpaceStorage} from './problem-space-storage.js';
 import {createAdminMetadataControl} from './admin-metadata-control.js';
 import {createAdminResearchRouter} from './admin-research.js';
+import {createEconomicsService} from './economics-service.js';
 import {createEconomicsRouter} from './economics.js';
+import {createDropshippingRouter} from './dropshipping-api.js';
 import {createPublishedFeedRouter} from './published-feed.js';
 import {createBaseballProspectRouter} from './baseball-prospect-router.js';
 import {createLegalService} from './legal.js';
 
 const directory=path.dirname(fileURLToPath(import.meta.url));
 export function createProblemRouter({service=createProblemSpacesService(),env=process.env}={}){
- const router=express.Router(),legal=createLegalService({env});
+ const router=express.Router(),legal=createLegalService({env}),storage=createProblemSpaceStorage({env}),economicsService=createEconomicsService({storage,env});
+ economicsService.startScheduler();
  router.use(createBaseballProspectRouter({legal}));
  router.get(['/economics','/economics/{*path}'],(_req,res)=>res.sendFile(path.join(directory,'../public/economics.html')));
  router.get(['/users/:slug','/users/:slug/{*path}'],(_req,res)=>res.sendFile(path.join(directory,'../public/profile.html')));
+ // Metadata-backed Problem Space APIs are mounted before legacy control routes so
+ // they work without manually creating Supabase tables.
+ router.use(createEconomicsRouter({service:economicsService,storage}));
+ router.use(createDropshippingRouter({storage}));
  router.use(createAdminMetadataControl({env}));
  router.use(createAdminResearchRouter({env}));
- router.use(createEconomicsRouter({env}));
  router.use(createPublishedFeedRouter({env}));
  const legacyAdminOk=req=>Boolean(env.ADMIN_PASSWORD)&&req.get('x-admin-password')===env.ADMIN_PASSWORD;
  router.get('/api/problem-spaces',async(_req,res)=>{try{return res.json({spaces:await service.listPublic()})}catch(error){console.error(error);return res.status(500).json({error:'Problem spaces are temporarily unavailable.'})}});
