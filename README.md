@@ -7,7 +7,7 @@ Atlas Harbor is a decision platform organized around inspectable **Problem Space
 - `/economics` — current economic headlines converted into decision problems and discussion surfaces.
 - `/game` — an exception-driven logistics control-tower game. See [`docs/logistics-game/README.md`](docs/logistics-game/README.md) for the player loop, routing model, persistence, optimization mapping, known limitations, and deployment checklist.
 - `/baseball` — professional, minor-league, and college baseball intelligence.
-- `/legal` — cases, dockets, timelines, sources, and legal analysis.
+- `/legal` — CourtListener-backed case records, dockets, primary filings, decision boards, and filing-aware analysis. See [`docs/legal/README.md`](docs/legal/README.md).
 - `/food` — restaurant and food discovery under real constraints.
 - `/dropshipping` — product hypotheses, unit economics, advertising experiments, and measured results.
 - `/life-sciences` — research questions, evidence, experiments, and translation.
@@ -26,6 +26,37 @@ The detailed manual distinguishes what is implemented today from future operatio
 - Browser manual: `/game/docs`
 - Technical and design manual: [`docs/logistics-game/README.md`](docs/logistics-game/README.md)
 
+## Legal case command center
+
+Legal is database-first and CourtListener/RECAP-first. It no longer depends on AI to determine whether a docket changed.
+
+The storage order is:
+
+1. The optional dedicated Supabase `legal_cases` table.
+2. Shared Supabase account metadata at `atlas_problem_spaces.legal_tracker`.
+3. Repository JSON files in `data/legal/cases` as bootstrap seeds and a read-only fallback.
+
+`POST /api/legal/seed` initializes the persistent store when it is empty. Ordinary users do not need to run a SQL migration.
+
+With `COURTLISTENER_API_TOKEN` configured, a non-AI synchronization saves structured docket metadata, docket entries, parties, RECAP document records, direct public PDF links, the latest filing date, judges, sources, and a decision board. The Admin control plane can seed Legal storage, synchronize one case, or synchronize a bounded batch without invoking OpenRouter or Perplexity.
+
+Case pages are organized around the current procedural position, an action queue, unresolved questions, primary filings, and a document workbench. Signed-in users can select filings and ask their configured AI to review only the bounded synchronized case context. Users may also keep a personal Perplexity key in browser local storage. Admin can use an encrypted Admin key or `PERPLEXITY_API_KEY` for optional current-source research after the CourtListener record is synchronized.
+
+Public APIs include:
+
+```text
+GET  /api/legal/status
+POST /api/legal/seed
+GET  /api/legal/cases
+GET  /api/legal/cases/:slug
+GET  /api/legal/cases/:slug/docket
+GET  /api/legal/cases/:slug/documents
+GET  /api/legal/cases/:slug/documents/:id
+POST /api/legal/cases/:slug/sync
+```
+
+The complete architecture, endpoint reference, rate limits, source hierarchy, AI rules, and deployment checklist are in [`docs/legal/README.md`](docs/legal/README.md).
+
 ## Problem Space persistence standard
 
 New Problem Spaces must **work after deployment without requiring a person to open the Supabase SQL editor**.
@@ -40,7 +71,7 @@ The standard implementation is:
 6. Collections are bounded and trimmed. A dedicated database adapter can replace metadata storage when a space grows beyond the bootstrap scale, without changing its public API.
 7. Missing optional tables must never produce an instruction telling an ordinary user to run SQL.
 
-This pattern is now used by Economics and Dropshipping. The existing Admin control plane uses the related `user_metadata.atlas_admin` store. The logistics game uses the same no-manual-table principle for signed-in career saves.
+This pattern is used by Economics, Dropshipping, Legal, and the logistics career. The existing Admin control plane uses the related `user_metadata.atlas_admin` store.
 
 A dedicated Supabase table remains appropriate for high-volume records, complex joins, realtime subscriptions, or large public archives. That is a scaling implementation detail, not a prerequisite for the feature to function.
 
@@ -114,6 +145,7 @@ The first signed-in Supabase user to initialize `/admin` becomes `master_admin`.
 - quality-review instructions and budget,
 - Economics feed settings and cadence,
 - Perplexity Legal/Economics research settings,
+- non-AI CourtListener Legal synchronization,
 - legal case recommendations.
 
 Provider keys are encrypted using:
@@ -122,7 +154,7 @@ Provider keys are encrypted using:
 ADMIN_ENCRYPTION_KEY=YOUR_LONG_STABLE_RANDOM_SECRET
 ```
 
-Economics always uses the provider and model saved in Admin, not the AI model selected in an ordinary user’s Account page.
+Economics always uses the provider and model saved in Admin, not the AI model selected in an ordinary user’s Account page. CourtListener Legal synchronization does not require any AI provider.
 
 ## Comments and publishing
 
@@ -153,9 +185,11 @@ SUPABASE_SECRET_KEY=YOUR_SUPABASE_SECRET_KEY
 SUPABASE_JWKS_URL=https://YOUR_PROJECT_REF.supabase.co/auth/v1/.well-known/jwks.json
 PUBLIC_APP_URL=http://localhost:3000
 ADMIN_ENCRYPTION_KEY=YOUR_LONG_STABLE_RANDOM_SECRET
+COURTLISTENER_API_TOKEN=YOUR_COURTLISTENER_API_TOKEN
+PERPLEXITY_API_KEY=OPTIONAL_SERVER_MANAGED_PERPLEXITY_KEY
 ```
 
-Some older or high-volume features still have SQL migrations in `supabase/`. They are deployment-specific adapters. Economics and Dropshipping do not require their legacy migrations.
+Some older or high-volume features still have SQL migrations in `supabase/`. They are deployment-specific adapters. Economics, Dropshipping, Legal bootstrap storage, and logistics career persistence do not require their legacy migrations.
 
 ## Run locally
 
