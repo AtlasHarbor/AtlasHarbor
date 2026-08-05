@@ -28,8 +28,9 @@ async function requestJSON(fetchImpl,url,options){
  return{data,elapsedMs:Date.now()-started};
 }
 
+function completionUrl(endpoint){const cleanEndpoint=String(endpoint||'').replace(/\/$/,'');return /\/chat\/completions$/i.test(cleanEndpoint)?cleanEndpoint:`${cleanEndpoint}/chat/completions`}
 function assistantText(data){
- const content=data?.choices?.[0]?.message?.content??data?.output_text??data?.response;
+ const message=data?.choices?.[0]?.message||{},content=message.content??message.reasoning_content??message.reasoning??data?.output_text??data?.response;
  if(typeof content==='string')return content.trim();
  if(Array.isArray(content))return content.map(part=>typeof part==='string'?part:part?.text||part?.content||'').join('\n').trim();
  return'';
@@ -41,7 +42,7 @@ function parseJsonContent(value){
  const end=Math.max(text.lastIndexOf('}'),text.lastIndexOf(']'));if(end>=0)text=text.slice(0,end+1);
  return JSON.parse(text);
 }
-function normalizeStories(parsed){const rows=Array.isArray(parsed)?parsed:parsed?.stories||parsed?.items||parsed?.results||[];return Array.isArray(rows)?rows:[]}
+function normalizeStories(parsed){if(Array.isArray(parsed))return parsed;const rows=parsed?.stories||parsed?.items||parsed?.results;if(Array.isArray(rows))return rows;return parsed&&Number.isFinite(Number(parsed.index))?[parsed]:[]}
 function inferTopics(title,summary){
  const haystack=`${title} ${summary}`.toLowerCase(),rules=[['inflation',['inflation','prices','cost of living']],['monetary policy',['central bank','interest rate','fed ','ecb','boe','yen','currency']],['trade',['trade','tariff','export','import','supply chain']],['energy',['oil','gas','energy','electricity']],['technology',['ai ','artificial intelligence','semiconductor','technology','digital']],['labor',['jobs','employment','wages','labor','workers']],['markets',['stocks','bonds','market','investors']],['public finance',['tax','budget','debt','deficit']],['housing',['housing','mortgage','property']],['geopolitics',['war','sanction','geopolit','security']]];
  const topics=rules.filter(([,needles])=>needles.some(needle=>haystack.includes(needle))).map(([topic])=>topic);return topics.length?topics.slice(0,6):['economics','current events'];
@@ -58,7 +59,7 @@ export async function runAIHealthCheck({fetchImpl,providers}){
  for(const provider of providers){
   if(!provider.endpoint||!provider.model||!provider.key)continue;
   try{
-   const {data,elapsedMs}=await requestJSON(fetchImpl,`${provider.endpoint.replace(/\/$/,'')}/chat/completions`,{method:'POST',headers:{Authorization:`Bearer ${provider.key}`,'Content-Type':'application/json'},body:JSON.stringify({model:provider.model,temperature:.2,messages:[{role:'system',content:'Be cordial and concise. This is a connectivity test.'},{role:'user',content:'Hello, how are you? Please reply with a friendly one- or two-sentence response.'}]}),signal:AbortSignal.timeout(60000)});
+   const {data,elapsedMs}=await requestJSON(fetchImpl,completionUrl(provider.endpoint),{method:'POST',headers:{Authorization:`Bearer ${provider.key}`,'Content-Type':'application/json'},body:JSON.stringify({model:provider.model,temperature:.2,messages:[{role:'system',content:'Be cordial and concise. This is a connectivity test.'},{role:'user',content:'Hello, how are you? Please reply with a friendly one- or two-sentence response.'}]}),signal:AbortSignal.timeout(60000)});
    const content=assistantText(data);
    if(!content)throw new Error('The provider returned no assistant message.');
    return{ok:true,provider:provider.name,model:data.model||provider.model,elapsedMs,usage:data.usage||null,response:content};
@@ -74,7 +75,7 @@ async function enrichBatch({fetchImpl,providers,instruction,settings,batch}){
   if(!provider.endpoint||!provider.model||!provider.key)continue;
   try{
    const prompt=`${instruction}\n\nAnalyze the following publication headlines. Return JSON only in this shape: {"stories":[{"index":0,"problem":"...","questions":["..."],"topics":["..."]}]}. Keep the original headline unchanged; do not quote or recreate full articles. Use the feed summary only as limited context.\n\nPublication: ${settings.source_name}\nStories: ${JSON.stringify(compact)}`;
-   const {data}=await requestJSON(fetchImpl,`${provider.endpoint.replace(/\/$/,'')}/chat/completions`,{method:'POST',headers:{Authorization:`Bearer ${provider.key}`,'Content-Type':'application/json'},body:JSON.stringify({model:provider.model,temperature:.1,max_tokens:2600,messages:[{role:'system',content:'You convert news headlines into concise economic decision problems. Return valid JSON only.'},{role:'user',content:prompt}]}),signal:AbortSignal.timeout(90000)});
+   const {data}=await requestJSON(fetchImpl,completionUrl(provider.endpoint),{method:'POST',headers:{Authorization:`Bearer ${provider.key}`,'Content-Type':'application/json'},body:JSON.stringify({model:provider.model,temperature:.1,max_tokens:2600,messages:[{role:'system',content:'You convert news headlines into concise economic decision problems. Return valid JSON only.'},{role:'user',content:prompt}]}),signal:AbortSignal.timeout(90000)});
    const rows=normalizeStories(parseJsonContent(assistantText(data)));
    if(!rows.length)throw new Error('The AI returned no structured story analyses.');
    return{rows,provider:provider.name,model:data.model||provider.model,error:null};
@@ -93,13 +94,14 @@ async function researchBatch({fetchImpl,researchProvider,batch}){
  }catch(error){return{rows:[],citations:[],model:researchProvider.model,error:error.message}}
 }
 
-export async function runEconomicsNow({fetchImpl,settings,providers,instruction,existingProblems=[],researchProvider=null}){
+export async function runEconomicsNow({fetchImpl,settings,providers,instruction,existingProblems=[],researchProvider=null,onHeadlines=null}){
  const started=Date.now(),errors=[];
  if(!settings.source_url)return{ok:false,reason:'Add a feed URL before running the Economics feed.',fetched:0,newItems:0,inserted:0,enriched:0,headlineOnly:0,skippedDuplicates:0,elapsedMs:Date.now()-started,problems:[],errors:[]};
  if(settings.source_type==='manual')return{ok:false,reason:'Manual sources cannot be fetched. Choose RSS, Atom, or JSON.',fetched:0,newItems:0,inserted:0,enriched:0,headlineOnly:0,skippedDuplicates:0,elapsedMs:Date.now()-started,problems:[],errors:[]};
  const response=await fetchImpl(settings.source_url,{headers:{Accept:'application/rss+xml,application/atom+xml,application/xml,text/xml,application/json;q=.8,*/*;q=.5','User-Agent':'AtlasHarbor/2.0 (+economics feed)'},signal:AbortSignal.timeout(45000)});
  if(!response?.ok)throw new Error(`Feed returned HTTP ${response?.status||'unknown'}.`);
  const raw=await responseText(response),limit=Math.max(1,Math.min(50,Number(settings.max_items)||8)),items=parsePublicationFeed(raw,settings.source_type,limit),existingKeys=new Set(existingProblems.map(sourceKey)),newItems=items.filter(item=>!existingKeys.has(sourceKey(item))),problems=newItems.map(item=>baseProblem(item,settings));
+ if(typeof onHeadlines==='function')await onHeadlines(structuredClone(problems),{fetched:items.length,newItems:newItems.length,skippedDuplicates:items.length-newItems.length});
  const enrichLimit=Math.min(problems.length,Math.max(1,Math.min(9,Number(settings.ai_items_per_run)||6))),batches=chunks(newItems.slice(0,enrichLimit),3);let enriched=0,models=[];
  for(let batchIndex=0;batchIndex<batches.length;batchIndex++){
   const batch=batches[batchIndex],offset=batchIndex*3,result=await enrichBatch({fetchImpl,providers,instruction,settings,batch});if(result.error)errors.push(`AI batch ${batchIndex+1}: ${result.error}`);if(result.model)models.push(result.model);
