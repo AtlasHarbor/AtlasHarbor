@@ -5,7 +5,7 @@ Atlas Harbor is a decision platform organized around inspectable **Problem Space
 ## Problem Spaces
 
 - `/economics` — current economic headlines converted into decision problems and discussion surfaces.
-- `/game` — an exception-driven logistics control-tower game.
+- `/game` — an exception-driven logistics control-tower game. See [`docs/logistics-game/README.md`](docs/logistics-game/README.md) for the player loop, routing model, persistence, optimization mapping, known limitations, and deployment checklist.
 - `/baseball` — professional, minor-league, and college baseball intelligence.
 - `/legal` — cases, dockets, timelines, sources, and legal analysis.
 - `/food` — restaurant and food discovery under real constraints.
@@ -14,6 +14,17 @@ Atlas Harbor is a decision platform organized around inspectable **Problem Space
 - `/featured` — work selected by the global quality system.
 - `/published` — public user analysis.
 - `/problems` — directory and public requests for future spaces.
+
+## Logistics game
+
+The logistics game uses management by exception: routine production and safe dispatch can be delegated, while the player handles breakdowns, port congestion, customer changes, quality holds, and capital-allocation decisions.
+
+Truck routes use OSRM/OpenStreetMap road geometry through `src/game-routing.js`; rail, air, and ocean movements use mode-specific corridors. Vehicle position, journey percentage, and ETA are calculated from the same routed path. Signed-in progress is stored in Supabase account metadata under `atlas_problem_spaces.logistics_game`, with local storage as an immediate fallback and optional import from the legacy `game_progress` table.
+
+The detailed manual distinguishes what is implemented today from future operations-research mechanics, including shortest path, weighted scheduling, capital allocation, capacity planning, stochastic control, network flow, and the difference between current fixed-stop contracts and a true traveling-salesman or capacitated vehicle-routing problem.
+
+- Browser manual: `/game/docs`
+- Technical and design manual: [`docs/logistics-game/README.md`](docs/logistics-game/README.md)
 
 ## Problem Space persistence standard
 
@@ -29,7 +40,7 @@ The standard implementation is:
 6. Collections are bounded and trimmed. A dedicated database adapter can replace metadata storage when a space grows beyond the bootstrap scale, without changing its public API.
 7. Missing optional tables must never produce an instruction telling an ordinary user to run SQL.
 
-This pattern is now used by Economics and Dropshipping. The existing Admin control plane uses the related `user_metadata.atlas_admin` store.
+This pattern is now used by Economics and Dropshipping. The existing Admin control plane uses the related `user_metadata.atlas_admin` store. The logistics game uses the same no-manual-table principle for signed-in career saves.
 
 A dedicated Supabase table remains appropriate for high-volume records, complex joins, realtime subscriptions, or large public archives. That is a scaling implementation detail, not a prerequisite for the feature to function.
 
