@@ -1,36 +1,364 @@
-import{mountWorkspace}from'./workspace.js';
-import{accessToken,user,refreshSession,ai}from'./supabase-client.js';
+import { mountWorkspace } from './workspace.js';
+import { accessToken, user, refreshSession, ai } from './supabase-client.js';
 
-const index=document.querySelector('#legal-index'),detail=document.querySelector('#case-detail'),hero=document.querySelector('#legal-hero'),systemStatus=document.querySelector('#legal-system-status');
-const esc=value=>String(value??'—').replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':'&quot;',"'":'&#39;'})[char]);
-const tags=values=>`<div class="legal-tags">${(values||[]).filter(Boolean).map(value=>`<span>${esc(value)}</span>`).join('')}</div>`;
-const bullets=values=>`<ul>${(values||[]).filter(Boolean).map(value=>`<li>${esc(value)}</li>`).join('')}</ul>`;
-const date=value=>value?new Date(value).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'}):'Not available';
-const compact=value=>String(value||'').replace(/\s+/g,' ').trim();
+const index = document.querySelector('#legal-index');
+const detail = document.querySelector('#case-detail');
+const hero = document.querySelector('#legal-hero');
+const systemStatus = document.querySelector('#legal-system-status');
 
-async function request(url,options={},authenticated=false){let token=accessToken(),response=await fetch(url,{...options,headers:{Accept:'application/json',...(options.headers||{}),...(authenticated&&token?{Authorization:`Bearer ${token}`}:{})}});if(response.status===401&&authenticated&&token){await refreshSession();token=accessToken();response=await fetch(url,{...options,headers:{Accept:'application/json',...(options.headers||{}),Authorization:`Bearer ${token}`}})}const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||`Request failed (${response.status}).`);return data}
-async function loadStatus(){try{const status=await request('/api/legal/status');systemStatus.innerHTML=`<b>${status.caseCount} tracked cases</b><span>${status.documentCount} synchronized filing records · ${status.storage} · CourtListener token ${status.courtListenerTokenConfigured?'configured':'not configured'}</span>`}catch(error){systemStatus.textContent=`Legal status unavailable: ${error.message}`}}
+const esc = (value) => String(value ?? '—').replace(/[&<>"']/g, (char) => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+})[char]);
+const tags = (values = []) => `<div class="legal-tags">${values.filter(Boolean).map((value) => `<span>${esc(value)}</span>`).join('')}</div>`;
+const bullets = (values = []) => `<ul>${values.filter(Boolean).map((value) => `<li>${esc(value)}</li>`).join('')}</ul>`;
 
-async function submitRecommendation(payload){if(!accessToken())throw new Error('Sign in first to recommend a case.');return request('/api/legal/recommendations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)},true)}
-function recommendationModal(){let modal=document.querySelector('#case-recommendation-modal');if(modal)return modal;modal=document.createElement('div');modal.id='case-recommendation-modal';modal.className='case-recommendation-modal';modal.hidden=true;modal.innerHTML=`<div class="case-recommendation-dialog" role="dialog" aria-modal="true"><button class="recommend-close" type="button">×</button><p class="eyebrow">RECOMMEND A CASE</p><h2>What should Atlas Harbor track next?</h2><form><label>Case caption or name<input name="caption" required minlength="5" maxlength="240"></label><label>Court or tribunal<input name="court" maxlength="220"></label><label>Docket or case number<input name="docket" maxlength="120"></label><label>CourtListener, court, or public source link<input name="sourceUrl" type="url" maxlength="700" placeholder="https://www.courtlistener.com/docket/..."></label><label>Why should this matter be tracked?<textarea name="reason" required minlength="20" maxlength="2000" rows="5"></textarea></label><div class="recommend-actions"><button>Submit recommendation</button><button class="secondary recommend-cancel" type="button">Cancel</button></div><p class="recommend-status"></p></form></div>`;document.body.append(modal);const close=()=>{modal.hidden=true;document.body.classList.remove('modal-open')};modal.querySelector('.recommend-close').onclick=close;modal.querySelector('.recommend-cancel').onclick=close;modal.onclick=event=>{if(event.target===modal)close()};modal.querySelector('form').onsubmit=async event=>{event.preventDefault();const status=modal.querySelector('.recommend-status'),button=event.submitter;button.disabled=true;status.textContent='Submitting…';try{await submitRecommendation(Object.fromEntries(new FormData(event.currentTarget)));status.textContent='Submitted for administrator review.';event.currentTarget.reset();setTimeout(close,1200)}catch(error){status.textContent=error.message}finally{button.disabled=false}};return modal}
-function openRecommendation(){if(!user())return location.assign('/account');const modal=recommendationModal();modal.hidden=false;document.body.classList.add('modal-open');modal.querySelector('input')?.focus()}
+async function request(url, options = {}, authenticated = false) {
+  let token = accessToken();
+  const make = () => fetch(url, {
+    ...options,
+    headers: {
+      Accept: 'application/json',
+      ...(options.headers || {}),
+      ...(authenticated && token ? { Authorization: `Bearer ${token}` } : {})
+    }
+  });
+  let response = await make();
+  if (response.status === 401 && authenticated && token) {
+    await refreshSession();
+    token = accessToken();
+    response = await make();
+  }
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || `Request failed (${response.status}).`);
+  return data;
+}
 
-async function showIndex(){document.body.classList.remove('focused-legal-view');hero.hidden=false;index.hidden=false;detail.hidden=true;let data=await request('/api/legal/cases');if(!data.cases?.length){await request('/api/legal/seed',{method:'POST'}).catch(()=>{});data=await request('/api/legal/cases')}const cases=data.cases||[];index.innerHTML=`<section class="legal-search"><label>Search cases, courts, dockets, parties, or legal issues<input id="legal-search-input" type="search" placeholder="Try: X.AI, Clean Air Act, motion to dismiss, D.C. Circuit"></label><div id="legal-filters"></div></section><div id="case-list"></div>`;const host=index.querySelector('#case-list'),input=index.querySelector('#legal-search-input'),jurisdictions=[...new Set(cases.map(item=>item.jurisdiction).filter(Boolean))].sort();index.querySelector('#legal-filters').innerHTML=['All',...jurisdictions].map((item,index)=>`<button data-jurisdiction="${esc(item)}" class="${index?'':'selected'}">${esc(item)}</button>`).join('');let active='All',page=1;const perPage=11;function draw(){const query=input.value.trim().toLowerCase(),filtered=cases.filter(item=>active==='All'||item.jurisdiction===active).filter(item=>!query||[item.title,item.shortTitle,item.court,item.indexNumber,item.status,item.proceduralStage,item.courtListener?.caseName,item.courtListener?.assignedJudge,...(item.jurisdictionTags||[]),...(item.lawTopics||[]),...(item.keywords||[])].join(' ').toLowerCase().includes(query)),pages=Math.max(1,Math.ceil(filtered.length/perPage));page=Math.min(page,pages);const visible=filtered.slice((page-1)*perPage,page*perPage),cards=visible.map(item=>`<a class="case-card" href="/legal/${esc(item.slug)}"><p class="eyebrow">${esc(item.status)} · ${esc(item.proceduralStage||'case')}</p><h2>${esc(item.shortTitle)}</h2><p>${esc(item.court)}</p>${tags([...(item.lawTopics||[]).slice(0,3),...(item.keywords||[]).slice(0,2)])}<div class="case-meta"><span>${esc(item.indexNumber||'Docket pending')}</span><span>${item.documentCount||0} documents</span></div><div class="case-freshness"><b>Latest filing</b><span>${esc(item.latestFilingAt||'Not synchronized')}</span></div><strong>Open command center →</strong></a>`).join(''),recommend=`<button type="button" class="case-card recommend-case-card" id="recommend-case"><span class="recommend-plus">＋</span><p class="eyebrow">COMMUNITY INPUT</p><h2>Recommend a case</h2><p>Suggest a lawsuit, appeal, enforcement action, or tribunal matter and include its CourtListener or official source.</p><strong>${user()?'Send to the admin queue →':'Sign in and recommend →'}</strong></button>`,pagination=pages>1?`<nav class="legal-pagination"><button data-page="${page-1}" ${page===1?'disabled':''}>← Previous</button><span>Page ${page} of ${pages} · ${filtered.length} cases</span><button data-page="${page+1}" ${page===pages?'disabled':''}>Next →</button></nav>`:'';host.innerHTML=`<div class="case-grid">${cards}${recommend}</div>${pagination}`;host.querySelector('#recommend-case').onclick=openRecommendation;host.querySelectorAll('[data-page]').forEach(button=>button.onclick=()=>{page=Number(button.dataset.page);draw();index.scrollIntoView({behavior:'smooth'})})}input.oninput=()=>{page=1;draw()};index.querySelector('#legal-filters').onclick=event=>{const button=event.target.closest('[data-jurisdiction]');if(!button)return;active=button.dataset.jurisdiction;page=1;index.querySelectorAll('[data-jurisdiction]').forEach(item=>item.classList.toggle('selected',item===button));draw()};draw()}
+async function loadStatus() {
+  try {
+    const status = await request('/api/legal/status');
+    systemStatus.innerHTML = `<b>${status.caseCount} tracked cases</b><span>${status.documentCount} synchronized filing records · ${esc(status.storage)} · CourtListener token ${status.courtListenerTokenConfigured ? 'configured' : 'not configured'}</span>`;
+  } catch (error) {
+    systemStatus.textContent = `Legal status unavailable: ${error.message}`;
+  }
+}
 
-function partyCards(parties){if(!parties?.length)return'<p class="empty">Party data has not been synchronized from CourtListener.</p>';return`<div class="party-grid">${parties.slice(0,30).map(party=>`<article><h3>${esc(party.name)}</h3>${tags((party.roles||[]).map(role=>role.role))}${party.extraInfo?`<p>${esc(party.extraInfo)}</p>`:''}</article>`).join('')}</div>`}
-function docketRows(entries){if(!entries?.length)return'<p class="empty">No CourtListener docket entries have been synchronized.</p>';return`<div class="docket-table"><table><thead><tr><th>Date</th><th>No.</th><th>Filing</th><th>Documents</th></tr></thead><tbody>${entries.slice(0,80).map(entry=>`<tr><td>${esc(entry.dateFiled||'—')}</td><td>${esc(entry.entryNumber??'—')}</td><td>${entry.courtListenerUrl?`<a href="${esc(entry.courtListenerUrl)}" target="_blank" rel="noreferrer">${esc(entry.description)}</a>`:esc(entry.description)}</td><td>${(entry.documents||[]).filter(document=>document.pdfUrl).map(document=>`<a href="${esc(document.pdfUrl)}" target="_blank" rel="noreferrer">PDF</a>`).join(' ')||'—'}</td></tr>`).join('')}</tbody></table></div>`}
-function documentRows(documents){if(!documents?.length)return'<p class="empty">No filing documents have been synchronized. Run the non-AI CourtListener update.</p>';return`<div class="document-list">${documents.slice(0,100).map((document,index)=>`<label class="document-row ${index<6?'recommended':''}"><input type="checkbox" data-document-id="${esc(document.id)}" ${index<3?'checked':''}><span><b>${esc(document.category||'Filing')} · ${esc(document.dateFiled||'Undated')}</b><strong>${esc(document.description)}</strong><small>${document.pageCount?`${document.pageCount} pages · `:''}${document.isAvailable?'RECAP copy available':'Metadata only'}</small></span>${document.pdfUrl?`<a href="${esc(document.pdfUrl)}" target="_blank" rel="noreferrer">Open PDF</a>`:''}</label>`).join('')}</div>`}
-function sourceRows(sources){return(sources||[]).map(source=>`<a class="source" href="${esc(source.url)}" target="_blank" rel="noreferrer"><b>${esc(source.title)}</b><small>${esc(source.type||'source')}${source.verifiedAt?` · verified ${esc(source.verifiedAt)}`:''}</small></a>`).join('')||'<p class="empty">No source links are attached.</p>'}
-function analysisHtml(signedIn){return`<section class="legal-analyst"><p class="eyebrow">FILING-AWARE ANALYST</p><h2>Ask a question against selected documents</h2><p>The server selects likely filings or uses your checked documents, retrieves available CourtListener text, and sends only that structured context to the AI you choose.</p>${signedIn?`<label>Question<textarea id="legal-question" rows="4" placeholder="Example: What must each side establish on the pending motion, which filing contains the controlling evidence, and what would change the analysis?"></textarea></label><div class="analyst-actions"><button id="select-documents" class="secondary">Select likely documents</button><button id="ask-user-ai">Ask my selected AI</button><button id="ask-perplexity" class="perplexity">Ask with my Perplexity key</button></div><p id="legal-ai-status"></p><div id="legal-ai-answer"></div>`:`<p><a href="/account">Sign in</a> to select filings, ask your AI, save analysis, and publish.</p>`}</section>`}
+async function submitRecommendation(payload) {
+  if (!accessToken()) throw new Error('Sign in first to recommend a case.');
+  return request('/api/legal/recommendations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }, true);
+}
 
-async function showCase(slug){document.body.classList.add('focused-legal-view');hero.hidden=true;index.hidden=true;detail.hidden=false;let record=await request(`/api/legal/cases/${encodeURIComponent(slug)}`);document.title=`${record.shortTitle} · Legal Command Center · Atlas Harbor`;const board=record.decisionBoard||{stage:record.proceduralStage,currentPosition:record.summary,actionQueue:record.nextWatchItems||[],openQuestions:[record.coreQuestion].filter(Boolean),latestDevelopments:[],documentsToRead:[]},docket=record.courtListener||{},courtLink=docket.courtListenerUrl||(record.sources||[]).find(source=>/courtlistener|storage\.courtlistener/i.test(source.url))?.url;detail.innerHTML=`<p><a href="/legal">← All tracked matters</a></p><header class="case-hero"><p class="eyebrow">${esc(record.status)} · ${esc(board.stage||record.proceduralStage||record.matterType)}</p><h1>${esc(record.title)}</h1><p>${esc(record.court)} · ${esc(record.indexNumber||docket.docketNumber||'Docket not confirmed')}</p><div class="hero-actions">${courtLink?`<a class="button" href="${esc(courtLink)}" target="_blank" rel="noreferrer">Open CourtListener record</a>`:''}<button id="sync-case" class="secondary">Get latest docket data</button></div><p id="sync-status">Last synchronized: ${esc(docket.lastSyncedAt||record.lastVerifiedAt||'not yet')}</p>${tags([...(record.jurisdictionTags||[]),...(record.lawTopics||[])])}</header><section class="case-command"><div class="command-main"><p class="eyebrow">CURRENT POSITION</p><h2>${esc(board.stage||'Case review')}</h2><p>${esc(board.currentPosition||record.summary)}</p></div><div class="command-metrics"><div><small>Latest filing</small><b>${esc(docket.dateLastFiling||'Unknown')}</b></div><div><small>Documents</small><b>${record.documents?.length||0}</b></div><div><small>Assigned judge</small><b>${esc(docket.assignedJudge||'Not confirmed')}</b></div><div><small>RECAP available</small><b>${record.documents?.filter(item=>item.isAvailable).length||0}</b></div></div></section><section class="columns"><div class="panel action-panel"><h2>Action queue</h2>${bullets(board.actionQueue)}</div><div class="panel question-panel"><h2>Questions to resolve</h2>${bullets(board.openQuestions)}</div></section><section class="meta">${[['Court',record.court],['Filed',record.filedAt||docket.dateFiled],['Docket',record.indexNumber||docket.docketNumber],['Cause',docket.cause],['Nature of suit',docket.natureOfSuit],['Last verified',record.lastVerifiedAt]].map(([key,value])=>`<div class="fact"><small>${key}</small>${esc(value||'Not available')}</div>`).join('')}</section><section><h2>Case problem</h2><p>${esc(record.summary||record.analysis?.importance)}</p><div class="notice"><b>Core legal question</b><p>${esc(record.coreQuestion||'Identify the controlling legal decision and the facts needed to resolve it.')}</p></div></section><section><h2>Parties and roles</h2>${partyCards(record.parties)}</section><section><div class="section-heading"><div><p class="eyebrow">PRIMARY RECORD</p><h2>Docket entries</h2></div><span>${record.docketEntries?.length||0} synchronized</span></div>${docketRows(record.docketEntries)}</section><section id="document-section"><div class="section-heading"><div><p class="eyebrow">DOCUMENT WORKBENCH</p><h2>Select the filings that matter</h2></div><span>${record.documents?.length||0} documents</span></div><p>Orders, pleadings, and motions are prioritized. Check the documents your AI should review.</p>${documentRows(record.documents)}</section>${analysisHtml(Boolean(user()))}<section class="columns">${Object.entries(record.positions||{}).map(([name,items])=>`<div class="panel"><h3>${esc(name.replace(/([A-Z])/g,' $1'))}</h3>${bullets(items)}</div>`).join('')}</section><section><h2>Procedural timeline</h2><div class="timeline">${(record.timeline||[]).slice(-80).map(item=>`<div><b>${esc(item.date)}</b>${item.sourceUrl?`<a href="${esc(item.sourceUrl)}" target="_blank" rel="noreferrer">${esc(item.event)}</a>`:esc(item.event)}</div>`).join('')}</div></section><section><h2>Sources</h2>${sourceRows(record.sources)}</section><div id="legal-workspace"></div><p class="notice">${esc(record.disclaimer||'This tool supports research and decision preparation. Verify every deadline and obligation from the operative court record.')}</p>`;
- const syncButton=detail.querySelector('#sync-case'),syncStatus=detail.querySelector('#sync-status');syncButton.onclick=async()=>{syncButton.disabled=true;syncStatus.textContent='Synchronizing CourtListener docket entries and RECAP documents…';try{const result=await request(`/api/legal/cases/${encodeURIComponent(slug)}/sync`,{method:'POST'});syncStatus.textContent=`Synchronized ${result.entries} entries and ${result.documents} documents${result.cached?' from the five-minute cache':''}. Reloading…`;setTimeout(()=>showCase(slug),500)}catch(error){syncStatus.textContent=error.message}finally{syncButton.disabled=false}};
- if(user())bindAnalyst(record,slug);
- const workspaceContext={summary:record.summary,coreQuestion:record.coreQuestion,decisionBoard:record.decisionBoard,courtListener:record.courtListener,latestEntries:(record.docketEntries||[]).slice(0,20),documents:(record.documents||[]).slice(0,20).map(item=>({id:item.id,dateFiled:item.dateFiled,description:item.description,pdfUrl:item.pdfUrl,category:item.category}))};await mountWorkspace(document.querySelector('#legal-workspace'),{type:'legal_case',id:record.slug,title:record.shortTitle,context:workspaceContext})}
+function recommendationModal() {
+  let modal = document.querySelector('#case-recommendation-modal');
+  if (modal) return modal;
+  modal = document.createElement('div');
+  modal.id = 'case-recommendation-modal';
+  modal.className = 'case-recommendation-modal';
+  modal.hidden = true;
+  modal.innerHTML = `<div class="case-recommendation-dialog" role="dialog" aria-modal="true">
+    <button class="recommend-close" type="button">×</button>
+    <p class="eyebrow">RECOMMEND A CASE</p><h2>What should Atlas Harbor track next?</h2>
+    <form>
+      <label>Case caption or name<input name="caption" required minlength="5" maxlength="240"></label>
+      <label>Court or tribunal<input name="court" maxlength="220"></label>
+      <label>Docket or case number<input name="docket" maxlength="120"></label>
+      <label>CourtListener, court, or public source link<input name="sourceUrl" type="url" maxlength="700" placeholder="https://www.courtlistener.com/docket/..."></label>
+      <label>Why should this matter be tracked?<textarea name="reason" required minlength="20" maxlength="2000" rows="5"></textarea></label>
+      <div class="recommend-actions"><button>Submit recommendation</button><button class="secondary recommend-cancel" type="button">Cancel</button></div>
+      <p class="recommend-status"></p>
+    </form>
+  </div>`;
+  document.body.append(modal);
+  const close = () => {
+    modal.hidden = true;
+    document.body.classList.remove('modal-open');
+  };
+  modal.querySelector('.recommend-close').onclick = close;
+  modal.querySelector('.recommend-cancel').onclick = close;
+  modal.onclick = (event) => { if (event.target === modal) close(); };
+  modal.querySelector('form').onsubmit = async (event) => {
+    event.preventDefault();
+    const status = modal.querySelector('.recommend-status');
+    const button = event.submitter;
+    button.disabled = true;
+    status.textContent = 'Submitting…';
+    try {
+      await submitRecommendation(Object.fromEntries(new FormData(event.currentTarget)));
+      status.textContent = 'Submitted for administrator review.';
+      event.currentTarget.reset();
+      setTimeout(close, 1200);
+    } catch (error) {
+      status.textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  };
+  return modal;
+}
 
-function selectedDocumentIds(){return[...detail.querySelectorAll('[data-document-id]:checked')].map(input=>input.dataset.documentId)}
-async function getAnalysisContext(slug,question,documentIds){return request(`/api/legal/cases/${encodeURIComponent(slug)}/analysis-context`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question,documentIds})},true)}
-function showAnswer(answer,documents=[],citations=[]){const host=detail.querySelector('#legal-ai-answer');host.innerHTML=`<article class="analysis-answer"><h3>Analysis</h3><p>${esc(answer).replace(/\n/g,'<br>')}</p>${documents.length?`<h4>Documents reviewed</h4>${bullets(documents.map(item=>item.description||item.pdfUrl))}`:''}${citations.length?`<h4>Additional citations</h4>${citations.map(item=>`<a href="${esc(item.url)}" target="_blank" rel="noreferrer">${esc(item.title||item.url)}</a>`).join('')}:''}</article>`}
-function bindAnalyst(record,slug){const question=detail.querySelector('#legal-question'),status=detail.querySelector('#legal-ai-status');detail.querySelector('#select-documents').onclick=async()=>{const value=question.value.trim()||record.coreQuestion||'What documents control the next decision?';status.textContent='Selecting the most relevant filings…';try{const context=await getAnalysisContext(slug,value,[]),ids=new Set(context.selectedDocuments.map(item=>String(item.id)));detail.querySelectorAll('[data-document-id]').forEach(input=>input.checked=ids.has(input.dataset.documentId));status.textContent=`Selected ${ids.size} filings based on the question, document type, availability, and recency.`}catch(error){status.textContent=error.message}};detail.querySelector('#ask-user-ai').onclick=async()=>{const value=question.value.trim();if(!value)return status.textContent='Enter a question first.';status.textContent='Retrieving selected filing text and running your AI…';try{const context=await getAnalysisContext(slug,value,selectedDocumentIds()),result=await ai([{role:'system',content:'You are a cautious legal research assistant. Use only the supplied synchronized docket and selected filing text for case-specific facts. Clearly separate allegations, evidence, procedural orders, holdings, and inference. Cite each filing by description and URL. Do not fabricate law, deadlines, quotations, or legal advice.'},{role:'user',content:`Question:\n${value}\n\nCase and selected filings:\n${JSON.stringify(context)}`}],{surface:'legal_case_review',resourceId:slug});showAnswer(result.content,context.selectedDocuments);status.textContent=`Answered using ${result.model||'your selected model'} and ${context.selectedDocuments.length} selected filings.`}catch(error){status.textContent=`AI unavailable: ${error.message}`}};detail.querySelector('#ask-perplexity').onclick=async()=>{const value=question.value.trim(),key=localStorage.getItem('atlas-perplexity-key')||'',model=localStorage.getItem('atlas-perplexity-model')||'sonar-pro';if(!value)return status.textContent='Enter a question first.';if(!key)return status.innerHTML='Add your Perplexity key under <a href="/account">Account and AI Settings</a> first.';status.textContent='Running Perplexity with the synchronized docket and selected filings…';try{const result=await request(`/api/legal/cases/${encodeURIComponent(slug)}/ask-perplexity`,{method:'POST',headers:{'Content-Type':'application/json','x-perplexity-key':key},body:JSON.stringify({question:value,documentIds:selectedDocumentIds(),model})},true);showAnswer(result.answer,result.selectedDocuments,result.citations);status.textContent=`Answered using ${result.model}${result.cached?' from the five-minute result cache':''}.`}catch(error){status.textContent=error.message}}}
+function openRecommendation() {
+  if (!user()) return location.assign('/account');
+  const modal = recommendationModal();
+  modal.hidden = false;
+  document.body.classList.add('modal-open');
+  modal.querySelector('input')?.focus();
+}
 
-loadStatus();const slug=decodeURIComponent(location.pathname.replace(/^\/legal\/?/,'').split('/')[0]||'');(slug?showCase(slug):showIndex()).catch(error=>{hero.hidden=true;detail.hidden=false;detail.innerHTML=`<p class="notice">${esc(error.message)}</p>`});
+async function showIndex() {
+  document.body.classList.remove('focused-legal-view');
+  hero.hidden = false;
+  index.hidden = false;
+  detail.hidden = true;
+  let data = await request('/api/legal/cases');
+  if (!data.cases?.length) {
+    await request('/api/legal/seed', { method: 'POST' }).catch(() => {});
+    data = await request('/api/legal/cases');
+  }
+  const cases = data.cases || [];
+  index.innerHTML = `<section class="legal-search">
+    <label>Search cases, courts, dockets, parties, or legal issues<input id="legal-search-input" type="search" placeholder="Try: X.AI, Clean Air Act, motion to dismiss, D.C. Circuit"></label>
+    <div id="legal-filters"></div>
+  </section><div id="case-list"></div>`;
+  const host = index.querySelector('#case-list');
+  const input = index.querySelector('#legal-search-input');
+  const jurisdictions = [...new Set(cases.map((item) => item.jurisdiction).filter(Boolean))].sort();
+  const filters = index.querySelector('#legal-filters');
+  filters.innerHTML = ['All', ...jurisdictions].map((item, filterIndex) => `<button data-jurisdiction="${esc(item)}" class="${filterIndex ? '' : 'selected'}">${esc(item)}</button>`).join('');
+  let active = 'All';
+  let page = 1;
+  const perPage = 11;
+  function draw() {
+    const query = input.value.trim().toLowerCase();
+    const filtered = cases.filter((item) => active === 'All' || item.jurisdiction === active).filter((item) => !query || [
+      item.title, item.shortTitle, item.court, item.indexNumber, item.status, item.proceduralStage,
+      item.courtListener?.caseName, item.courtListener?.assignedJudge,
+      ...(item.jurisdictionTags || []), ...(item.lawTopics || []), ...(item.keywords || [])
+    ].join(' ').toLowerCase().includes(query));
+    const pages = Math.max(1, Math.ceil(filtered.length / perPage));
+    page = Math.min(page, pages);
+    const visible = filtered.slice((page - 1) * perPage, page * perPage);
+    const cards = visible.map((item) => `<a class="case-card" href="/legal/${esc(item.slug)}">
+      <p class="eyebrow">${esc(item.status)} · ${esc(item.proceduralStage || 'case')}</p>
+      <h2>${esc(item.shortTitle)}</h2><p>${esc(item.court)}</p>
+      ${tags([...(item.lawTopics || []).slice(0, 3), ...(item.keywords || []).slice(0, 2)])}
+      <div class="case-meta"><span>${esc(item.indexNumber || 'Docket pending')}</span><span>${item.documentCount || 0} documents</span></div>
+      <div class="case-freshness"><b>Latest filing</b><span>${esc(item.latestFilingAt || 'Not synchronized')}</span></div>
+      <strong>Open command center →</strong>
+    </a>`).join('');
+    const recommend = `<button type="button" class="case-card recommend-case-card" id="recommend-case">
+      <span class="recommend-plus">＋</span><p class="eyebrow">COMMUNITY INPUT</p><h2>Recommend a case</h2>
+      <p>Suggest a lawsuit, appeal, enforcement action, or tribunal matter and include its CourtListener or official source.</p>
+      <strong>${user() ? 'Send to the admin queue →' : 'Sign in and recommend →'}</strong>
+    </button>`;
+    const pagination = pages > 1 ? `<nav class="legal-pagination"><button data-page="${page - 1}" ${page === 1 ? 'disabled' : ''}>← Previous</button><span>Page ${page} of ${pages} · ${filtered.length} cases</span><button data-page="${page + 1}" ${page === pages ? 'disabled' : ''}>Next →</button></nav>` : '';
+    host.innerHTML = `<div class="case-grid">${cards}${recommend}</div>${pagination}`;
+    host.querySelector('#recommend-case').onclick = openRecommendation;
+    host.querySelectorAll('[data-page]').forEach((button) => {
+      button.onclick = () => {
+        page = Number(button.dataset.page);
+        draw();
+        index.scrollIntoView({ behavior: 'smooth' });
+      };
+    });
+  }
+  input.oninput = () => { page = 1; draw(); };
+  filters.onclick = (event) => {
+    const button = event.target.closest('[data-jurisdiction]');
+    if (!button) return;
+    active = button.dataset.jurisdiction;
+    page = 1;
+    filters.querySelectorAll('[data-jurisdiction]').forEach((item) => item.classList.toggle('selected', item === button));
+    draw();
+  };
+  draw();
+}
+
+function partyCards(parties = []) {
+  if (!parties.length) return '<p class="empty">Party data has not been synchronized from CourtListener.</p>';
+  return `<div class="party-grid">${parties.slice(0, 30).map((party) => `<article><h3>${esc(party.name)}</h3>${tags((party.roles || []).map((role) => role.role))}${party.extraInfo ? `<p>${esc(party.extraInfo)}</p>` : ''}</article>`).join('')}</div>`;
+}
+
+function docketRows(entries = []) {
+  if (!entries.length) return '<p class="empty">No CourtListener docket entries have been synchronized.</p>';
+  return `<div class="docket-table"><table><thead><tr><th>Date</th><th>No.</th><th>Filing</th><th>Documents</th></tr></thead><tbody>${entries.slice(0, 80).map((entry) => `<tr>
+    <td>${esc(entry.dateFiled || '—')}</td><td>${esc(entry.entryNumber ?? '—')}</td>
+    <td>${entry.courtListenerUrl ? `<a href="${esc(entry.courtListenerUrl)}" target="_blank" rel="noreferrer">${esc(entry.description)}</a>` : esc(entry.description)}</td>
+    <td>${(entry.documents || []).filter((document) => document.pdfUrl).map((document) => `<a href="${esc(document.pdfUrl)}" target="_blank" rel="noreferrer">PDF</a>`).join(' ') || '—'}</td>
+  </tr>`).join('')}</tbody></table></div>`;
+}
+
+function documentRows(documents = []) {
+  if (!documents.length) return '<p class="empty">No filing documents have been synchronized. Run the non-AI CourtListener update.</p>';
+  return `<div class="document-list">${documents.slice(0, 100).map((document, rowIndex) => `<label class="document-row ${rowIndex < 6 ? 'recommended' : ''}">
+    <input type="checkbox" data-document-id="${esc(document.id)}" ${rowIndex < 3 ? 'checked' : ''}>
+    <span><b>${esc(document.category || 'Filing')} · ${esc(document.dateFiled || 'Undated')}</b><strong>${esc(document.description)}</strong><small>${document.pageCount ? `${document.pageCount} pages · ` : ''}${document.isAvailable ? 'RECAP copy available' : 'Metadata only'}</small></span>
+    ${document.pdfUrl ? `<a href="${esc(document.pdfUrl)}" target="_blank" rel="noreferrer">Open PDF</a>` : ''}
+  </label>`).join('')}</div>`;
+}
+
+function sourceRows(sources = []) {
+  if (!sources.length) return '<p class="empty">No source links are attached.</p>';
+  return sources.map((source) => `<a class="source" href="${esc(source.url)}" target="_blank" rel="noreferrer"><b>${esc(source.title)}</b><small>${esc(source.type || 'source')}${source.verifiedAt ? ` · verified ${esc(source.verifiedAt)}` : ''}</small></a>`).join('');
+}
+
+function analysisHtml(signedIn) {
+  return `<section class="legal-analyst"><p class="eyebrow">FILING-AWARE ANALYST</p><h2>Ask a question against selected documents</h2>
+    <p>The server selects likely filings or uses your checked documents, retrieves available CourtListener text, and sends only that structured context to the AI you choose.</p>
+    ${signedIn ? `<label>Question<textarea id="legal-question" rows="4" placeholder="Example: What must each side establish on the pending motion, which filing contains the controlling evidence, and what would change the analysis?"></textarea></label>
+      <div class="analyst-actions"><button id="select-documents" class="secondary">Select likely documents</button><button id="ask-user-ai">Ask my selected AI</button><button id="ask-perplexity" class="perplexity">Ask with my Perplexity key</button></div>
+      <p id="legal-ai-status"></p><div id="legal-ai-answer"></div>` : `<p><a href="/account">Sign in</a> to select filings, ask your AI, save analysis, and publish.</p>`}
+  </section>`;
+}
+
+async function showCase(slug) {
+  document.body.classList.add('focused-legal-view');
+  hero.hidden = true;
+  index.hidden = true;
+  detail.hidden = false;
+  const record = await request(`/api/legal/cases/${encodeURIComponent(slug)}`);
+  document.title = `${record.shortTitle} · Legal Command Center · Atlas Harbor`;
+  const board = record.decisionBoard || {
+    stage: record.proceduralStage,
+    currentPosition: record.summary,
+    actionQueue: record.nextWatchItems || [],
+    openQuestions: [record.coreQuestion].filter(Boolean)
+  };
+  const docket = record.courtListener || {};
+  const courtLink = docket.courtListenerUrl || (record.sources || []).find((source) => /courtlistener|storage\.courtlistener/i.test(source.url))?.url;
+  detail.innerHTML = `<p><a href="/legal">← All tracked matters</a></p>
+    <header class="case-hero"><p class="eyebrow">${esc(record.status)} · ${esc(board.stage || record.proceduralStage || record.matterType)}</p><h1>${esc(record.title)}</h1>
+      <p>${esc(record.court)} · ${esc(record.indexNumber || docket.docketNumber || 'Docket not confirmed')}</p>
+      <div class="hero-actions">${courtLink ? `<a class="button" href="${esc(courtLink)}" target="_blank" rel="noreferrer">Open CourtListener record</a>` : ''}<button id="sync-case" class="secondary">Get latest docket data</button></div>
+      <p id="sync-status">Last synchronized: ${esc(docket.lastSyncedAt || record.lastVerifiedAt || 'not yet')}</p>
+      ${tags([...(record.jurisdictionTags || []), ...(record.lawTopics || [])])}
+    </header>
+    <section class="case-command"><div class="command-main"><p class="eyebrow">CURRENT POSITION</p><h2>${esc(board.stage || 'Case review')}</h2><p>${esc(board.currentPosition || record.summary)}</p></div>
+      <div class="command-metrics"><div><small>Latest filing</small><b>${esc(docket.dateLastFiling || 'Unknown')}</b></div><div><small>Documents</small><b>${record.documents?.length || 0}</b></div><div><small>Assigned judge</small><b>${esc(docket.assignedJudge || 'Not confirmed')}</b></div><div><small>RECAP available</small><b>${record.documents?.filter((item) => item.isAvailable).length || 0}</b></div></div>
+    </section>
+    <section class="columns"><div class="panel action-panel"><h2>Action queue</h2>${bullets(board.actionQueue)}</div><div class="panel question-panel"><h2>Questions to resolve</h2>${bullets(board.openQuestions)}</div></section>
+    <section class="meta">${[
+      ['Court', record.court], ['Filed', record.filedAt || docket.dateFiled], ['Docket', record.indexNumber || docket.docketNumber],
+      ['Cause', docket.cause], ['Nature of suit', docket.natureOfSuit], ['Last verified', record.lastVerifiedAt]
+    ].map(([key, value]) => `<div class="fact"><small>${key}</small>${esc(value || 'Not available')}</div>`).join('')}</section>
+    <section><h2>Case problem</h2><p>${esc(record.summary || record.analysis?.importance)}</p><div class="notice"><b>Core legal question</b><p>${esc(record.coreQuestion || 'Identify the controlling legal decision and the facts needed to resolve it.')}</p></div></section>
+    <section><h2>Parties and roles</h2>${partyCards(record.parties)}</section>
+    <section><div class="section-heading"><div><p class="eyebrow">PRIMARY RECORD</p><h2>Docket entries</h2></div><span>${record.docketEntries?.length || 0} synchronized</span></div>${docketRows(record.docketEntries)}</section>
+    <section id="document-section"><div class="section-heading"><div><p class="eyebrow">DOCUMENT WORKBENCH</p><h2>Select the filings that matter</h2></div><span>${record.documents?.length || 0} documents</span></div><p>Orders, pleadings, and motions are prioritized. Check the documents your AI should review.</p>${documentRows(record.documents)}</section>
+    ${analysisHtml(Boolean(user()))}
+    <section class="columns">${Object.entries(record.positions || {}).map(([name, items]) => `<div class="panel"><h3>${esc(name.replace(/([A-Z])/g, ' $1'))}</h3>${bullets(items)}</div>`).join('')}</section>
+    <section><h2>Procedural timeline</h2><div class="timeline">${(record.timeline || []).slice(-80).map((item) => `<div><b>${esc(item.date)}</b>${item.sourceUrl ? `<a href="${esc(item.sourceUrl)}" target="_blank" rel="noreferrer">${esc(item.event)}</a>` : esc(item.event)}</div>`).join('')}</div></section>
+    <section><h2>Sources</h2>${sourceRows(record.sources)}</section>
+    <div id="legal-workspace"></div>
+    <p class="notice">${esc(record.disclaimer || 'This tool supports research and decision preparation. Verify every deadline and obligation from the operative court record.')}</p>`;
+
+  const syncButton = detail.querySelector('#sync-case');
+  const syncStatus = detail.querySelector('#sync-status');
+  syncButton.onclick = async () => {
+    syncButton.disabled = true;
+    syncStatus.textContent = 'Synchronizing CourtListener docket entries and RECAP documents…';
+    try {
+      const result = await request(`/api/legal/cases/${encodeURIComponent(slug)}/sync`, { method: 'POST' });
+      syncStatus.textContent = `Synchronized ${result.entries} entries and ${result.documents} documents${result.cached ? ' from the five-minute cache' : ''}. Reloading…`;
+      setTimeout(() => showCase(slug), 500);
+    } catch (error) {
+      syncStatus.textContent = error.message;
+    } finally {
+      syncButton.disabled = false;
+    }
+  };
+  if (user()) bindAnalyst(record, slug);
+  const workspaceContext = {
+    summary: record.summary,
+    coreQuestion: record.coreQuestion,
+    decisionBoard: record.decisionBoard,
+    courtListener: record.courtListener,
+    latestEntries: (record.docketEntries || []).slice(0, 20),
+    documents: (record.documents || []).slice(0, 20).map((item) => ({ id: item.id, dateFiled: item.dateFiled, description: item.description, pdfUrl: item.pdfUrl, category: item.category }))
+  };
+  await mountWorkspace(document.querySelector('#legal-workspace'), { type: 'legal_case', id: record.slug, title: record.shortTitle, context: workspaceContext });
+}
+
+function selectedDocumentIds() {
+  return [...detail.querySelectorAll('[data-document-id]:checked')].map((input) => input.dataset.documentId);
+}
+
+async function getAnalysisContext(slug, question, documentIds) {
+  return request(`/api/legal/cases/${encodeURIComponent(slug)}/analysis-context`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question, documentIds })
+  }, true);
+}
+
+function showAnswer(answer, documents = [], citations = []) {
+  const host = detail.querySelector('#legal-ai-answer');
+  const documentSection = documents.length ? `<h4>Documents reviewed</h4>${bullets(documents.map((item) => item.description || item.pdfUrl))}` : '';
+  const citationSection = citations.length ? `<h4>Additional citations</h4>${citations.map((item) => `<a href="${esc(item.url)}" target="_blank" rel="noreferrer">${esc(item.title || item.url)}</a>`).join('')}` : '';
+  host.innerHTML = `<article class="analysis-answer"><h3>Analysis</h3><p>${esc(answer).replace(/\n/g, '<br>')}</p>${documentSection}${citationSection}</article>`;
+}
+
+function bindAnalyst(record, slug) {
+  const question = detail.querySelector('#legal-question');
+  const status = detail.querySelector('#legal-ai-status');
+  detail.querySelector('#select-documents').onclick = async () => {
+    const value = question.value.trim() || record.coreQuestion || 'What documents control the next decision?';
+    status.textContent = 'Selecting the most relevant filings…';
+    try {
+      const context = await getAnalysisContext(slug, value, []);
+      const ids = new Set(context.selectedDocuments.map((item) => String(item.id)));
+      detail.querySelectorAll('[data-document-id]').forEach((input) => { input.checked = ids.has(input.dataset.documentId); });
+      status.textContent = `Selected ${ids.size} filings based on the question, document type, availability, and recency.`;
+    } catch (error) {
+      status.textContent = error.message;
+    }
+  };
+  detail.querySelector('#ask-user-ai').onclick = async () => {
+    const value = question.value.trim();
+    if (!value) return void (status.textContent = 'Enter a question first.');
+    status.textContent = 'Retrieving selected filing text and running your AI…';
+    try {
+      const context = await getAnalysisContext(slug, value, selectedDocumentIds());
+      const result = await ai([
+        { role: 'system', content: 'You are a cautious legal research assistant. Use only the supplied synchronized docket and selected filing text for case-specific facts. Clearly separate allegations, evidence, procedural orders, holdings, and inference. Cite each filing by description and URL. Do not fabricate law, deadlines, quotations, or legal advice.' },
+        { role: 'user', content: `Question:\n${value}\n\nCase and selected filings:\n${JSON.stringify(context)}` }
+      ], { surface: 'legal_case_review', resourceId: slug });
+      showAnswer(result.content, context.selectedDocuments);
+      status.textContent = `Answered using ${result.model || 'your selected model'} and ${context.selectedDocuments.length} selected filings.`;
+    } catch (error) {
+      status.textContent = `AI unavailable: ${error.message}`;
+    }
+  };
+  detail.querySelector('#ask-perplexity').onclick = async () => {
+    const value = question.value.trim();
+    const key = localStorage.getItem('atlas-perplexity-key') || '';
+    const model = localStorage.getItem('atlas-perplexity-model') || 'sonar-pro';
+    if (!value) return void (status.textContent = 'Enter a question first.');
+    if (!key) {
+      status.innerHTML = 'Add your Perplexity key under <a href="/account">Account and AI Settings</a> first.';
+      return;
+    }
+    status.textContent = 'Running Perplexity with the synchronized docket and selected filings…';
+    try {
+      const result = await request(`/api/legal/cases/${encodeURIComponent(slug)}/ask-perplexity`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-perplexity-key': key },
+        body: JSON.stringify({ question: value, documentIds: selectedDocumentIds(), model })
+      }, true);
+      showAnswer(result.answer, result.selectedDocuments, result.citations);
+      status.textContent = `Answered using ${result.model}${result.cached ? ' from the five-minute result cache' : ''}.`;
+    } catch (error) {
+      status.textContent = error.message;
+    }
+  };
+}
+
+loadStatus();
+const slug = decodeURIComponent(location.pathname.replace(/^\/legal\/?/, '').split('/')[0] || '');
+(slug ? showCase(slug) : showIndex()).catch((error) => {
+  hero.hidden = true;
+  detail.hidden = false;
+  detail.innerHTML = `<p class="notice">${esc(error.message)}</p>`;
+});
