@@ -12,13 +12,16 @@ import {createPublishedFeedRouter} from './published-feed.js';
 import {createBaseballProspectRouter} from './baseball-prospect-router.js';
 import {createGameRoutingRouter} from './game-routing.js';
 import {createLegalService} from './legal.js';
+import {createLegalRouter} from './legal-router.js';
 
 const directory=path.dirname(fileURLToPath(import.meta.url));
 export function createProblemRouter({service=createProblemSpacesService(),env=process.env}={}){
  const router=express.Router(),legal=createLegalService({env}),storage=createProblemSpaceStorage({env}),economicsService=createEconomicsService({storage,env});
  economicsService.startScheduler();
+ legal.startScheduler();
  router.use(createBaseballProspectRouter({legal}));
  router.use(createGameRoutingRouter());
+ router.use(createLegalRouter({service:legal}));
  router.get(['/economics','/economics/{*path}'],(_req,res)=>res.sendFile(path.join(directory,'../public/economics.html')));
  router.get(['/users/:slug','/users/:slug/{*path}'],(_req,res)=>res.sendFile(path.join(directory,'../public/profile.html')));
  // Metadata-backed Problem Space APIs are mounted before legacy control routes so
@@ -26,7 +29,7 @@ export function createProblemRouter({service=createProblemSpacesService(),env=pr
  router.use(createEconomicsRouter({service:economicsService,storage}));
  router.use(createDropshippingRouter({storage}));
  router.use(createAdminMetadataControl({env}));
- router.use(createAdminResearchRouter({env}));
+ router.use(createAdminResearchRouter({env,legalService:legal}));
  router.use(createPublishedFeedRouter({env}));
  const legacyAdminOk=req=>Boolean(env.ADMIN_PASSWORD)&&req.get('x-admin-password')===env.ADMIN_PASSWORD;
  router.get('/api/problem-spaces',async(_req,res)=>{try{return res.json({spaces:await service.listPublic()})}catch(error){console.error(error);return res.status(500).json({error:'Problem spaces are temporarily unavailable.'})}});
