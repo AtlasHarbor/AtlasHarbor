@@ -10,14 +10,17 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
   <link rel="stylesheet" href="/game.css">
+  <link rel="stylesheet" href="/game-v3.css">
 </head>
 <body>
   <header class="control-header">
     <a class="brand" href="/"><span>AH</span><b>Atlas Harbor</b></a>
+    <a class="game-doc-link" href="/game/docs">How to play</a>
     <div class="clock"><small>NETWORK TIME</small><b id="day">Mon 08:00</b></div>
     <div class="metrics" aria-label="Company metrics">
       <div><small>CASH</small><b id="cash">$2.40M</b></div><div><small>ON-TIME</small><b id="share">94%</b></div><div><small>TRUST</small><b id="rep">82</b></div><div><small>LEVEL</small><b id="level">1</b></div><div><small>ALERTS</small><b id="alert-count">1</b></div>
     </div>
+    <span id="save-status" class="save-status">Saved on this device</span>
     <button id="pause" class="secondary">Pause</button><button id="advance">Next decision</button>
   </header>
   <section class="briefing-strip">
@@ -31,19 +34,19 @@
       <section class="map-panel" id="map-panel">
         <div class="toolbar"><div class="automation-state"><span class="pulse"></span><strong id="automation-copy">Routine operations running</strong></div><div><button id="fit-map" class="secondary">Fit network</button><button id="show-all" class="secondary">Show every route</button></div></div>
         <div class="map-stage"><div id="map" aria-label="Interactive logistics operating map"></div><div class="map-scoreboard"><span><b id="routine-count">7</b> routine moves handled</span><span><b id="decision-count">1</b> decision waiting</span></div><div id="map-action-card" class="map-action-card" hidden></div><div id="decision-card" class="decision-card" hidden></div><div id="map-toast" class="map-toast" hidden aria-live="polite"></div><div id="map-alert-stack" class="map-alert-stack"></div></div>
-        <div class="map-help">Click any facility, vehicle, route, or competitor. Important decisions interrupt the simulation automatically.</div>
+        <div class="map-help">Truck routes follow the road network. Rail, air, and ocean movements use mode-specific corridors. The displayed percentage is distance traveled along the complete routed journey.</div>
       </section>
     </section>
     <section class="operations-deck">
-      <div class="deck-heading"><div><p class="eyebrow">ACTIVE NETWORK</p><h2>Movements in progress</h2></div><p>Progress continues while routine operations are delegated. Select a movement to jump back to its route.</p></div><div id="fleet-list" class="fleet-list"></div>
+      <div class="deck-heading"><div><p class="eyebrow">ACTIVE NETWORK</p><h2>Movements in progress</h2></div><p>Progress continues while routine operations are delegated. Each card shows overall journey progress and current-leg progress separately.</p></div><div id="fleet-list" class="fleet-list"></div>
       <div class="lower-grid"><section><div class="deck-heading"><div><p class="eyebrow">PEOPLE</p><h2>Your control-tower team</h2></div></div><div id="staff-list" class="staff-list"></div></section><section><div class="deck-heading"><div><p class="eyebrow">COMPETITION</p><h2>Market pressure</h2></div></div><div id="rival-list" class="rival-list"></div></section><section><div class="deck-heading"><div><p class="eyebrow">OPERATIONS FEED</p><h2>Your story so far</h2></div></div><div id="event-feed" class="event-feed" aria-live="polite"></div></section></div>
-      <div class="lower-grid utility-grid"><section><div class="deck-heading"><div><p class="eyebrow">UPGRADES</p><h2>Build a smarter company</h2></div></div><div id="upgrade-list" class="upgrade-list"></div></section><section class="ai-planner" id="advisor-host"><p class="eyebrow">EXCEPTION PLAN</p><h2>Try an unusual move</h2><textarea id="plan-input" rows="4" placeholder="Example: protect the Target launch, use air only for the late cartons, and have Maya call the buyer."></textarea><button id="draft-plan">Draft a reviewable plan</button><div id="plan-review"></div></section><section class="reset-zone"><div><p class="eyebrow">SIMULATION</p><h2>Need a clean start?</h2><p>Reset only this logistics career. Your account and other Atlas Harbor work remain untouched.</p></div><button id="reset-game" class="danger">Reset my game</button></section></div>
+      <div class="lower-grid utility-grid"><section><div class="deck-heading"><div><p class="eyebrow">UPGRADES</p><h2>Build a smarter company</h2></div></div><div id="upgrade-list" class="upgrade-list"></div></section><section class="ai-planner" id="advisor-host"><p class="eyebrow">DECISION SUPPORT</p><h2>Plan the network</h2><p>Generate a weighted dispatch recommendation, or describe an unusual recovery move for review.</p><button id="optimize-network" type="button" class="secondary">Optimize current priorities</button><textarea id="plan-input" rows="4" placeholder="Example: protect the Target launch, use air only for the late cartons, and have Maya call the buyer."></textarea><button id="draft-plan">Draft a reviewable plan</button><div id="plan-review"></div></section><section class="reset-zone"><div><p class="eyebrow">SIMULATION</p><h2>Need a clean start?</h2><p>Reset only this logistics career. Your account and other Atlas Harbor work remain untouched.</p></div><button id="reset-game" class="danger">Reset my game</button></section></div>
     </section>
   </main>
   <div id="modal" class="modal" hidden><div><button id="modal-close" class="modal-close" aria-label="Close">×</button><p class="eyebrow" id="modal-eyebrow">DECISION</p><h2 id="modal-title">Review action</h2><div id="modal-copy"></div><div class="modal-actions"><button id="confirm-action">Confirm</button><button id="cancel-action" class="secondary">Cancel</button></div></div></div>
-  <div id="intro" class="intro" hidden><div class="intro-card"><p class="eyebrow">YOUR FIRST MORNING</p><h1>A holiday launch is already in trouble.</h1><p>A truck carrying licensed toys to Walmart has broken down outside Memphis. The customer promise is in seven hours, your new team is watching, and a competitor is offering to take the lane.</p><div class="intro-stakes"><span>💰 $420K contract</span><span>⏱ 7 hours left</span><span>❤️ First customer trust</span></div><button id="take-command">Take command</button><small>Routine shipments are already moving. You only step in when judgment matters.</small></div></div>
+  <div id="intro" class="intro" hidden><div class="intro-card"><p class="eyebrow">YOUR FIRST MORNING</p><h1>A holiday launch is already in trouble.</h1><p>A truck carrying licensed toys to Walmart has broken down near Albuquerque. The customer promise is in seven hours, your new team is watching, and a competitor is offering to take the lane.</p><div class="intro-stakes"><span>💰 $420K contract</span><span>⏱ 7 hours left</span><span>❤️ First customer trust</span></div><button id="take-command">Take command</button><small>Routine shipments are already moving. You only step in when judgment matters.</small></div></div>
   <p class="disclaimer">Fictional operating scenario. Customer and competitor names are fictional archetypes and do not imply affiliation.</p>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <script type="module" src="/game-v2.js"></script><script type="module" src="/progress.js"></script><script type="module" src="/game-ai.js"></script><script type="module" src="/account-indicator.js"></script>
+  <script type="module" src="/game-v3.js"></script><script type="module" src="/progress.js"></script><script type="module" src="/game-ai.js"></script><script type="module" src="/account-indicator.js"></script>
 </body>
 </html>
