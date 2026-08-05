@@ -10,6 +10,7 @@ import {createEconomicsRouter} from './economics.js';
 import {createDropshippingRouter} from './dropshipping-api.js';
 import {createPublishedFeedRouter} from './published-feed.js';
 import {createBaseballProspectRouter} from './baseball-prospect-router.js';
+import {createGameRoutingRouter} from './game-routing.js';
 import {createLegalService} from './legal.js';
 
 const directory=path.dirname(fileURLToPath(import.meta.url));
@@ -17,6 +18,7 @@ export function createProblemRouter({service=createProblemSpacesService(),env=pr
  const router=express.Router(),legal=createLegalService({env}),storage=createProblemSpaceStorage({env}),economicsService=createEconomicsService({storage,env});
  economicsService.startScheduler();
  router.use(createBaseballProspectRouter({legal}));
+ router.use(createGameRoutingRouter());
  router.get(['/economics','/economics/{*path}'],(_req,res)=>res.sendFile(path.join(directory,'../public/economics.html')));
  router.get(['/users/:slug','/users/:slug/{*path}'],(_req,res)=>res.sendFile(path.join(directory,'../public/profile.html')));
  // Metadata-backed Problem Space APIs are mounted before legacy control routes so
