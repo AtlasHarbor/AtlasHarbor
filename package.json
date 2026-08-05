@@ -5,6 +5,8 @@
   "description": "A supply-chain decision game for translating complex choices into playable systems.",
   "type": "module",
   "scripts": {
+    "check": "node scripts/check-js.js",
+    "prestart": "npm run check",
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "test": "node --test",
