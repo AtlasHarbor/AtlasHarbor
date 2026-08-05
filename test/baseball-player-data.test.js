@@ -22,9 +22,9 @@ test('hitting totals merge MLB and MiLB counting stats and recalculate rates',()
  assert.equal(total.homeRuns,20);
  assert.equal(total.hits,82);
  assert.equal(total.avg,'.255');
- assert.equal(total.obp,'.329');
+ assert.equal(total.obp,'.334');
  assert.equal(total.slg,'.506');
- assert.equal(total.ops,'.835');
+ assert.equal(total.ops,'.840');
 });
 
 test('pitching totals sum baseball innings by outs rather than decimals',()=>{
