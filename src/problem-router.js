@@ -8,6 +8,7 @@ import {createAdminResearchRouter} from './admin-research.js';
 import {createEconomicsService} from './economics-service.js';
 import {createEconomicsRouter} from './economics.js';
 import {createDropshippingRouter} from './dropshipping-api.js';
+import {createWorkspaceRouter} from './workspace-api.js';
 import {createPublishedFeedRouter} from './published-feed.js';
 import {createBaseballProspectRouter} from './baseball-prospect-router.js';
 import {createGameRoutingRouter} from './game-routing.js';
@@ -30,6 +31,7 @@ export function createProblemRouter({service=createProblemSpacesService(),env=pr
  // they work without manually creating Supabase tables.
  router.use(createEconomicsRouter({service:economicsService,storage}));
  router.use(createDropshippingRouter({storage}));
+ router.use(createWorkspaceRouter({env,storage}));
  router.use(createAdminMetadataControl({env}));
  router.use(createAdminResearchRouter({env,legalService:legal}));
  router.use(createPublishedFeedRouter({env}));
