@@ -25,12 +25,13 @@ The service reads and writes in this order:
 
 `COURTLISTENER_API_TOKEN` enables authenticated calls to the CourtListener REST API. The non-AI synchronization process resolves each tracked case from its:
 
-- CourtListener docket ID,
-- CourtListener URL,
-- court abbreviation,
-- PACER case ID,
+- exact CourtListener docket ID or URL,
+- court abbreviation and PACER case ID,
+- court abbreviation and docket number,
 - docket number, or
-- existing primary-source URL.
+- a separately verified identity correction for a case whose bootstrap record was incomplete.
+
+Exact docket identifiers take precedence over caption similarity. Cases with overlapping parties must not be merged merely because their names look related.
 
 For a resolved case the service stores:
 
@@ -48,6 +49,51 @@ For a resolved case the service stores:
 - a merged procedural timeline,
 - data-quality and synchronization timestamps.
 
+The application does not treat CourtListener coverage as guaranteed completeness. A missing RECAP PDF means the filing may be metadata-only, sealed, unavailable in RECAP, or not yet contributed. Deadlines must be verified from the operative court docket and orders.
+
+## Verified case identities
+
+### New York v. KalshiEX LLC
+
+The New York enforcement action must remain separate from Kalshi's earlier preemption case and its appeal.
+
+```text
+Originating state action
+Caption: New York v. KalshiEX LLC
+Court: New York Supreme Court, New York County
+Docket: 453272/2026
+
+Federal removal action
+Caption: People of the State of New York, by Letitia James,
+         Attorney General of the State of New York v. KalshiEX LLC
+Court: U.S. District Court for the Southern District of New York
+Docket: 1:26-cv-06550
+CourtListener docket ID: 73700030
+CourtListener: https://www.courtlistener.com/docket/73700030/people-of-the-state-of-new-york-by-letitia-james-attorney-general-of-the/
+```
+
+The following are related matters, not alternate numbers for the enforcement action:
+
+```text
+KalshiEX LLC v. Williams
+S.D.N.Y. docket: 1:25-cv-08846
+CourtListener docket ID: 71766515
+
+KalshiEX LLC v. Williams
+Second Circuit docket: 26-1835
+CourtListener docket ID: 73601450
+```
+
+Atlas Harbor hard-binds the enforcement action to CourtListener docket `73700030`. Before a public refresh, it saves the corrected identity to the persistent Legal store. The non-AI synchronization then retrieves that docket's entries, parties, and available RECAP documents. A startup task performs the same correction and refresh when `COURTLISTENER_API_TOKEN` is configured.
+
+This prevents three common errors:
+
+1. showing `Docket pending` after the federal number is known,
+2. attaching filings from `KalshiEX LLC v. Williams` to the New York enforcement action,
+3. treating the Second Circuit appeal number as the district-court docket.
+
+### X.AI property-damage matter
+
 The known X.AI property-damage matter is linked to the supplied primary filing:
 
 ```text
@@ -62,15 +108,13 @@ PACER case ID: 52569
 docket: 3:26-cv-00148
 ```
 
-The application does not treat CourtListener coverage as guaranteed completeness. A missing RECAP PDF means the filing may be metadata-only, sealed, unavailable in RECAP, or not yet contributed. Deadlines must be verified from the operative court docket and orders.
-
 ## Non-AI update flow
 
 CourtListener synchronization is independent of OpenRouter and Perplexity.
 
 A synchronization:
 
-1. Resolves the CourtListener docket.
+1. Resolves or applies the verified CourtListener identity.
 2. Downloads structured docket metadata.
 3. Downloads bounded sets of docket entries and parties.
 4. Normalizes RECAP document records and direct PDF URLs.
@@ -78,9 +122,9 @@ A synchronization:
 6. Rebuilds the case decision board.
 7. Saves the updated case immediately.
 
-Public case synchronization is limited to one request per IP and case per minute. CourtListener responses and completed case synchronizations are cached for five minutes.
+Public case synchronization is limited to one request per IP and case per minute. CourtListener responses and completed case synchronizations are cached for five minutes. A verified identity can force a fresh synchronization after the public rate-limit check so an earlier unresolved lookup does not keep the case empty.
 
-When `COURTLISTENER_API_TOKEN` is configured, a background scheduler checks every 15 minutes and updates a small batch of cases whose last successful synchronization is more than 12 hours old. This avoids a burst of requests at startup or on every page view.
+When `COURTLISTENER_API_TOKEN` is configured, a background scheduler checks every 15 minutes and updates a small batch of cases whose last successful synchronization is more than 12 hours old. Verified incomplete identities are corrected shortly after startup before their first docket refresh.
 
 Admin provides:
 
@@ -102,6 +146,7 @@ GET  /api/legal/cases/:slug/docket
 GET  /api/legal/cases/:slug/documents
 GET  /api/legal/cases/:slug/documents/:id
 POST /api/legal/cases/:slug/sync
+POST /api/legal/cases/:slug/refresh
 ```
 
 Signed-in research endpoints:
@@ -140,6 +185,22 @@ The command center shows:
 - private analysis and publication tools.
 
 The action queue is deliberately operational. It asks the researcher to identify the operative pleading or order, determine what relief is pending, verify deadlines from primary documents, and separate allegations, evidence, procedural rulings, and holdings.
+
+## Mobile card containment
+
+Legal cards must remain readable at narrow phone widths. Provider and seed values can contain long captions, docket strings, court names, URLs, or machine-style labels.
+
+`public/legal-containment.css` is loaded after the original Legal styles and enforces:
+
+- `min-width: 0` on grid and card descendants,
+- hidden horizontal overflow at the card boundary,
+- `overflow-wrap: anywhere` and `word-break: break-word` for long text,
+- bounded tag chips,
+- a two-column metadata layout on larger screens,
+- a single-column docket and freshness layout on phone widths,
+- human-readable stage labels rather than raw underscore-separated database values.
+
+The containment rule applies to index cards and the command center. Horizontal scrolling remains intentional only inside large docket tables.
 
 ## Filing-aware AI
 
@@ -194,10 +255,14 @@ After deployment:
 1. Open `/api/legal/status` and confirm a nonzero case count.
 2. Call `POST /api/legal/seed` if storage is empty.
 3. Open Admin and confirm the Legal docket-data panel appears.
-4. Synchronize the X.AI case without AI.
-5. Confirm its case page contains a CourtListener link and the supplied complaint PDF.
-6. Confirm docket entries and document counts persist after a server restart.
-7. Select the complaint and ask a narrow question with the user AI.
-8. Verify the answer labels allegations and does not present them as findings.
-9. Trigger the same Perplexity question twice and confirm the second result reports the five-minute cache.
-10. Run `npm run check` and `npm test` before deployment.
+4. Open the New York v. KalshiEX card and confirm it shows federal docket `1:26-cv-06550`.
+5. Confirm its CourtListener button opens docket `73700030`, not the Williams docket.
+6. Run its non-AI synchronization and confirm entries and available RECAP documents appear and persist.
+7. Confirm state docket `453272/2026`, Williams district docket `1:25-cv-08846`, and appeal `26-1835` are labeled as separate related matters.
+8. Test the Legal index at approximately 390 CSS pixels wide and confirm no card text leaves its border.
+9. Synchronize the X.AI case without AI and confirm the supplied complaint PDF appears.
+10. Confirm docket entries and document counts persist after a server restart.
+11. Select a filing and ask a narrow question with the user AI.
+12. Verify the answer labels allegations and does not present them as findings.
+13. Trigger the same Perplexity question twice and confirm the second result reports the five-minute cache.
+14. Run `npm run check` and `npm test` before deployment.
