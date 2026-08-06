@@ -10,7 +10,7 @@ test('publishing workspace is database-only in the browser', () => {
   assert.match(source, /workspace_notes/);
   assert.doesNotMatch(source, /localStorage/);
   assert.doesNotMatch(source, /atlas-workspace:/);
-  assert.doesNotMatch(source, /device copy|device-only draft|service reconnects/i);
+  assert.doesNotMatch(source, /Using your saved account copy|Saved on this device|service reconnects/i);
 });
 
 test('server workspace API writes workspace_notes instead of account metadata', () => {
