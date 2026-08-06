@@ -8,7 +8,7 @@ const spaces = [
   ['/baseball', 'Baseball Intelligence', 'Games, teams, players, injuries, and projections.'],
   ['/legal', 'Legal Systems Tracker', 'Cases, timelines, sources, and analysis.'],
   ['/food', 'Food Decision Planner', 'Choose breakfast through late night, solo or together, for dine-in, quick service, takeaway, or delivery.'],
-  ['/go-to-market', 'Go-to-Market Research', 'Market evidence, demand, economics, launch plans, and partner pitches.'],
+  ['/prop', 'Propositions', 'Build data-based cases for work projects, partnerships, sales pitches, investments, and market ideas.'],
   ['/dropshipping', 'Dropshipping & Advertising', 'Products, campaigns, tests, results, and collaboration.'],
   ['/life-sciences', 'Life Sciences', 'Research questions, evidence, experiments, and translation.'],
   ['/featured', 'Featured', 'High-quality work selected by the global quality system.'],
