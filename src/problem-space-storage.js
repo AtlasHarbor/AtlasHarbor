@@ -9,7 +9,7 @@ async function readJson(response){
 }
 
 export function createProblemSpaceStorage({env=process.env,fetchImpl=globalThis.fetch}={}){
- const base=env.SUPABASE_URL,key=env.SUPABASE_PUBLISHABLE_KEY,secret=env.SUPABASE_SECRET_KEY;
+ const base=env.SUPABASE_URL,key=env.SUPABASE_PUBLISHABLE_KEY,secret=env.SUPABASE_SECRET_KEY||env.SUPABASE_SERVICE_ROLE_KEY||env.SUPABASE_SERVICE_KEY;
  let writeQueue=Promise.resolve(),cachedHostId=null;
  const configured=Boolean(base&&key&&secret);
  const authHeaders=token=>({apikey:key,Authorization:`Bearer ${token}`,...JSON_HEADERS});
