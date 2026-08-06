@@ -1,6 +1,7 @@
 import express from 'express';
 import crypto from 'node:crypto';
 import {createProblemSpaceStorage} from './problem-space-storage.js';
+import{supabaseSecretKey,supabaseServiceHeaders}from'./supabase-server-key.js';
 import {normalizeWorkspaceRecord,normalizeLegacyLegalRecord,newestRecord,sameResource,upsertWorkspaceRecord} from './workspace-records.js';
 
 const SPACE='publishing_workspace';
@@ -10,12 +11,12 @@ const route=handler=>async(req,res)=>{try{await handler(req,res)}catch(error){co
 const missingTable=(status,body)=>status===404||/Could not find the table|schema cache|PGRST205|relation .* does not exist/i.test(body||'');
 
 export function createWorkspaceRouter({env=process.env,fetchImpl=globalThis.fetch,storage=createProblemSpaceStorage({env,fetchImpl})}={}){
- const router=express.Router(),base=env.SUPABASE_URL,publishable=env.SUPABASE_PUBLISHABLE_KEY,secret=env.SUPABASE_SECRET_KEY||env.SUPABASE_SERVICE_ROLE_KEY||env.SUPABASE_SERVICE_KEY;
+ const router=express.Router(),base=env.SUPABASE_URL,publishable=env.SUPABASE_PUBLISHABLE_KEY,secret=supabaseSecretKey(env);
  async function tableRows(table,query,token){
   if(!base||!publishable||!token)return[];
   try{
-   const key=secret||publishable,authorization=secret?secret:token;
-   const response=await fetchImpl(`${base}/rest/v1/${table}${query}`,{headers:{apikey:key,Authorization:`Bearer ${authorization}`,Accept:'application/json'}}),body=await response.text();
+   const headers=secret?{...supabaseServiceHeaders(secret,{json:false}),Accept:'application/json'}:{apikey:publishable,Authorization:`Bearer ${token}`,Accept:'application/json'};
+   const response=await fetchImpl(`${base}/rest/v1/${table}${query}`,{headers}),body=await response.text();
    if(!response.ok){if(!missingTable(response.status,body))console.warn(`Optional ${table} workspace adapter returned ${response.status}: ${body.slice(0,240)}`);return[]}
    try{return body?JSON.parse(body):[]}catch{return[]}
   }catch(error){console.warn(`Optional ${table} workspace adapter is unavailable:`,error.message);return[]}
@@ -55,6 +56,11 @@ export function createWorkspaceRouter({env=process.env,fetchImpl=globalThis.fetc
   }
   return{token,current,note:normalized,source:normalized._store||'account-metadata'};
  }
+ router.get('/api/workspaces/status',route(async(req,res)=>{
+  const{current}=await storage.requestUser(req,{required:false});
+  res.set('Cache-Control','no-store');
+  res.json({ok:true,signedIn:Boolean(current),supabaseConfigured:Boolean(base&&publishable),serviceKeyConfigured:Boolean(secret),serviceKeyType:secret?(secret.startsWith('sb_secret_')?'opaque-secret':'legacy-service-role'):'none'});
+ }));
  router.get('/api/workspaces/:resourceType/:resourceId',route(async(req,res)=>{
   const result=await load(req);
   res.set('Cache-Control','no-store');
