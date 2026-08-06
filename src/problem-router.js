@@ -17,6 +17,7 @@ import {createLegalService} from './legal.js';
 import {createLegalRouter} from './legal-router.js';
 import {createGoToMarketRouter} from './go-to-market.js';
 import {createPropositionRouter} from './proposition.js';
+import {createPublicPropositionRouter} from './proposition-public.js';
 
 const directory=path.dirname(fileURLToPath(import.meta.url));
 export function createProblemRouter({service=createProblemSpacesService(),env=process.env}={}){
@@ -35,6 +36,8 @@ export function createProblemRouter({service=createProblemSpacesService(),env=pr
  // they work without manually creating Supabase tables.
  router.use(createEconomicsRouter({service:economicsService,storage}));
  router.use(createDropshippingRouter({storage}));
+ // Public reads have an example fallback and do not depend on Supabase auth being reachable.
+ router.use(createPublicPropositionRouter({storage}));
  router.use(createPropositionRouter({storage}));
  // Preserve the former API for existing clients and saved integrations.
  router.use(createGoToMarketRouter({storage}));
