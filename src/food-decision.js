@@ -44,6 +44,12 @@ function participantFit(place,participant){
   if(/loud|noisy|crowded|club/.test(reviewText)){score-=15;reasons.push('review excerpts suggest a noisy setting')}
  }
  if(participant.noise==='lively'&&/lively|music|busy|energetic/.test(reviewText)){score+=7;reasons.push('review excerpts suggest a lively atmosphere')}
+ const spicyEvidence=/spicy|very hot|hot pot|sichuan|szechuan|chili|chilli|pepper heat/.test(haystack);
+ if(spicyEvidence&&participant.spice<35){score-=14;reasons.push('the available evidence suggests more heat than this person prefers')}
+ else if(spicyEvidence&&participant.spice>65){score+=7;reasons.push('the available evidence matches a higher spice tolerance')}
+ if(participant.adventurousness<30&&participant.likes.length&&!matchedLikes.length){score-=10;reasons.push('a familiar preferred cuisine is especially important to this person')}
+ const specificCuisine=text(place.primaryTypeDisplay||place.primaryType).toLowerCase();
+ if(participant.adventurousness>70&&specificCuisine&&!/restaurant|food|cafe$/.test(specificCuisine)){score+=5;reasons.push('a more distinctive cuisine fits this person’s adventurousness')}
  return{name:participant.name,score:Math.round(clamp(score)),hardConflict,reasons:unique(reasons),verification:unique(verification)};
 }
 
