@@ -1,31 +1,51 @@
 # Legal private workspaces and publications
 
-Legal case analysis uses the shared Atlas Harbor workspace system. The court record and the user's analysis are intentionally separate:
+Legal case analysis uses the shared Atlas Harbor publishing database. The court record and the user's analysis remain separate:
 
 - CourtListener and RECAP provide the canonical case record.
-- The private workspace contains the signed-in user's draft, projections, and AI-assisted text.
-- Publishing creates a separate public article and never modifies the synchronized court facts.
+- `workspace_notes` stores the signed-in user's draft, projections, and AI-assisted text.
+- Publishing creates a separate public article and never modifies synchronized court facts.
 
 ## Canonical persistence
 
-The canonical private copy is stored in the signed-in account at:
+The only canonical private workspace store is:
 
 ```text
-user_metadata.atlas_problem_spaces.publishing_workspace.notes
+public.workspace_notes
 ```
 
-Each note is identified by the user, resource type, and resource ID. A Legal note uses:
+Each row is identified by:
+
+```text
+user_id + resource_type + resource_id
+```
+
+For the New York v. KalshiEX workspace:
 
 ```text
 resource_type = legal_case
-resource_id   = the case slug
+resource_id   = ny-kalshi-enforcement-2026
 ```
 
-The browser also writes an immediate device copy under `atlas-workspace:<user>:<type>:<id>`. The device copy is a safety net, not the canonical publication database.
+The browser reads and upserts the signed-in user's row using the Supabase publishable key and that user's access-token JWT. Row Level Security permits users to read and modify their own rows.
 
-## Server API
+There is no device-only or `localStorage` persistence path for analysis content. A failed database request is displayed as a database error and does not create a second private copy.
 
-Signed-in pages use same-origin routes rather than making ordinary browser-to-PostgREST table calls:
+## Why the August 2026 regression happened
+
+The original workspace used authenticated database requests to `workspace_notes`. A later compatibility change routed it through a new same-origin `/api/workspaces` service and added account-metadata and device fallbacks.
+
+The deployed browser could load the new JavaScript while the workspace service returned `Failed to fetch`. The interface therefore showed and edited a fallback copy. At the same time, `/published` and the private workspace were no longer guaranteed to read the same source.
+
+That behavior was misleading: a user could see a draft or copy a share link even though the canonical database write had not succeeded.
+
+The repaired invariant is:
+
+> A successful save means the `workspace_notes` database row was written.
+
+## Database access paths
+
+The browser writes `workspace_notes` directly with the authenticated user's JWT. The same-origin workspace API also uses `workspace_notes`, so it remains available for server-side clients and diagnostics without creating another storage model.
 
 ```text
 GET /api/workspaces/:resourceType/:resourceId
@@ -33,56 +53,49 @@ PUT /api/workspaces/:resourceType/:resourceId
 GET /api/workspaces/status
 ```
 
-The GET route searches all known historical stores, selects the newest record, and migrates it into account metadata. The PUT route saves the canonical account copy and makes a best-effort mirror to the optional `workspace_notes` table.
+Both browser and server paths use the same unique constraint:
 
-## Historical migration order
+```text
+on_conflict = user_id, resource_type, resource_id
+```
 
-A workspace load considers:
+## One-time legacy migration
 
-1. `atlas_problem_spaces.publishing_workspace.notes`
-2. older `atlas_virtual_tables.workspace_notes` account metadata
-3. the optional `workspace_notes` table
-4. for Legal only, the legacy `legal_notes` table
-5. the local device copy when the account services cannot be reached
+Older Legal analysis may exist in `legal_notes`, or in temporary account metadata created during the regression. On the first successful database load, Atlas Harbor compares timestamps from:
 
-The newest record wins. Reading an older adapter automatically migrates the selected record into the canonical account-metadata store.
+1. the current `workspace_notes` row,
+2. the user's older `legal_notes` row,
+3. temporary publishing metadata attached to the account.
 
-Legacy Legal notes whose body begins with `ATLAS_WORKSPACE_V1` are decoded before migration. Existing publication state, sharing state, projections, title, body, dates, and share token are preserved. A deterministic legacy share token is generated only when an old published record has no token.
+When a newer legacy copy exists, it is upserted into `workspace_notes`. Matching temporary account-metadata copies are then removed. This is a one-time migration into the database, not an ongoing fallback.
 
-## Deployment-gap behavior
+No browser device copy is read or written.
 
-Render can briefly serve a new browser asset while the corresponding server process is still replacing an older deployment. During that window, `fetch('/api/workspaces/...')` can fail even though the user remains signed in.
+## Published feed
 
-The workspace therefore follows this fallback sequence:
+`/published` reads shared, published rows directly from `workspace_notes` and merges the server-side publication index when available. Both refer to the same database records.
 
-1. Try the same-origin workspace API.
-2. Read the cached account-metadata copy already present in the authenticated user object.
-3. On save, update Supabase Auth user metadata directly with the user's JWT.
-4. Keep the device copy if both account paths fail.
+A row appears in discovery when:
 
-A deployment gap must not replace the workspace with a false sign-in prompt. The UI reports which fallback is active and retains the draft.
+```text
+is_shared = true
+is_published = true
+share_token is present
+featured is not false
+```
 
-## Publication feed recovery
+Direct publication pages resolve the database row by `share_token`.
 
-`GET /api/published-feed` merges discoverable publications from:
+## Supabase key handling
 
-- account metadata in `publishing_workspace.notes`,
-- older virtual workspace metadata,
-- the optional `workspace_notes` table,
-- legacy Legal publications in `legal_notes`.
+Browser database calls use:
 
-Records are deduplicated by share token or record ID, and the newest copy wins. The feed uses the authenticated user's account when available and, with a configured server secret key, enumerates all accounts for global discovery.
+- `apikey: SUPABASE_PUBLISHABLE_KEY`
+- `Authorization: Bearer <signed-in user JWT>`
 
-## Supabase key compatibility
+Server adapters support both legacy JWT service-role keys and newer opaque `sb_secret_...` keys. Opaque secret keys are API keys and are not sent as bearer JWTs.
 
-Supabase supports both legacy JWT `service_role` keys and newer opaque `sb_secret_...` keys.
-
-- A legacy service-role JWT is sent in both `apikey` and `Authorization: Bearer`.
-- An opaque `sb_secret_...` key is sent only in `apikey`.
-
-Sending an opaque secret key as a bearer token causes an `Invalid JWT` response and can make global account enumeration or server-side metadata recovery appear empty. Atlas Harbor centralizes this distinction in `src/supabase-server-key.js`.
-
-Accepted environment names are:
+Accepted server environment names are:
 
 ```text
 SUPABASE_SECRET_KEY
@@ -92,16 +105,25 @@ SUPABASE_SERVICE_KEY
 
 `SUPABASE_SECRET_KEY` is preferred.
 
+## Legal page presentation
+
+The public Legal page does not display implementation details such as account-storage mode, service-key status, or CourtListener-token configuration. Those diagnostics belong in Admin and operational logs.
+
+The shared Problem Spaces menu remains available on the Legal index and focused case pages.
+
 ## Verification checklist
 
 After deployment:
 
-1. Open `/api/workspaces/status` and confirm `ok: true`.
-2. Sign in and open a Legal case with a previous draft.
-3. Confirm the draft appears without a sign-in prompt.
-4. Save a change, reload, and confirm it persists.
-5. Publish with sharing enabled and follow the returned article link.
-6. Open `/api/published-feed` while signed in and confirm the article appears.
-7. Open `/published` in a private browser window and confirm global publications appear when a server secret key is configured.
-8. Temporarily make the optional SQL tables unavailable in a test environment and confirm account-metadata drafts and publications still work.
-9. Run `npm run check` and `npm test`.
+1. Sign in and open `/legal/ny-kalshi-enforcement-2026`.
+2. Confirm the workspace says it is saved in the account database and shows no device-copy or reconnect warning.
+3. Edit the analysis and press **Save draft**.
+4. Reload and confirm the edit remains.
+5. Enable sharing and press **Publish**.
+6. Open the returned `/published/<share-token>` URL.
+7. Open `/published` and confirm the article is listed.
+8. Sign in on another browser or device and confirm the same private draft loads.
+9. Confirm the Legal index does not display internal storage or CourtListener-token diagnostics.
+10. Run `npm run check` and `npm test` before deployment.
+
+When the table, network, or RLS policy is unavailable, the workspace reports a database error. It does not claim that a local or account-metadata fallback was saved.
