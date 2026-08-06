@@ -11,6 +11,7 @@ import {createDropshippingRouter} from './dropshipping-api.js';
 import {createPublishedFeedRouter} from './published-feed.js';
 import {createBaseballProspectRouter} from './baseball-prospect-router.js';
 import {createGameRoutingRouter} from './game-routing.js';
+import {createGameClientRouter} from './game-client.js';
 import {createLegalService} from './legal.js';
 import {createLegalRouter} from './legal-router.js';
 
@@ -19,6 +20,7 @@ export function createProblemRouter({service=createProblemSpacesService(),env=pr
  const router=express.Router(),legal=createLegalService({env}),storage=createProblemSpaceStorage({env}),economicsService=createEconomicsService({storage,env});
  economicsService.startScheduler();
  legal.startScheduler();
+ router.use(createGameClientRouter());
  router.use(createBaseballProspectRouter({legal}));
  router.use(createGameRoutingRouter());
  router.use(createLegalRouter({service:legal}));
