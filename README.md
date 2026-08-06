@@ -24,7 +24,7 @@ The interface should not become a data-entry job. Routine collection and ranking
 - `/game` — an exception-driven logistics control-tower game. See [`docs/logistics-game/README.md`](docs/logistics-game/README.md).
 - `/baseball` — professional, Minor League, and college baseball intelligence.
 - `/legal` — CourtListener-backed dockets, filings, decision boards, and legal research. See [`docs/legal/README.md`](docs/legal/README.md).
-- `/food` — a location-first group food decision planner. See [`docs/food/README.md`](docs/food/README.md).
+- `/food` — a location-first food decision planner for breakfast through late night, solo or together, with dine-in, quick-service, takeaway, and delivery constraints. See [`docs/food/README.md`](docs/food/README.md).
 - `/dropshipping` — product hypotheses, unit economics, advertising experiments, and measured results.
 - `/life-sciences` — research questions, evidence, experiments, and translation.
 - `/featured` — work selected by the global quality system.
@@ -33,21 +33,25 @@ The interface should not become a data-entry job. Routine collection and ranking
 
 ## Food decision planner
 
-Food Discovery is treated as a multi-stakeholder logistics problem rather than a generic restaurant list.
+Food Discovery is treated as a meal logistics problem rather than a generic restaurant list.
 
-The user must first confirm the group’s origin by searching a location, using browser geolocation, or clicking the map. The planner then considers:
+The user first confirms the starting location by searching, using browser geolocation, or clicking the map. The planner then considers:
 
-- each participant’s likes, dislikes, dietary requirements, allergy questions, noise preference, price ceiling, spice comfort, and adventurousness,
-- the occasion and desired food,
+- whether the decision is for one diner or several,
+- breakfast, brunch, lunch, dinner, late night, or coffee/snack,
+- solo meal, meal for two, date, friends, family, business, celebration, group outing, or travel meal,
+- quick or counter service, sit-down dining, takeaway/to-go, delivery, or any service style,
+- each diner’s likes, dislikes, dietary requirements, allergy questions, noise preference, price ceiling, spice comfort, and adventurousness,
 - road travel distance from the confirmed origin,
 - opening status and closing risk,
-- group price limit,
 - rating confidence and review volume,
 - freshness, seasonality, sourcing, and raw-shellfish verification questions.
 
-The objective protects the least-satisfied participant first, then improves average group satisfaction while balancing logistics, evidence confidence, and freshness uncertainty. Unknown dietary or allergy information is never silently treated as safe; it becomes a verification task.
+For a solo meal, the objective maximizes that diner’s fit while respecting timing, service format, travel, budget, hours, evidence, and freshness constraints. For multiple diners, it protects the least-satisfied person before improving the average.
 
-When available, road distance is calculated with OSRM/OpenStreetMap. Google Places supplies restaurant identity, hours, ratings, review excerpts, price level, and selected attributes when `GOOGLE_PLACES_API_KEY` is configured. OpenStreetMap remains the fallback provider.
+Breakfast and other meal periods use Google Places service fields when available. Delivery, takeaway, and dine-in are actual feasibility constraints when the provider explicitly reports that a format is unavailable. Unknown meal or service information becomes a verification task rather than an unsupported assumption.
+
+When available, road distance is calculated with OSRM/OpenStreetMap. Google Places supplies restaurant identity, hours, ratings, review excerpts, price level, meal-service fields, and service-format attributes when `GOOGLE_PLACES_API_KEY` is configured. OpenStreetMap remains the fallback provider.
 
 Profiles and recent decisions persist without a food-specific Supabase table:
 
@@ -56,7 +60,7 @@ localStorage["atlas-food-planner-profile-v2"]
 user_metadata.atlas_problem_spaces.food_planner
 ```
 
-The full decision model, API, persistence rules, freshness guidance, and logistics mapping are documented in [`docs/food/README.md`](docs/food/README.md).
+The full decision model, scoring weights, API, persistence rules, freshness guidance, meal periods, service modes, and logistics mapping are documented in [`docs/food/README.md`](docs/food/README.md).
 
 ## Logistics game
 
@@ -73,15 +77,13 @@ Every logistics location declares a facility type and landmass. The routing laye
 - only ocean or air may bridge different landmasses,
 - truck, rail, and ocean fallbacks never invent a straight-line route when no verified corridor exists.
 
-This rule is enforced in `src/game-routing.js`, not merely described in the interface.
-
 Signed-in progress is stored under:
 
 ```text
 user_metadata.atlas_problem_spaces.logistics_game.progress
 ```
 
-Local storage remains the immediate fallback, with optional import from the legacy `game_progress` table. See [`docs/logistics-game/README.md`](docs/logistics-game/README.md) for the player loop, routing model, optimization mapping, persistence, limitations, and deployment checklist.
+Local storage remains the immediate fallback, with optional import from the legacy `game_progress` table. See [`docs/logistics-game/README.md`](docs/logistics-game/README.md).
 
 ## Problem Space persistence standard
 
@@ -96,8 +98,6 @@ New Problem Spaces must work after deployment without asking an ordinary user to
 7. A dedicated table can replace metadata when volume or query complexity requires it without changing the public API.
 8. Missing optional tables must never produce instructions telling an ordinary user to run SQL.
 
-A dedicated table remains appropriate for high-volume records, complex joins, realtime subscriptions, or large public archives. That is a scaling implementation detail, not a prerequisite for a Problem Space to function.
-
 ## Economics publication feed
 
 Economics is headline-first. Feed titles, URLs, summaries, and dates are saved before AI enrichment so provider latency or malformed model output cannot prevent new stories from appearing.
@@ -108,9 +108,7 @@ GET  /api/economics/status
 POST /api/economics/run
 ```
 
-The public trigger is asynchronous, limited to one accepted run per minute, and returns a `runId`. Admin configures source, cadence, model, and optional Perplexity enrichment. The scheduler checks once per minute and starts a real run when the saved cadence is due.
-
-`supabase/economics-feed.sql` is a legacy optional adapter, not a requirement.
+The public trigger is asynchronous, limited to one accepted run per minute, and returns a `runId`. Admin configures source, cadence, model, and optional Perplexity enrichment.
 
 ## Legal tracker
 
@@ -122,52 +120,21 @@ Legal is database-first with this persistence order:
 
 CourtListener/RECAP synchronization is non-AI and saves docket metadata, entries, parties, document metadata, direct filing links, and available extracted text. Perplexity and user-selected AI are optional analysis layers over the synchronized record and selected filings.
 
-```text
-GET  /api/legal/status
-POST /api/legal/seed
-GET  /api/legal/cases
-GET  /api/legal/cases/:slug
-GET  /api/legal/cases/:slug/docket
-GET  /api/legal/cases/:slug/documents
-POST /api/legal/cases/:slug/sync
-POST /api/legal/cases/:slug/analysis-context
-POST /api/legal/cases/:slug/ask-perplexity
-```
-
 See [`docs/legal/README.md`](docs/legal/README.md).
 
 ## Dropshipping & Advertising
 
-Dropshipping uses an application API and metadata-backed storage rather than requiring browser access to `dropship_strategies`, `strategy_comments`, or related legacy tables.
-
-The space is organized around product type, supplier evidence, fulfillment risk, selling price, supplier and shipping cost, target acquisition cost, contribution margin, test budget, success criteria, kill criteria, measured results, human thesis, and a separate AI critique.
-
-Shared decision briefs use host-account metadata. Personal categories and filters use the individual user’s metadata. Legacy SQL files remain available only for installations that intentionally retain the table-backed implementation.
+Dropshipping uses an application API and metadata-backed storage rather than requiring browser access to legacy Supabase tables. Shared decision briefs use host-account metadata. Personal categories and filters use the individual user’s metadata.
 
 ## Global AI and administration
 
-The first signed-in Supabase user to initialize `/admin` becomes `master_admin`. Administrators can configure:
-
-- primary and backup OpenAI-compatible endpoints, models, and encrypted keys,
-- quality-review instructions and budget,
-- Economics feed settings and cadence,
-- Perplexity Legal/Economics research settings,
-- non-AI Legal CourtListener synchronization,
-- legal case recommendations.
-
-Provider keys saved by Admin are encrypted using:
-
-```bash
-ADMIN_ENCRYPTION_KEY=YOUR_LONG_STABLE_RANDOM_SECRET
-```
+The first signed-in Supabase user to initialize `/admin` becomes `master_admin`. Administrators can configure primary and backup OpenAI-compatible providers, Economics ingestion, Perplexity research, Legal CourtListener synchronization, quality review, and case recommendations.
 
 Ordinary-user OpenRouter and Perplexity keys remain browser-local and are sent only when the user explicitly starts or tests an AI request.
 
 ## Comments and publishing
 
 Comments are off by default. Canonical legal, baseball, Economics, Food, and other source pages remain separate from user publications.
-
-Public analysis uses separate links:
 
 ```text
 /published/<share-token>
@@ -189,8 +156,6 @@ MAP_PROVIDER=openstreetmap
 MAP_TILE_URL=https://tile.openstreetmap.org/{z}/{x}/{y}.png
 ```
 
-Some older or high-volume features still have migrations in `supabase/`. They are deployment-specific adapters, not universal initialization requirements.
-
 ## Run locally
 
 Requires Node.js 20 or later.
@@ -207,4 +172,4 @@ Open `http://localhost:3000/`.
 
 ## Responsible use
 
-Atlas Harbor is experimental decision support. Restaurant data, food-safety context, map routes, legal records, sports data, news-derived problems, scientific evidence, model output, quality scores, and projections may be incomplete, stale, biased, manipulated, or wrong. Verify consequential information with primary sources and the relevant professional or provider. User publications and comments are personal views, not official records, legal advice, medical advice, investment advice, food-safety certification, or guaranteed recommendations.
+Atlas Harbor is experimental decision support. Restaurant data, food-safety context, meal-service attributes, delivery availability, map routes, legal records, sports data, news-derived problems, scientific evidence, model output, quality scores, and projections may be incomplete, stale, biased, manipulated, or wrong. Verify consequential information with primary sources and the relevant professional or provider. User publications and comments are personal views, not official records, legal advice, medical advice, investment advice, food-safety certification, or guaranteed recommendations.
