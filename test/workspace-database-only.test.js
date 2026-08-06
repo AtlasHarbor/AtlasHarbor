@@ -27,11 +27,12 @@ test('Legal hides infrastructure status and does not run device recovery', () =>
   assert.doesNotMatch(html, /legal-workspace-recovery\.js/);
 });
 
-test('Published can recover directly from the workspace database', () => {
+test('Published reads shared publications from the workspace database', () => {
   const html = read('public/published.html');
-  const source = read('public/published-database-feed.js');
-  assert.match(html, /published-database-feed\.js/);
+  const source = read('public/published.js');
+  assert.doesNotMatch(html, /published-database-feed\.js/);
   assert.match(source, /rest\/v1\/workspace_notes/);
   assert.match(source, /is_published=eq\.true/);
   assert.match(source, /is_shared=eq\.true/);
+  assert.doesNotMatch(source, /atlas_problem_spaces|atlas_virtual_tables/);
 });
