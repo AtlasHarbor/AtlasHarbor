@@ -13,9 +13,11 @@ export function createWorkspaceRouter({env=process.env,fetchImpl=globalThis.fetc
  const router=express.Router(),base=env.SUPABASE_URL,publishable=env.SUPABASE_PUBLISHABLE_KEY;
  async function tableRows(table,query,token){
   if(!base||!publishable||!token)return[];
-  const response=await fetchImpl(`${base}/rest/v1/${table}${query}`,{headers:{apikey:publishable,Authorization:`Bearer ${token}`,Accept:'application/json'}}),body=await response.text();
-  if(!response.ok){if(missingTable(response.status,body))return[];const error=new Error(body||`${table} returned ${response.status}`);error.status=response.status;throw error}
-  try{return body?JSON.parse(body):[]}catch{return[]}
+  try{
+   const response=await fetchImpl(`${base}/rest/v1/${table}${query}`,{headers:{apikey:publishable,Authorization:`Bearer ${token}`,Accept:'application/json'}}),body=await response.text();
+   if(!response.ok){if(!missingTable(response.status,body))console.warn(`Optional ${table} workspace adapter returned ${response.status}: ${body.slice(0,240)}`);return[]}
+   try{return body?JSON.parse(body):[]}catch{return[]}
+  }catch(error){console.warn(`Optional ${table} workspace adapter is unavailable:`,error.message);return[]}
  }
  async function mirrorWorkspaceTable(note,token,existingId=null){
   if(!base||!publishable||!token)return;
