@@ -25,11 +25,28 @@ The interface should not become a data-entry job. Routine collection and ranking
 - `/baseball` — professional, Minor League, and college baseball intelligence.
 - `/legal` — CourtListener-backed dockets, filings, decision boards, and legal research. See [`docs/legal/README.md`](docs/legal/README.md).
 - `/food` — a location-first food decision planner for breakfast through late night, solo or together, with dine-in, quick-service, takeaway, and delivery constraints. See [`docs/food/README.md`](docs/food/README.md).
+- `/prop` — source-backed propositions for work projects, company partnerships, sales pitches, investments, programs, products, and market decisions. See [`docs/prop/README.md`](docs/prop/README.md).
 - `/dropshipping` — product hypotheses, unit economics, advertising experiments, and measured results.
 - `/life-sciences` — research questions, evidence, experiments, and translation.
 - `/featured` — work selected by the global quality system.
 - `/published` — public user analysis.
 - `/problems` — directory and public requests for future spaces.
+
+## Propositions
+
+Propositions starts with the decision being requested rather than assuming every idea is a market launch. A proposition can support:
+
+- an internal work project seeking approval, budget, staffing, or a pilot,
+- a partnership proposal between companies,
+- a sales pitch that needs a buyer-specific value and implementation case,
+- an investment, program, policy, vendor, or operating-change decision,
+- a product, brand, or market-entry proposal.
+
+The guided brief captures the current state, problem, decision audience, requested action, why now, scope, timeline, financial frame, constraints, available evidence, and research questions. Perplexity supplies current external research where relevant. The normalizer separates sourced evidence, user-provided context, calculations, assumptions, recommendations, and verification tasks.
+
+The resulting proposition can include stakeholder maps, evidence claims, alternatives, expected outcomes, success metrics, costs, implementation phases, objections, risks, experiments, sources, and optional market, partnership, sales, or unit-economic modules. The user then writes and publishes a separate rich-text pitch through the existing workspace.
+
+`/go-to-market` redirects to `/prop`, while existing `go_to_market` metadata and `go_to_market_report` workspace records remain compatible.
 
 ## Food decision planner
 
@@ -134,7 +151,7 @@ Ordinary-user OpenRouter and Perplexity keys remain browser-local and are sent o
 
 ## Comments and publishing
 
-Comments are off by default. Canonical legal, baseball, Economics, Food, and other source pages remain separate from user publications.
+Comments are off by default. Canonical legal, proposition, baseball, Economics, Food, and other source pages remain separate from user publications.
 
 ```text
 /published/<share-token>
@@ -172,4 +189,4 @@ Open `http://localhost:3000/`.
 
 ## Responsible use
 
-Atlas Harbor is experimental decision support. Restaurant data, food-safety context, meal-service attributes, delivery availability, map routes, legal records, sports data, news-derived problems, scientific evidence, model output, quality scores, and projections may be incomplete, stale, biased, manipulated, or wrong. Verify consequential information with primary sources and the relevant professional or provider. User publications and comments are personal views, not official records, legal advice, medical advice, investment advice, food-safety certification, or guaranteed recommendations.
+Atlas Harbor is experimental decision support. Restaurant data, food-safety context, meal-service attributes, delivery availability, map routes, legal records, proposition research, internal context, sports data, news-derived problems, scientific evidence, model output, quality scores, and projections may be incomplete, stale, biased, manipulated, or wrong. Verify consequential information with primary sources and the relevant professional or provider. User publications and comments are personal views, not official records, legal advice, medical advice, investment advice, food-safety certification, or guaranteed recommendations.
