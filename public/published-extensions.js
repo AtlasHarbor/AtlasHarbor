@@ -1,4 +1,4 @@
-import { accessToken } from './supabase-client.js';
+import { accessToken, publicRest } from './supabase-client.js';
 import { renderGtmReport } from './go-to-market-render.js';
 
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
@@ -75,8 +75,10 @@ function updatePublicationLinks(article, row) {
 }
 
 async function detail(token) {
-  const row = (await json(`/api/published-feed/${encodeURIComponent(token)}`)).publication;
-  if (!row) return;
+  const serverRow = (await json(`/api/published-feed/${encodeURIComponent(token)}`)).publication;
+  if (!serverRow) return;
+  const directRows = await publicRest('workspace_notes', `?share_token=eq.${encodeURIComponent(token)}&is_shared=eq.true&is_published=eq.true&select=share_scope,resource_type,resource_id&limit=1`).catch(() => []);
+  const row = { ...serverRow, ...(directRows?.[0] || {}) };
   const article = await waitFor('.publication');
   if (!article) return;
   updatePublicationLinks(article, row);
