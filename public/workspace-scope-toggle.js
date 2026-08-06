@@ -51,9 +51,11 @@ export async function installWorkspaceScopeToggle({ host, resourceType, resource
   section.insertBefore(controls, status || null);
   const checkbox = controls.querySelector('input');
 
+  let workspaceRecord = null;
   try {
     const data = await authenticated(`/api/workspaces/${encodeURIComponent(resourceType)}/${encodeURIComponent(resourceId)}`);
-    checkbox.checked = data.workspace?.share_scope === 'everything';
+    workspaceRecord = data.workspace || null;
+    checkbox.checked = workspaceRecord?.share_scope === 'everything';
   } catch {
     checkbox.checked = false;
   }
@@ -68,11 +70,18 @@ export async function installWorkspaceScopeToggle({ host, resourceType, resource
     pendingIntent = null;
     const message = section.querySelector('#ws-status');
     try {
-      await authenticated(`/api/workspaces/${encodeURIComponent(resourceType)}/${encodeURIComponent(resourceId)}`, {
+      const fresh = await authenticated(`/api/workspaces/${encodeURIComponent(resourceType)}/${encodeURIComponent(resourceId)}`);
+      workspaceRecord = fresh.workspace || workspaceRecord || {};
+      const saved = await authenticated(`/api/workspaces/${encodeURIComponent(resourceType)}/${encodeURIComponent(resourceId)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ intent, share_scope: checkbox.checked ? 'everything' : 'page' })
+        body: JSON.stringify({
+          ...workspaceRecord,
+          intent,
+          share_scope: checkbox.checked ? 'everything' : 'page'
+        })
       });
+      workspaceRecord = saved.workspace || workspaceRecord;
       if (message) message.textContent = checkbox.checked
         ? 'Saved. The shared article will include the full underlying analysis.'
         : 'Saved. The shared article will link to the underlying analysis.';
