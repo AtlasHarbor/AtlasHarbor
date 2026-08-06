@@ -1,16 +1,22 @@
 import { accessToken, publicRest } from './supabase-client.js';
-import { renderGtmReport } from './go-to-market-render.js';
+import { renderPropositionReport } from './prop-render.js';
 
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
 })[char]);
 const list = (items) => `<ul>${(items || []).filter(Boolean).map((item) => `<li>${esc(item)}</li>`).join('')}</ul>`;
 
-function ensureStyles({ gtm = false } = {}) {
-  if (gtm && !document.querySelector('link[href="/go-to-market.css"]')) {
+function ensureStyles({ proposition = false } = {}) {
+  if (proposition && !document.querySelector('link[href="/go-to-market.css"]')) {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
     link.href = '/go-to-market.css';
+    document.head.append(link);
+  }
+  if (proposition && !document.querySelector('link[href="/prop.css"]')) {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = '/prop.css';
     document.head.append(link);
   }
   if (!document.querySelector('#published-extension-styles')) {
@@ -64,9 +70,9 @@ function legalAnalysis(item) {
 
 function updatePublicationLinks(article, row) {
   if (row.resource_type !== 'go_to_market_report') return;
-  const href = `/go-to-market/${encodeURIComponent(row.resource_id)}`;
+  const href = `/prop/${encodeURIComponent(row.resource_id)}`;
   const eyebrow = article.querySelector(':scope > .eyebrow');
-  if (eyebrow) eyebrow.textContent = eyebrow.textContent.replace(/^Analysis/i, 'Go-to-market');
+  if (eyebrow) eyebrow.textContent = eyebrow.textContent.replace(/^(Analysis|Go-to-market)/i, 'Proposition');
   const resourceLink = article.querySelector('.resource-title a');
   if (resourceLink) resourceLink.href = href;
   for (const link of article.querySelectorAll('.publication-actions a')) {
@@ -84,12 +90,12 @@ async function detail(token) {
   updatePublicationLinks(article, row);
   if (row.share_scope !== 'everything' || article.querySelector('.attached-research')) return;
 
-  ensureStyles({ gtm: row.resource_type === 'go_to_market_report' });
+  ensureStyles({ proposition: row.resource_type === 'go_to_market_report' });
   const attached = document.createElement('section');
   attached.className = 'attached-research';
   if (row.resource_type === 'go_to_market_report') {
-    const report = (await json(`/api/go-to-market/reports/${encodeURIComponent(row.resource_id)}`)).report;
-    attached.innerHTML = `<header><p class="eyebrow">ATTACHED UNDERLYING RESEARCH</p><h2>Full go-to-market analysis</h2><p>This research was attached by the author. It remains separate from the author’s article above.</p></header>${renderGtmReport(report, { embedded: true })}`;
+    const report = (await json(`/api/prop/reports/${encodeURIComponent(row.resource_id)}`)).report;
+    attached.innerHTML = `<header><p class="eyebrow">ATTACHED UNDERLYING RESEARCH</p><h2>Full proposition evidence</h2><p>This data-based proposition was attached by the author. It remains separate from the author’s article above.</p></header>${renderPropositionReport(report, { embedded: true })}`;
   } else if (row.resource_type === 'legal_case') {
     const item = await json(`/api/legal/cases/${encodeURIComponent(row.resource_id)}`);
     attached.innerHTML = `<header><p class="eyebrow">ATTACHED UNDERLYING ANALYSIS</p><h2>Full Legal case analysis</h2><p>This case record and decision board were attached by the author. Verify consequential details against the operative docket and filings.</p></header>${legalAnalysis(item)}`;
@@ -107,7 +113,7 @@ async function feed() {
     const token = decodeURIComponent(card.getAttribute('href')?.replace(/^\/published\//, '') || '');
     const row = byToken.get(token);
     if (row?.resource_type !== 'go_to_market_report') continue;
-    card.querySelector(':scope > span')?.replaceChildren('Go-to-market');
+    card.querySelector(':scope > span')?.replaceChildren('Proposition');
   }
 }
 
