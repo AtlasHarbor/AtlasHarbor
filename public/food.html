@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="Solve the group food decision with location, tastes, dietary constraints, budget, travel, availability, freshness questions, and an explicit compromise score.">
+  <meta name="description" content="Decide what to eat solo or with other people using location, breakfast-to-late-night timing, service style, tastes, dietary constraints, budget, travel, availability, and freshness questions.">
   <title>Food Decision Planner · Atlas Harbor</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,15 +16,15 @@
 <main>
   <section class="hero">
     <p class="eyebrow">FOOD DECISION PROBLEM</p>
-    <h1>Choose what the group should eat—<em>without ignoring anyone.</em></h1>
-    <p>A restaurant choice is a small logistics problem. People begin in a place, have different preferences and hard constraints, share a travel budget, face changing availability, and need one workable decision.</p>
+    <h1>Choose what you should eat—<em>solo or together.</em></h1>
+    <p>A meal is a small logistics problem. One person or a group starts in a place, has tastes and hard constraints, chooses breakfast through late night, decides between quick service, sit-down, takeaway, or delivery, and needs one workable answer.</p>
   </section>
 
   <section class="location-step" id="location-step">
     <div class="step-copy">
       <p class="eyebrow">STEP 1 · CONFIRM THE ORIGIN</p>
-      <h2>Where is the group starting?</h2>
-      <p>Search a place, use your current location, or click the map. Atlas Harbor will not rank restaurants until you confirm the origin because travel cost and feasible distance depend on it.</p>
+      <h2>Where are you starting?</h2>
+      <p>Search a place, use your current location, or click the map. Atlas Harbor will not rank restaurants until you confirm the origin because travel cost, pickup burden, and delivery feasibility depend on it.</p>
       <div class="location-field">
         <label>City, address, or landmark<input id="location" autocomplete="off" placeholder="Downtown Memphis, TN" aria-autocomplete="list" aria-controls="location-suggestions"></label>
         <div id="location-suggestions" class="suggestions" role="listbox" hidden></div>
@@ -32,27 +32,29 @@
       <div class="location-actions"><button type="button" id="near-me">Use my location</button><button type="button" id="confirm-location" class="secondary" disabled>Confirm this location</button></div>
       <p id="location-status" class="status-line" aria-live="polite">Choose a point before continuing.</p>
     </div>
-    <div class="map-wrap"><div id="food-map" aria-label="Select the group starting location on a map"></div><small>Click the map to move the origin. Map data follows the deployment’s configured tile provider.</small></div>
+    <div class="map-wrap"><div id="food-map" aria-label="Select the meal starting location on a map"></div><small>Click the map to move the origin. Map data follows the deployment’s configured tile provider.</small></div>
   </section>
 
   <section id="planner" class="planner" hidden>
-    <div class="planner-heading"><div><p class="eyebrow">STEP 2 · DEFINE THE DECISION</p><h2>What counts as a good answer?</h2><p id="confirmed-location"></p></div><button id="change-location" type="button" class="secondary">Change location</button></div>
+    <div class="planner-heading"><div><p class="eyebrow">STEP 2 · DEFINE THE DECISION</p><h2>What kind of meal are you solving?</h2><p id="confirmed-location"></p></div><button id="change-location" type="button" class="secondary">Change location</button></div>
     <form id="food-solver">
       <div class="objective-grid">
-        <label>Occasion<select id="occasion"><option value="meal">Everyday meal</option><option value="quick lunch">Quick lunch</option><option value="date night">Date night</option><option value="family dinner">Family dinner</option><option value="business meal">Business meal</option><option value="celebration">Celebration</option><option value="late night">Late night</option></select></label>
-        <label>What sounds good?<input id="query" placeholder="tacos, sushi, oysters, quiet Italian"></label>
+        <label>Meal time<select id="meal-period"><option value="breakfast">Breakfast</option><option value="brunch">Brunch</option><option value="lunch">Lunch</option><option value="dinner" selected>Dinner</option><option value="late_night">Late night</option><option value="coffee_snack">Coffee or snack</option></select></label>
+        <label>Occasion<select id="occasion"><option value="solo" selected>Solo meal</option><option value="partner">Meal for two</option><option value="date">Date</option><option value="friends">Friends</option><option value="family">Family meal</option><option value="business">Business meal</option><option value="celebration">Celebration</option><option value="group">Group outing</option><option value="travel">Travel or road meal</option></select></label>
+        <label>Service style<select id="service-mode"><option value="any">Any service style</option><option value="quick">Quick or counter service</option><option value="sit_down">Sit-down / dine-in</option><option value="takeaway">Takeaway / to-go</option><option value="delivery">Delivery</option></select></label>
+        <label>What sounds good?<input id="query" placeholder="pancakes, tacos, oysters, quiet Italian"></label>
         <label>Maximum travel distance<select id="distance"><option value="2">2 km</option><option value="5">5 km</option><option value="10" selected>10 km</option><option value="20">20 km</option><option value="40">40 km</option></select></label>
-        <label>Group price ceiling<select id="price"><option value="">Any price</option><option value="1">$</option><option value="2">$$</option><option value="3">$$$</option><option value="4">$$$$</option></select></label>
+        <label>Price ceiling<select id="price"><option value="">Any price</option><option value="1">$</option><option value="2">$$</option><option value="3">$$$</option><option value="4">$$$$</option></select></label>
         <label class="check"><input id="open-now" type="checkbox"> Must be open now</label>
         <label>Freshness priority<select id="freshness"><option value="normal">Normal</option><option value="high">High · seasonal or just-delivered matters</option></select></label>
         <label class="check warning-check"><input id="raw-shellfish" type="checkbox"> Considering raw oysters or raw shellfish</label>
       </div>
 
       <section class="people-section">
-        <div class="section-heading"><div><p class="eyebrow">STEP 3 · PEOPLE AND CONSTRAINTS</p><h2>Who needs to be satisfied?</h2><p>The solver protects the least-satisfied person first, then improves the group average.</p></div><button id="add-person" type="button" class="secondary">Add a person</button></div>
+        <div class="section-heading"><div><p class="eyebrow">STEP 3 · DINERS AND CONSTRAINTS</p><h2>Who is eating?</h2><p id="people-help">For a solo meal, the solver maximizes your personal fit. Add people and it shifts to protecting the least-satisfied diner before improving the group average.</p></div><button id="add-person" type="button" class="secondary">Add a person</button></div>
         <div id="participants"></div>
       </section>
-      <div class="solve-row"><button id="solve-button" type="submit">Solve the group decision</button><span id="profile-status">Preferences save on this device; signed-in users also sync to their account.</span></div>
+      <div class="solve-row"><button id="solve-button" type="submit">Find my best fit</button><span id="profile-status">Preferences save on this device; signed-in users also sync to their account.</span></div>
     </form>
   </section>
 
@@ -64,18 +66,18 @@
 
   <section class="method">
     <p class="eyebrow">THE LOGISTICS CONNECTION</p>
-    <h2>A dinner decision uses the same structure as a network decision.</h2>
+    <h2>A meal decision uses the same structure as a network decision.</h2>
     <div class="method-grid">
-      <article><b>Origins and travel cost</b><p>The confirmed group location is the origin. Distance is the route burden, like moving freight from a plant to a customer.</p></article>
-      <article><b>Hard constraints</b><p>Hours, distance, price ceilings, dislikes, and dietary needs define which options are feasible.</p></article>
-      <article><b>Multiple stakeholders</b><p>Each person has a taste profile. The solver avoids maximizing one person’s happiness while making another person miserable.</p></article>
+      <article><b>Origin and route burden</b><p>The confirmed location is the origin. Distance is the travel, pickup, or delivery burden, like moving freight from a facility to a destination.</p></article>
+      <article><b>Hard constraints</b><p>Hours, meal time, service style, distance, price ceilings, dislikes, and dietary needs define which options are feasible.</p></article>
+      <article><b>One or many stakeholders</b><p>A solo decision maximizes one diner’s fit. A shared decision protects the least-satisfied person before improving the average.</p></article>
       <article><b>Freshness and uncertainty</b><p>Map listings cannot prove delivery day, cold-chain handling, allergen controls, or raw-shellfish safety. Those become explicit verification tasks.</p></article>
-      <article><b>Objective function</b><p>Rankings combine minimum participant fit, average fit, travel and availability, evidence confidence, and freshness questions.</p></article>
-      <article><b>Decision, then execution</b><p>The output explains the compromise, shows who is least satisfied, and identifies what the group must call or verify before leaving.</p></article>
+      <article><b>Objective function</b><p>Rankings combine diner fit, breakfast-to-late-night availability, service mode, travel, evidence confidence, and freshness questions.</p></article>
+      <article><b>Decision, then execution</b><p>The output explains the fit, exposes tradeoffs, and identifies what to call or verify before ordering or leaving.</p></article>
     </div>
   </section>
 </main>
-<footer>Restaurant facts, menus, hours, dietary handling, harvest information, and availability can change quickly. Verify consequential dietary, allergy, and raw-shellfish questions directly with the restaurant. Atlas Harbor is decision support, not a food-safety certification.</footer>
+<footer>Restaurant facts, menus, hours, service modes, dietary handling, harvest information, and availability can change quickly. Verify consequential dietary, allergy, delivery, takeaway, and raw-shellfish questions directly with the restaurant. Atlas Harbor is decision support, not a food-safety certification.</footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script type="module" src="/problem-nav.js"></script>
 <script type="module" src="/food.js"></script>
