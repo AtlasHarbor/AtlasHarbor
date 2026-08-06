@@ -2,6 +2,9 @@ const clamp=(value,min=0,max=100)=>Math.max(min,Math.min(max,Number(value)||0));
 const text=value=>String(value??'').trim();
 const unique=items=>[...new Set(items.filter(Boolean))];
 const DIET_LABELS={vegetarian:'vegetarian',vegan:'vegan',gluten_free:'gluten-free',halal:'halal',kosher:'kosher',shellfish_allergy:'shellfish allergy',nut_allergy:'nut allergy',dairy_free:'dairy-free'};
+const MEAL_LABELS={breakfast:'breakfast',brunch:'brunch',lunch:'lunch',dinner:'dinner',late_night:'late-night food',coffee_snack:'coffee or a snack'};
+const SERVICE_LABELS={any:'any service style',quick:'quick or counter service',sit_down:'sit-down dining',takeaway:'takeaway or to-go',delivery:'delivery'};
+const OCCASION_LABELS={solo:'a solo meal',partner:'a meal with one other person',date:'a date',friends:'a meal with friends',family:'a family meal',business:'a business meal',celebration:'a celebration',group:'a group outing',travel:'a travel meal'};
 
 export function normalizeParticipant(input={},index=0){
  return{
@@ -53,6 +56,74 @@ function participantFit(place,participant){
  return{name:participant.name,score:Math.round(clamp(score)),hardConflict,reasons:unique(reasons),verification:unique(verification)};
 }
 
+function mealFit(place,request){
+ const meal=request.mealPeriod,haystack=evidenceText(place),reasons=[],verification=[];let score=72,hardConflict=false;
+ const field={breakfast:'servesBreakfast',brunch:'servesBrunch',lunch:'servesLunch',dinner:'servesDinner'}[meal];
+ if(field){
+  if(place[field]===true){score=100;reasons.push(`${MEAL_LABELS[meal]} service is reported`)}
+  else if(place[field]===false){score=0;hardConflict=true;reasons.push(`the listing reports no ${MEAL_LABELS[meal]} service`)}
+  else if(haystack.includes(MEAL_LABELS[meal])){score=88;reasons.push(`${MEAL_LABELS[meal]} appears in the listing evidence`)}
+  else{score=58;verification.push(`confirm that ${MEAL_LABELS[meal]} is served at the intended time`)}
+ }else if(meal==='coffee_snack'){
+  if(place.servesCoffee===true||place.servesDessert===true||/cafe|coffee|bakery|dessert|tea/.test(haystack)){score=95;reasons.push('coffee, bakery, dessert, or snack service is evident')}
+  else{score=54;verification.push('confirm coffee or snack availability at the intended time')}
+ }else if(meal==='late_night'){
+  if(/late night|late-night|open late|24 hour|24-hour/.test(haystack)){score=94;reasons.push('late-night service appears in the listing evidence')}
+  else if(place.currentOpeningHours?.openNow===false){score=0;hardConflict=true;reasons.push('the restaurant is currently closed')}
+  else{score=48;verification.push('confirm the kitchen is serving the full menu late tonight')}
+ }
+ return{score:Math.round(clamp(score)),hardConflict,reasons,verification};
+}
+
+function serviceFit(place,request){
+ const mode=request.serviceMode,haystack=evidenceText(place),reasons=[],verification=[];let score=72,hardConflict=false;
+ if(mode==='any')return{score,reasons:['no service format was required'],verification,hardConflict};
+ if(mode==='delivery'){
+  if(place.delivery===true){score=100;reasons.push('delivery is reported')}
+  else if(place.delivery===false){score=0;hardConflict=true;reasons.push('the listing reports no delivery')}
+  else{score=45;verification.push('confirm delivery availability, radius, fees, and timing')}
+ }
+ if(mode==='takeaway'){
+  if(place.takeout===true){score=100;reasons.push('takeaway or to-go service is reported')}
+  else if(place.takeout===false){score=0;hardConflict=true;reasons.push('the listing reports no takeaway service')}
+  else if(/takeout|takeaway|to-go|to go|meal_takeaway/.test(haystack)){score=88;reasons.push('takeaway service appears in the listing evidence')}
+  else{score=48;verification.push('confirm takeaway ordering and pickup timing')}
+ }
+ if(mode==='sit_down'){
+  if(place.dineIn===true){score=100;reasons.push('dine-in service is reported')}
+  else if(place.dineIn===false){score=0;hardConflict=true;reasons.push('the listing reports no dine-in service')}
+  else if(/fine dining|sit-down|sit down|table service|restaurant/.test(haystack)){score=82;reasons.push('the listing suggests a sit-down restaurant')}
+  else{score=52;verification.push('confirm dine-in seating and table-service availability')}
+ }
+ if(mode==='quick'){
+  if(/fast food|fast_food|counter service|quick service|meal_takeaway|cafe|food court|drive through|drive-through/.test(haystack)||place.takeout===true){score=95;reasons.push('quick, counter, cafe, or takeaway service is evident')}
+  else{score=50;verification.push('confirm ordering and wait time before relying on this as a quick option')}
+  if(Number(place.routeDurationMinutes)>20){score-=18;reasons.push('the travel time weakens the quick-meal objective')}
+ }
+ return{score:Math.round(clamp(score)),hardConflict,reasons:unique(reasons),verification:unique(verification)};
+}
+
+function occasionFit(place,request,participantCount){
+ const occasion=request.occasion,haystack=evidenceText(place),reviewText=(place.reviews||[]).map(review=>review.text||'').join(' ').toLowerCase(),reasons=[],verification=[];let score=72;
+ if(occasion==='solo'){
+  score=82;reasons.push('the plan is optimized for one diner rather than group amenities');
+  if(request.serviceMode==='quick'||request.serviceMode==='takeaway')score+=8;
+ }
+ if(occasion==='partner'){score=78;if(place.dineIn===true)score+=8;if(/quiet|intimate|cozy/.test(reviewText)){score+=8;reasons.push('review excerpts suggest a comfortable two-person setting')}}
+ if(occasion==='date'){score=65;if(place.dineIn===true)score+=12;if(place.reservable===true)score+=12;if(/romantic|intimate|quiet|cozy/.test(reviewText)){score+=12;reasons.push('review excerpts suggest a date-friendly atmosphere')}if(request.serviceMode==='delivery'||request.serviceMode==='takeaway')score-=8}
+ if(occasion==='friends'||occasion==='group'){score=64;if(place.goodForGroups===true){score+=22;reasons.push('good-for-groups is reported')}else verification.push('confirm seating for the party size');if(/lively|shareable|group|music/.test(haystack))score+=8}
+ if(occasion==='family'){score=66;if(place.goodForGroups===true)score+=18;if(/family|kids|children|casual/.test(haystack)){score+=10;reasons.push('family or casual fit appears in the listing evidence')}else verification.push('confirm seating, children’s options, and wait time')}
+ if(occasion==='business'){score=62;if(place.dineIn===true)score+=10;if(place.reservable===true)score+=12;if(/quiet|private|business|meeting/.test(reviewText)){score+=12;reasons.push('review excerpts suggest a meeting-friendly environment')}else verification.push('confirm noise level and reservation availability')}
+ if(occasion==='celebration'){score=60;if(place.reservable===true)score+=14;if(place.goodForGroups===true||participantCount<=2)score+=10;if(/celebration|special occasion|birthday|anniversary|festive/.test(haystack))score+=10;else verification.push('confirm reservations, party accommodation, and any celebration policy')}
+ if(occasion==='travel'){score=62;if(place.takeout===true||/fast|quick|counter|drive-through|to-go|takeaway/.test(haystack))score+=22;if(Number(place.routeDurationMinutes)>15)score-=18;reasons.push('travel meals prioritize execution speed and route burden')}
+ return{score:Math.round(clamp(score)),reasons:unique(reasons),verification:unique(verification)};
+}
+
+function contextFit(place,request,participantCount){
+ const meal=mealFit(place,request),service=serviceFit(place,request),occasion=occasionFit(place,request,participantCount),hardConflict=meal.hardConflict||service.hardConflict;
+ return{hardConflict,mealScore:meal.score,serviceScore:service.score,occasionScore:occasion.score,score:Math.round(meal.score*.36+service.score*.40+occasion.score*.24),reasons:unique([...meal.reasons,...service.reasons,...occasion.reasons]),verification:unique([...meal.verification,...service.verification,...occasion.verification])};
+}
+
 export function foodSafetyBrief({query='',freshnessPriority='normal',rawShellfish=false,month=new Date().getMonth()+1}={}){
  const value=text(query).toLowerCase(),shellfish=rawShellfish||/raw oyster|oyster bar|raw shellfish|half shell/.test(value),seafood=shellfish||/seafood|sushi|sashimi|ceviche|fish/.test(value),warmMonth=month>=5&&month<=10;
  if(shellfish)return{
@@ -73,24 +144,27 @@ export function foodSafetyBrief({query='',freshnessPriority='normal',rawShellfis
  return{level:'normal',title:'No special freshness risk identified',score:72,points:['Freshness claims are not assumed from ratings alone. Verify time-sensitive ingredients directly when they matter.'],seasonalContext:null,sources:[]};
 }
 
-function tradeoffSummary(place,participantScores,request,freshness){
+function tradeoffSummary(place,participantScores,request,freshness,context){
  const lowest=[...participantScores].sort((a,b)=>a.score-b.score)[0],tradeoffs=[];
- if(lowest&&lowest.score<65)tradeoffs.push(`${lowest.name} has the weakest fit at ${lowest.score}/100.`);
- if(place.distanceKm!=null&&place.distanceKm>Math.max(3,(Number(request.maxDistanceKm)||10)*.65))tradeoffs.push('The group is accepting a longer trip for a better overall compromise.');
+ if(participantScores.length>1&&lowest&&lowest.score<65)tradeoffs.push(`${lowest.name} has the weakest fit at ${lowest.score}/100.`);
+ if(place.distanceKm!=null&&place.distanceKm>Math.max(3,(Number(request.maxDistanceKm)||10)*.65))tradeoffs.push('The diner or group is accepting a longer trip for a better overall fit.');
  if(place.closingSoon)tradeoffs.push('The restaurant may close soon, increasing execution risk.');
+ if(context.serviceScore<65)tradeoffs.push(`The evidence for ${SERVICE_LABELS[request.serviceMode]} is weak.`);
+ if(context.mealScore<65)tradeoffs.push(`The intended ${MEAL_LABELS[request.mealPeriod]} service needs confirmation.`);
  if(freshness.level==='verify')tradeoffs.push('Freshness or raw-shellfish safety must be verified directly.');
- const verification=unique(participantScores.flatMap(item=>item.verification));if(verification.length)tradeoffs.push(`${verification.length} dietary or allergy question${verification.length===1?'':'s'} remain unverified.`);
+ const verification=unique([...participantScores.flatMap(item=>item.verification),...context.verification]);if(verification.length)tradeoffs.push(`${verification.length} service, dietary, allergy, or timing question${verification.length===1?'':'s'} remain unverified.`);
  if(!tradeoffs.length)tradeoffs.push('No major conflict was detected in the available restaurant data.');
  return tradeoffs;
 }
 
 export function solveFoodDecision(places=[],input={}){
- const participants=(Array.isArray(input.participants)&&input.participants.length?input.participants:[{name:'You'}]).slice(0,10).map(normalizeParticipant),request={query:text(input.query||'restaurant'),openNow:Boolean(input.openNow),maxDistanceKm:Math.max(1,Math.min(80,Number(input.maxDistanceKm)||10)),maxPrice:input.maxPrice==null||input.maxPrice===''?null:clamp(input.maxPrice,0,4),occasion:text(input.occasion||'meal'),freshnessPriority:text(input.freshnessPriority||'normal'),rawShellfish:Boolean(input.rawShellfish)},freshness=foodSafetyBrief(request),ranked=[];
+ const participants=(Array.isArray(input.participants)&&input.participants.length?input.participants:[{name:'You'}]).slice(0,10).map(normalizeParticipant),request={query:text(input.query||'restaurant'),openNow:Boolean(input.openNow),maxDistanceKm:Math.max(1,Math.min(80,Number(input.maxDistanceKm)||10)),maxPrice:input.maxPrice==null||input.maxPrice===''?null:clamp(input.maxPrice,0,4),mealPeriod:Object.hasOwn(MEAL_LABELS,input.mealPeriod)?input.mealPeriod:'dinner',serviceMode:Object.hasOwn(SERVICE_LABELS,input.serviceMode)?input.serviceMode:'any',occasion:Object.hasOwn(OCCASION_LABELS,input.occasion)?input.occasion:(participants.length===1?'solo':'friends'),freshnessPriority:text(input.freshnessPriority||'normal'),rawShellfish:Boolean(input.rawShellfish)},freshness=foodSafetyBrief(request),ranked=[];
  for(const place of places){
-  const logistics=logisticsScore(place,request);if(logistics<=0)continue;const participantScores=participants.map(person=>participantFit(place,person));if(participantScores.some(item=>item.hardConflict))continue;const fairness=Math.min(...participantScores.map(item=>item.score)),average=participantScores.reduce((sum,item)=>sum+item.score,0)/participantScores.length,confidence=confidenceScore(place),freshnessScore=freshness.score,verificationCount=unique(participantScores.flatMap(item=>item.verification)).length;
-  let score=fairness*.36+average*.24+logistics*.20+confidence*.10+freshnessScore*.10-verificationCount*2.5;score=clamp(score);
-  ranked.push({...place,groupScore:Math.round(score),fairnessScore:Math.round(fairness),averageTasteScore:Math.round(average),logisticsScore:Math.round(logistics),confidenceScore:confidence,freshnessScore,participantScores,requiresVerification:verificationCount>0||freshness.level==='verify',verificationItems:unique(participantScores.flatMap(item=>item.verification)),freshnessBrief:freshness,tradeoffs:tradeoffSummary(place,participantScores,request,freshness)});
+  const logistics=logisticsScore(place,request);if(logistics<=0)continue;const participantScores=participants.map(person=>participantFit(place,person));if(participantScores.some(item=>item.hardConflict))continue;const context=contextFit(place,request,participants.length);if(context.hardConflict)continue;const fairness=Math.min(...participantScores.map(item=>item.score)),average=participantScores.reduce((sum,item)=>sum+item.score,0)/participantScores.length,confidence=confidenceScore(place),freshnessScore=freshness.score,verificationItems=unique([...participantScores.flatMap(item=>item.verification),...context.verification]),verificationCount=verificationItems.length;
+  let score=fairness*.32+average*.22+logistics*.18+context.score*.15+confidence*.07+freshnessScore*.06-verificationCount*1.5;score=clamp(score);
+  ranked.push({...place,groupScore:Math.round(score),fairnessScore:Math.round(fairness),averageTasteScore:Math.round(average),logisticsScore:Math.round(logistics),contextScore:context.score,serviceScore:context.serviceScore,mealScore:context.mealScore,occasionScore:context.occasionScore,contextReasons:context.reasons,confidenceScore:confidence,freshnessScore,participantScores,requiresVerification:verificationCount>0||freshness.level==='verify',verificationItems,freshnessBrief:freshness,tradeoffs:tradeoffSummary(place,participantScores,request,freshness,context)});
  }
  ranked.sort((a,b)=>b.groupScore-a.groupScore||b.fairnessScore-a.fairnessScore||a.distanceKm-b.distanceKm);
- return{participants,request,freshness,restaurants:ranked.slice(0,20).map((place,index)=>({...place,rank:index+1,recommendation:index===0?'Best group compromise':index<3?'Strong alternative':'Candidate'})),method:{objective:'Maximize the group’s minimum satisfaction, then average satisfaction, while respecting travel, budget, hours, evidence, and freshness constraints.',weights:{fairness:36,averageTaste:24,logistics:20,confidence:10,freshness:10},uncertainty:'Dietary suitability, allergy handling, menu availability, delivery day, and freshness are not assumed when provider data does not establish them.'}};
+ const solo=participants.length===1;
+ return{participants,request,freshness,restaurants:ranked.slice(0,20).map((place,index)=>({...place,rank:index+1,recommendation:index===0?(solo?'Best personal fit':'Best group compromise'):index<3?'Strong alternative':'Candidate'})),method:{objective:solo?`Maximize this diner’s fit while respecting ${MEAL_LABELS[request.mealPeriod]}, ${SERVICE_LABELS[request.serviceMode]}, travel, budget, hours, evidence, and freshness constraints.`:`Protect the least-satisfied diner, then improve average group fit while respecting ${MEAL_LABELS[request.mealPeriod]}, ${SERVICE_LABELS[request.serviceMode]}, travel, budget, hours, evidence, and freshness constraints.`,weights:{fairness:32,averageTaste:22,logistics:18,mealServiceOccasion:15,confidence:7,freshness:6},uncertainty:'Dietary suitability, allergy handling, service format, meal-period availability, menu availability, delivery day, and freshness are not assumed when provider data does not establish them.'}};
 }
