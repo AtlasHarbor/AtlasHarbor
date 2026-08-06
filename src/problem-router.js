@@ -15,6 +15,7 @@ import {createGameRoutingRouter} from './game-routing.js';
 import {createGameClientRouter} from './game-client.js';
 import {createLegalService} from './legal.js';
 import {createLegalRouter} from './legal-router.js';
+import {createGoToMarketRouter} from './go-to-market.js';
 
 const directory=path.dirname(fileURLToPath(import.meta.url));
 export function createProblemRouter({service=createProblemSpacesService(),env=process.env}={}){
@@ -26,11 +27,13 @@ export function createProblemRouter({service=createProblemSpacesService(),env=pr
  router.use(createGameRoutingRouter());
  router.use(createLegalRouter({service:legal}));
  router.get(['/economics','/economics/{*path}'],(_req,res)=>res.sendFile(path.join(directory,'../public/economics.html')));
+ router.get(['/go-to-market','/go-to-market/{*path}'],(_req,res)=>res.sendFile(path.join(directory,'../public/go-to-market.html')));
  router.get(['/users/:slug','/users/:slug/{*path}'],(_req,res)=>res.sendFile(path.join(directory,'../public/profile.html')));
  // Metadata-backed Problem Space APIs are mounted before legacy control routes so
  // they work without manually creating Supabase tables.
  router.use(createEconomicsRouter({service:economicsService,storage}));
  router.use(createDropshippingRouter({storage}));
+ router.use(createGoToMarketRouter({storage}));
  router.use(createWorkspaceRouter({env,storage}));
  router.use(createAdminMetadataControl({env}));
  router.use(createAdminResearchRouter({env,legalService:legal}));
