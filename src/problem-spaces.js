@@ -4,6 +4,7 @@ const seededSpaces=[
  {slug:'baseball-intelligence',title:'Baseball Intelligence',description:'Explore games, teams, players, injuries, projections, notes, and published analysis.',url:'/baseball',status:'approved',requester_name:'Atlas Harbor'},
  {slug:'legal-systems',title:'Legal Systems Tracker',description:'Track litigation, sources, procedural events, projections, and independent analysis.',url:'/legal',status:'approved',requester_name:'Atlas Harbor'},
  {slug:'food-discovery',title:'Food Discovery',description:'Find the best place to eat for a particular location, group, time, mood, budget, and set of constraints.',url:'/food',status:'approved',requester_name:'Atlas Harbor'},
+ {slug:'propositions',title:'Propositions',description:'Build source-backed decision cases for work projects, company partnerships, sales pitches, investments, programs, products, and market ideas.',url:'/prop',status:'approved',requester_name:'Atlas Harbor'},
  {slug:'dropshipping-advertising',title:'Dropshipping & Advertising',description:'Publish product hypotheses, keywords, audiences, bidding plans, campaign results, funding interest, and AI-assisted critique.',url:'/dropshipping',status:'approved',requester_name:'Atlas Harbor'},
  {slug:'life-sciences',title:'Life Sciences',description:'Develop research questions, experimental plans, evidence maps, translational hypotheses, and reproducible analysis while keeping uncertainty and safety visible.',url:'/life-sciences',status:'approved',requester_name:'Atlas Harbor'}
 ];
