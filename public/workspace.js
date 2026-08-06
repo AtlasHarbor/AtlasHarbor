@@ -1,4 +1,4 @@
-import{user,ai,accessToken,refreshSession}from'./supabase-client.js';
+import{user,ai,accessToken,refreshSession,updateUserMetadata}from'./supabase-client.js';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':'&quot;',"'":'&#39;'})[char]);
 const safeHtml=html=>{const template=document.createElement('template');template.innerHTML=html;for(const element of template.content.querySelectorAll('script,style,iframe,object,embed'))element.remove();for(const element of template.content.querySelectorAll('*'))for(const attribute of[...element.attributes])if(/^on/i.test(attribute.name)||attribute.name==='srcdoc')element.removeAttribute(attribute.name);return template.innerHTML};
@@ -6,6 +6,25 @@ const localKey=(resource,current)=>`atlas-workspace:${current.id}:${resource.typ
 const scenarioKey=(resource,current)=>`atlas-workspace-scenarios:${current.id}:${resource.type}:${resource.id}`;
 const signedOut=(host,message='Sign in or create an account to write projections, run AI, publish, and share this page.')=>{host.innerHTML=`<section class="workspace"><h2>Publish your analysis</h2><p>${esc(message)}</p><p><a href="/account">Sign in or create an account</a></p></section>`};
 const cleanScenarios=value=>(Array.isArray(value)?value:[]).map(item=>({label:String(item?.label||''),date:String(item?.date||''),probability:item?.probability==null?'':String(item.probability)})).filter(item=>item.label||item.date||item.probability);
+const stamp=value=>{const result=Date.parse(value||'');return Number.isFinite(result)?result:0};
+const sameResource=(row,resource,current)=>String(row?.user_id||current.id)===String(current.id)&&String(row?.resource_type||'')===String(resource.type)&&String(row?.resource_id||'')===String(resource.id);
+const randomToken=()=>{const bytes=new Uint8Array(18);crypto.getRandomValues(bytes);let binary='';for(const byte of bytes)binary+=String.fromCharCode(byte);return btoa(binary).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')};
+
+function legacyRecord(row,current){
+ let payload={};try{payload=JSON.parse(String(row?.body||'').replace(/^ATLAS_WORKSPACE_V1\n/,''))}catch{payload={body:row?.body||''}}
+ return{...payload,id:row?.id||payload.id,user_id:row?.user_id||current.id,resource_type:'legal_case',resource_id:row?.case_slug||payload.resource_id,title:payload.title||row?.title||'Analysis',body:payload.body||row?.body||'',is_shared:Boolean(payload.is_shared??row?.is_shared),is_published:Boolean(payload.is_published||row?.is_published||row?.share_token),share_token:payload.share_token||row?.share_token,updated_at:payload.updated_at||row?.updated_at,_store:'legacy-metadata'};
+}
+function metadataRecord(resource,current){
+ const metadata=current.user_metadata||{},spaces=metadata.atlas_problem_spaces||{},workspace=spaces.publishing_workspace||{},virtual=metadata.atlas_virtual_tables||{},rows=[];
+ for(const item of workspace.notes||[])if(sameResource(item,resource,current))rows.push({...item,_store:'account-metadata'});
+ for(const item of virtual.workspace_notes||[])if(sameResource(item,resource,current))rows.push({...item,_store:'virtual-metadata'});
+ if(resource.type==='legal_case')for(const item of virtual.legal_notes||[]){const legacy=legacyRecord(item,current);if(sameResource(legacy,resource,current))rows.push(legacy)}
+ return rows.sort((a,b)=>stamp(b.updated_at||b.published_at)-stamp(a.updated_at||a.published_at))[0]||null;
+}
+function upsertMetadata(records,record){
+ const rows=(Array.isArray(records)?records:[]).filter(item=>!(String(item.id||'')===String(record.id||'')||(String(item.user_id||'')===String(record.user_id||'')&&String(item.resource_type||'')===String(record.resource_type||'')&&String(item.resource_id||'')===String(record.resource_id||''))));
+ rows.push(record);return rows.sort((a,b)=>stamp(a.updated_at)-stamp(b.updated_at)).slice(-250);
+}
 
 async function workspaceApi(resource,options={}){
  let token=accessToken();if(!token)throw new Error('Sign in required.');
@@ -16,7 +35,17 @@ async function workspaceApi(resource,options={}){
 
 async function loadRecord(resource,current){
  try{const data=await workspaceApi(resource);return{row:data.workspace||null,store:data.storage||'account-metadata',warning:null}}
- catch(error){let saved=null;try{saved=JSON.parse(localStorage.getItem(localKey(resource,current))||'null')}catch{}return{row:saved?{...saved,_store:'local'}:null,store:'local',warning:`Account sync is temporarily unavailable. ${saved?'Your device copy is shown.':'A new device draft is available.'} (${error.message})`}}
+ catch(error){
+  const accountCopy=metadataRecord(resource,user()||current);if(accountCopy)return{row:accountCopy,store:accountCopy._store,warning:`Using your saved account copy while the workspace service reconnects. (${error.message})`};
+  let saved=null;try{saved=JSON.parse(localStorage.getItem(localKey(resource,current))||'null')}catch{}
+  return{row:saved?{...saved,_store:'local'}:null,store:'local',warning:`Account sync is temporarily unavailable. ${saved?'Your device copy is shown.':'A new device draft is available.'} (${error.message})`};
+ }
+}
+
+async function persistDirectMetadata(resource,current,body,intent,existing){
+ const active=user()||current;if(!active)throw new Error('Sign in required.');const now=new Date().toISOString(),shared=body.is_shared===true,published=intent==='publish'||existing?.is_published===true||body.is_published===true;
+ const record={...existing,...body,id:existing?.id||crypto.randomUUID(),user_id:active.id,resource_type:resource.type,resource_id:String(resource.id),is_shared:shared,is_published:published,share_token:existing?.share_token||(shared&&published?randomToken():null),published_at:published?(existing?.published_at||now):null,created_at:existing?.created_at||now,updated_at:now,featured:existing?.featured!==false,_store:'account-metadata-direct'};
+ const metadata=active.user_metadata||{},spaces={...(metadata.atlas_problem_spaces||{})},workspace={...(spaces.publishing_workspace||{})};workspace.notes=upsertMetadata(workspace.notes,record);spaces.publishing_workspace=workspace;await updateUserMetadata({atlas_problem_spaces:spaces});return record;
 }
 
 export async function mountWorkspace(host,resource){
@@ -32,8 +61,12 @@ export async function mountWorkspace(host,resource){
  host.querySelector('#ws-add-projection').onclick=()=>{captureScenarios();projections.push({label:'',date:'',probability:''});draw()};
  function captureScenarios(){for(let index=0;index<projections.length;index++)projections[index]={label:list.querySelector(`[data-p-label="${index}"]`)?.value.trim()||'',date:list.querySelector(`[data-p-date="${index}"]`)?.value||'',probability:list.querySelector(`[data-p-prob="${index}"]`)?.value||''};return cleanScenarios(projections)}
  function collect(){const savedScenarios=captureScenarios();localStorage.setItem(scenarioKey(resource,current),JSON.stringify(savedScenarios));const active=user();if(!active)throw new Error('Your session expired. Sign in again.');const profile=active.user_metadata?.atlas_profile||{};return{user_id:active.id,author_username:profile.username||'Atlas Author',author_avatar_seed:profile.avatar_seed||'',author_profile_slug:profile.profile_slug||'',resource_type:resource.type,resource_id:String(resource.id),resource_title:resource.title,title:host.querySelector('#ws-title').value.trim()||resource.title+' analysis',body:safeHtml(host.querySelector('#ws-editor').innerHTML),ai_prompt:host.querySelector('#ws-prompt').value,projections:savedScenarios,is_shared:host.querySelector('#ws-shared').checked,share_scope:'page',share_ai_analysis:host.querySelector('#ws-include-ai').checked,updated_at:new Date().toISOString()}}
- async function persist(body,intent){localStorage.setItem(localKey(resource,current),JSON.stringify(body));try{const data=await workspaceApi(resource,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body,intent})});store=data.storage||'account-metadata';return{...(data.workspace||body),_store:store,_syncError:null}}catch(error){return{...body,_store:'local',_syncError:error.message}}}
- async function save(publish=false){const status=host.querySelector('#ws-status');if(publish&&!host.querySelector('#ws-shared').checked){status.textContent='Enable “Allow anyone with the link” before publishing.';return}status.textContent=publish?'Publishing…':'Saving…';try{const body=collect();row=await persist(body,publish?'publish':'save');if(row._syncError){status.textContent=publish?`Saved on this device, but publication failed: ${row._syncError}`:`Saved on this device; account sync failed: ${row._syncError}`;return}localStorage.setItem(localKey(resource,current),JSON.stringify(row));if(publish&&row.share_token){status.innerHTML=`Published separately from this page. <a href="/published/${encodeURIComponent(row.share_token)}">View article</a>`}else status.textContent=publish?'Published. Reload to view the article link.':'Draft saved to your account.';window.dispatchEvent(new Event('atlas-publication-updated'))}catch(error){status.textContent=error.message}}
+ async function persist(body,intent){
+  localStorage.setItem(localKey(resource,current),JSON.stringify(body));
+  try{const data=await workspaceApi(resource,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({...body,intent})});store=data.storage||'account-metadata';return{...(data.workspace||body),_store:store,_syncError:null,_syncWarning:null}}
+  catch(serverError){try{const saved=await persistDirectMetadata(resource,current,body,intent,row);store='account-metadata-direct';return{...saved,_syncError:null,_syncWarning:`Saved through the account fallback while the workspace service reconnects. (${serverError.message})`}}catch(metadataError){return{...body,_store:'local',_syncError:`${serverError.message}; account fallback: ${metadataError.message}`}}}
+ }
+ async function save(publish=false){const status=host.querySelector('#ws-status');if(publish&&!host.querySelector('#ws-shared').checked){status.textContent='Enable “Allow anyone with the link” before publishing.';return}status.textContent=publish?'Publishing…':'Saving…';try{const body=collect();row=await persist(body,publish?'publish':'save');if(row._syncError){status.textContent=publish?`Saved on this device, but publication failed: ${row._syncError}`:`Saved on this device; account sync failed: ${row._syncError}`;return}localStorage.setItem(localKey(resource,current),JSON.stringify(row));if(publish&&row.share_token){status.innerHTML=`Published to your account${row._syncWarning?' while the server deployment reconnects':''}. <a href="/published/${encodeURIComponent(row.share_token)}">View article</a>${row._syncWarning?`<br>${esc(row._syncWarning)}`:''}`}else status.textContent=row._syncWarning?`Draft saved to your account. ${row._syncWarning}`:'Draft saved to your account.';window.dispatchEvent(new Event('atlas-publication-updated'))}catch(error){status.textContent=error.message}}
  host.querySelector('#ws-save').onclick=()=>save(false);host.querySelector('#ws-publish').onclick=()=>save(true);
  host.querySelector('#ws-ai').onclick=async()=>{const status=host.querySelector('#ws-status'),promptText=host.querySelector('#ws-prompt').value.trim();if(!promptText){status.textContent='Enter instructions for the AI first.';return}status.textContent='Running your selected model…';try{const result=await ai([{role:'system',content:'Create a clearly labeled analytical draft. Separate sourced page facts from inference, identify uncertainty, and do not fabricate citations.'},{role:'user',content:`Page context:\n${JSON.stringify(resource.context)}\n\nUser instructions:\n${promptText}\n\nExisting draft:\n${host.querySelector('#ws-editor').innerText}`}],{surface:resource.type,resourceId:String(resource.id)});host.querySelector('#ws-editor').insertAdjacentHTML('beforeend',`<h2>AI-assisted draft</h2><p>${esc(result.content).replace(/\n/g,'<br>')}</p>`);status.textContent=`Draft added using ${result.model||'your selected model'}. Review before publishing.`}catch(error){status.textContent=`AI unavailable: ${error.message}. Check Account for your API key, endpoint, and model.`}};
  host.querySelector('#ws-share')?.addEventListener('click',async()=>{await navigator.clipboard.writeText(`${location.origin}/published/${row.share_token}`);host.querySelector('#ws-status').textContent='Share link copied.'});
