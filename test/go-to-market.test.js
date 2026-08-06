@@ -34,8 +34,12 @@ test('router and pages mount the problem space and publication extensions', () =
   assert.match(read('src/problem-router.js'), /createGoToMarketRouter/);
   assert.match(read('src/problem-router.js'), /\/go-to-market/);
   assert.match(read('public/go-to-market.html'), /go-to-market\.js/);
+  assert.match(read('public/go-to-market.html'), /publishing-links\.js/);
   assert.match(read('public/legal.html'), /workspace-scope-toggle\.js/);
   assert.match(read('public/published.html'), /published-extensions\.js/);
   assert.match(read('public/published-extensions.js'), /select=share_scope,resource_type,resource_id/);
   assert.match(read('public/workspace-scope-toggle.js'), /\.\.\.workspaceRecord/);
+  assert.match(read('public/publishing-links.js'), /go_to_market_report/);
+  assert.match(read('public/account-posts.js'), /go_to_market_report/);
+  assert.match(read('public/profile.js'), /go_to_market_report:'Go-to-market'/);
 });
