@@ -1,4 +1,5 @@
 import express from 'express';
+import{supabaseSecretKey,supabaseServiceHeaders}from'./supabase-server-key.js';
 import {isDiscoverable,isPublished,normalizeLegacyLegalRecord,normalizeWorkspaceRecord,recordKey,upsertWorkspaceRecord} from './workspace-records.js';
 
 const safeSummary=row=>({id:row.id||null,share_token:row.share_token||null,title:String(row.title||'Untitled analysis'),resource_title:String(row.resource_title||'Analysis'),resource_type:String(row.resource_type||'analysis'),resource_id:String(row.resource_id||''),published_at:row.published_at||row.updated_at||row.created_at||null,updated_at:row.updated_at||row.published_at||row.created_at||null,author_username:String(row.author_username||'Atlas Author'),author_avatar_seed:String(row.author_avatar_seed||''),author_profile_slug:String(row.author_profile_slug||''),featured:row.featured!==false});
@@ -7,16 +8,17 @@ const missingTable=(status,body)=>status===404||/Could not find the table|schema
 async function readJson(response){const text=await response.text();if(!response.ok)throw new Error(text||`Request failed (${response.status})`);try{return text?JSON.parse(text):null}catch{return null}}
 
 export function createPublishedFeedRouter({env=process.env,fetchImpl=globalThis.fetch}={}){
- const router=express.Router(),base=env.SUPABASE_URL,publishable=env.SUPABASE_PUBLISHABLE_KEY,secret=env.SUPABASE_SECRET_KEY||env.SUPABASE_SERVICE_ROLE_KEY||env.SUPABASE_SERVICE_KEY;
+ const router=express.Router(),base=env.SUPABASE_URL,publishable=env.SUPABASE_PUBLISHABLE_KEY,secret=supabaseSecretKey(env);
  async function accounts(req){
   const found=[];let current=null;if(!base||!publishable)return{accounts:found,current};
   const bearer=String(req.get('authorization')||'').replace(/^Bearer\s+/i,'');
   if(bearer)try{const response=await fetchImpl(`${base}/auth/v1/user`,{headers:{apikey:publishable,Authorization:`Bearer ${bearer}`}});if(response.ok){current=await readJson(response);found.push(current)}}catch(error){console.warn('Current account lookup unavailable:',error.message)}
-  if(secret)try{const response=await fetchImpl(`${base}/auth/v1/admin/users?per_page=1000`,{headers:{apikey:secret,Authorization:`Bearer ${secret}`}}),data=await readJson(response);for(const account of data?.users||[])if(!found.some(item=>item.id===account.id))found.push(account)}catch(error){console.warn('Global account lookup unavailable:',error.message)}
+  if(secret)try{const response=await fetchImpl(`${base}/auth/v1/admin/users?per_page=1000`,{headers:supabaseServiceHeaders(secret,{json:false})}),data=await readJson(response);for(const account of data?.users||[])if(!found.some(item=>item.id===account.id))found.push(account)}catch(error){console.warn('Global account lookup unavailable:',error.message)}
   return{accounts:found,current,bearer};
  }
  async function tableRows(table,query,bearer=''){
-  if(!base||!publishable)return[];const key=secret||publishable,authorization=secret?`Bearer ${secret}`:bearer?`Bearer ${bearer}`:null,headers={apikey:key,Accept:'application/json',...(authorization?{Authorization:authorization}:{})};
+  if(!base||!publishable)return[];
+  const headers=secret?{...supabaseServiceHeaders(secret,{json:false}),Accept:'application/json'}:{apikey:publishable,Accept:'application/json',...(bearer?{Authorization:`Bearer ${bearer}`}:{})};
   try{const response=await fetchImpl(`${base}/rest/v1/${table}${query}`,{headers}),body=await response.text();if(!response.ok){if(missingTable(response.status,body))return[];console.warn(`${table} feed returned ${response.status}: ${body.slice(0,240)}`);return[]}try{return body?JSON.parse(body):[]}catch{return[]}}catch(error){console.warn(`${table} feed unavailable:`,error.message);return[]}
  }
  function accountRecords(account){
