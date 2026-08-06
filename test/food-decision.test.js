@@ -19,6 +19,12 @@ test('hard cuisine conflicts remove a candidate',()=>{
  assert.deepEqual(result.restaurants.map(item=>item.id),['pizza']);
 });
 
+test('spice tolerance and adventurousness affect participant fit',()=>{
+ const spicy=place('spicy','Sichuan Hot Pot',{primaryType:'sichuan_restaurant',primaryTypeDisplay:'Sichuan restaurant',reviews:[{text:'Very spicy chili broth.'}]}),cautious=solveFoodDecision([spicy],{participants:[{name:'Cautious',spice:10,adventurousness:10,likes:['pizza']}],maxDistanceKm:10}).restaurants[0],adventurous=solveFoodDecision([spicy],{participants:[{name:'Explorer',spice:90,adventurousness:90}],maxDistanceKm:10}).restaurants[0];
+ assert.ok(adventurous.participantScores[0].score>cautious.participantScores[0].score);
+ assert.match(cautious.participantScores[0].reasons.join(' '),/heat|familiar/i);
+});
+
 test('raw oyster plan creates a year-round verification brief',()=>{
  const brief=foodSafetyBrief({query:'raw oysters',month:7});
  assert.equal(brief.level,'verify');
