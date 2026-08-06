@@ -1,3 +1,5 @@
+import{supabaseSecretKey,supabaseServiceHeaders}from'./supabase-server-key.js';
+
 const JSON_HEADERS={'Content-Type':'application/json'};
 
 async function readJson(response){
@@ -9,11 +11,11 @@ async function readJson(response){
 }
 
 export function createProblemSpaceStorage({env=process.env,fetchImpl=globalThis.fetch}={}){
- const base=env.SUPABASE_URL,key=env.SUPABASE_PUBLISHABLE_KEY,secret=env.SUPABASE_SECRET_KEY||env.SUPABASE_SERVICE_ROLE_KEY||env.SUPABASE_SERVICE_KEY;
+ const base=env.SUPABASE_URL,key=env.SUPABASE_PUBLISHABLE_KEY,secret=supabaseSecretKey(env);
  let writeQueue=Promise.resolve(),cachedHostId=null;
  const configured=Boolean(base&&key&&secret);
  const authHeaders=token=>({apikey:key,Authorization:`Bearer ${token}`,...JSON_HEADERS});
- const serviceHeaders=()=>({apikey:secret,Authorization:`Bearer ${secret}`,...JSON_HEADERS});
+ const serviceHeaders=()=>supabaseServiceHeaders(secret);
  const bearer=req=>String(req?.get?.('authorization')||'').replace(/^Bearer\s+/i,'');
  const serial=operation=>{const next=writeQueue.then(operation,operation);writeQueue=next.catch(()=>{});return next};
  async function userForToken(token){if(!base||!key||!token)return null;const response=await fetchImpl(`${base}/auth/v1/user`,{headers:authHeaders(token)});return response.ok?response.json():null}
