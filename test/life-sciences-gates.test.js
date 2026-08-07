@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import express from 'express';
+import fs from 'node:fs';
+import {createLifeSciencesRouter} from '../src/life-sciences.js';
+
+function storage(){const account={id:'u1',user_metadata:{atlas_profile:{username:'Researcher'},atlas_problem_spaces:{life_sciences:{problems:[]}}}};return{account,requestUser:async()=>({token:'t',current:account}),listAccounts:async()=>[account],writeUser:async(_req,space,updater)=>{const current=account.user_metadata.atlas_problem_spaces[space]||{};account.user_metadata.atlas_problem_spaces[space]=await updater(structuredClone(current));return{value:account.user_metadata.atlas_problem_spaces[space],user:account}}}}
+
+test('signed-in users can publish a Life Sciences problem and public readers can retrieve it',async()=>{const store=storage(),app=express();app.use(express.json());app.use(createLifeSciencesRouter({storage:store}));const server=app.listen(0);try{const base=`http://127.0.0.1:${server.address().port}`;const created=await fetch(`${base}/api/life-sciences/problems`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer t'},body:JSON.stringify({title:'Biomarker response variation',question:'Why does treatment response vary across a biomarker-defined subgroup?',evidence:'Replicated observational signal'})}).then(r=>r.json());assert.ok(created.problem.slug);const listed=await fetch(`${base}/api/life-sciences/problems`).then(r=>r.json());assert.equal(listed.problems[0].title,'Biomarker response variation');const detail=await fetch(`${base}/api/life-sciences/problems/${created.problem.slug}`).then(r=>r.json());assert.equal(detail.problem.author_username,'Researcher')}finally{await new Promise(r=>server.close(r))}});
+
+test('Life Sciences reuses shared workspace publishing and attachment controls',()=>{const source=fs.readFileSync(new URL('../public/life-sciences.js',import.meta.url),'utf8');assert.match(source,/mountWorkspace/);assert.match(source,/life_science_problem/);assert.match(source,/installWorkspaceScopeToggle/);assert.match(source,/Sign in or create an account/)});
+
+test('Propositions and Leads lock intake until Perplexity is validated',()=>{const gate=fs.readFileSync(new URL('../public/research-credential-gate.js',import.meta.url),'utf8'),prop=fs.readFileSync(new URL('../public/prop.html',import.meta.url),'utf8'),leads=fs.readFileSync(new URL('../public/leads.html',import.meta.url),'utf8');assert.match(gate,/is-locked/);assert.match(gate,/Validate Perplexity before filling this out/);assert.match(gate,/api\/research\/perplexity\/test/);assert.match(prop,/research-credential-gate\.js/);assert.match(leads,/research-credential-gate\.js/)})
