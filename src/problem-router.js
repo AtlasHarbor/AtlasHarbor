@@ -11,6 +11,7 @@ import {createDropshippingRouter} from './dropshipping-api.js';
 import {createWorkspaceRouter} from './workspace-api.js';
 import {createPublishedFeedRouter} from './published-feed.js';
 import {createBaseballProspectRouter} from './baseball-prospect-router.js';
+import {createBaseballSearchRouter} from './baseball-search-router.js';
 import {createGameRoutingRouter} from './game-routing.js';
 import {createGameClientRouter} from './game-client.js';
 import {createLegalService} from './legal.js';
@@ -24,7 +25,7 @@ const directory=path.dirname(fileURLToPath(import.meta.url));
 export function createProblemRouter({service=createProblemSpacesService(),env=process.env}={}){
  const router=express.Router(),legal=createLegalService({env}),storage=createProblemSpaceStorage({env}),economicsService=createEconomicsService({storage,env});
  economicsService.startScheduler();legal.startScheduler();
- router.use(createGameClientRouter());router.use(createBaseballProspectRouter({legal}));router.use(createGameRoutingRouter());router.use(createLegalRouter({service:legal}));
+ router.use(createGameClientRouter());router.use(createBaseballSearchRouter());router.use(createBaseballProspectRouter({legal}));router.use(createGameRoutingRouter());router.use(createLegalRouter({service:legal}));
  router.get(['/economics','/economics/{*path}'],(_req,res)=>res.sendFile(path.join(directory,'../public/economics.html')));
  router.get(['/prop','/prop/{*path}'],(_req,res)=>res.sendFile(path.join(directory,'../public/prop.html')));
  router.get(['/go-to-market','/go-to-market/{*path}'],(req,res)=>res.redirect(301,req.originalUrl.replace(/^\/go-to-market/,'/prop')));
