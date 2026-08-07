@@ -20,6 +20,7 @@ import {createGoToMarketRouter} from './go-to-market.js';
 import {createPropositionRouter} from './proposition.js';
 import {createPublicPropositionRouter} from './proposition-public.js';
 import {createResearchProjectsRouter} from './research-projects.js';
+import {createResearchCredentialRouter} from './research-credentials.js';
 import {createLifeSciencesRouter} from './life-sciences.js';
 
 const directory=path.dirname(fileURLToPath(import.meta.url));
@@ -34,7 +35,7 @@ export function createProblemRouter({service=createProblemSpacesService(),env=pr
  router.get(['/logistics','/logistics/{*path}'],(_req,res)=>res.sendFile(path.join(directory,'../public/logistics-planner.html')));
  router.get(['/life-sciences','/life-sciences/{*path}'],(_req,res)=>res.sendFile(path.join(directory,'../public/life-sciences.html')));
  router.get(['/users/:slug','/users/:slug/{*path}'],(_req,res)=>res.sendFile(path.join(directory,'../public/profile.html')));
- router.use(createEconomicsRouter({service:economicsService,storage}));router.use(createDropshippingRouter({storage}));router.use(createPublicPropositionRouter({storage}));router.use(createPropositionRouter({storage}));router.use(createGoToMarketRouter({storage}));router.use(createResearchProjectsRouter({storage}));router.use(createLifeSciencesRouter({storage}));router.use(createWorkspaceRouter({env,storage}));router.use(createAdminMetadataControl({env}));router.use(createAdminResearchRouter({env,legalService:legal}));router.use(createPublishedFeedRouter({env}));
+ router.use(createEconomicsRouter({service:economicsService,storage}));router.use(createDropshippingRouter({storage}));router.use(createPublicPropositionRouter({storage}));router.use(createPropositionRouter({storage}));router.use(createGoToMarketRouter({storage}));router.use(createResearchCredentialRouter({storage}));router.use(createResearchProjectsRouter({storage}));router.use(createLifeSciencesRouter({storage}));router.use(createWorkspaceRouter({env,storage}));router.use(createAdminMetadataControl({env}));router.use(createAdminResearchRouter({env,legalService:legal}));router.use(createPublishedFeedRouter({env}));
  const legacyAdminOk=req=>Boolean(env.ADMIN_PASSWORD)&&req.get('x-admin-password')===env.ADMIN_PASSWORD;
  router.get('/api/problem-spaces',async(_req,res)=>{try{return res.json({spaces:await service.listPublic()})}catch(error){console.error(error);return res.status(500).json({error:'Problem spaces are temporarily unavailable.'})}});
  router.post('/api/problem-spaces/requests',async(req,res)=>{try{return res.status(201).json({request:await service.create(req.body||{})})}catch(error){return res.status(400).json({error:error.message})}});
