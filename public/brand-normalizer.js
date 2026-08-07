@@ -1,0 +1,4 @@
+const STYLE_ID='atlas-brand-normalizer';
+if(!document.getElementById(STYLE_ID)){const style=document.createElement('style');style.id=STYLE_ID;style.textContent=`header .brand,header>a.brand{display:inline-flex;align-items:center;gap:10px;color:#173b32;text-decoration:none;font:800 15px system-ui;white-space:nowrap}header .brand>span:first-child{display:inline-grid;place-items:center;min-width:34px;height:34px;padding:0 7px;border-radius:9px;background:#ef6b3a;color:#fff;font:900 12px/1 system-ui;letter-spacing:.5px;box-shadow:0 5px 14px #ef6b3a28}`;document.head.append(style)}
+const header=document.querySelector('body>header,header');
+if(header){const link=[...header.querySelectorAll(':scope > a[href="/"],a[href="/"]')].find(a=>/atlas harbor/i.test(a.textContent||''));if(link){link.classList.add('brand');if(!link.querySelector('span'))link.innerHTML='<span>AH</span>Atlas Harbor'}}
