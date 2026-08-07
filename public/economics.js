@@ -1,6 +1,6 @@
 import'./problem-nav.js';
 const feed=document.querySelector('#problem-feed'),status=document.querySelector('#feed-status'),date=document.querySelector('#feed-date'),refresh=document.querySelector('#refresh-economics');
-const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'})[char]);
+const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[char]);
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const STALE_MS=20*60*1000;
 date.textContent=new Date().toLocaleDateString(undefined,{weekday:'long',year:'numeric',month:'long',day:'numeric'});
