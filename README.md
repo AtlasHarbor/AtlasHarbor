@@ -36,43 +36,46 @@ Routine collection and ranking should be automated. The user should spend time o
 
 ## Workspace and publishing architecture
 
-**One writable source of truth: the database workspace. Never create a device-only workspace.**
+**One writable source of truth: the Supabase-backed account workspace. Never create a device-only workspace.**
 
-Every Problem Space uses the same private workspace, publishing API, sharing rules, public feed, and profile/discovery surfaces. The full contract and incident history are documented in [`docs/WORKSPACE_ARCHITECTURE.md`](docs/WORKSPACE_ARCHITECTURE.md).
+Every Problem Space uses the same private workspace, sharing rules, public feed, and profile/discovery surfaces. The full contract and incident history are documented in [`docs/WORKSPACE_ARCHITECTURE.md`](docs/WORKSPACE_ARCHITECTURE.md).
 
-Normal workspace reads and writes must go through:
-
-```text
-/api/workspaces/:resourceType/:resourceId
-```
-
-The canonical record is stored in the signed-in user's Supabase-backed account metadata:
+The canonical record is stored in the signed-in user's account metadata:
 
 ```text
 user_metadata.atlas_problem_spaces.publishing_workspace.notes
 ```
 
-Server-side read recovery may inspect optional `workspace_notes`, previous virtual metadata, and legacy Legal records and may migrate an older record into canonical account metadata without deleting the source. **The browser must never fall back to localStorage or create a second workspace when the database request fails.** A database failure must show a retry state.
+There are two allowed ways to reach that **same** database record:
+
+1. preferred: `/api/workspaces/:resourceType/:resourceId`,
+2. recovery transport: direct authenticated Supabase Auth user-metadata access with the existing browser session and publishable key.
+
+The second path is not a local copy and not a second persistence layer. It exists so a temporary Atlas Harbor API routing/deployment failure does not make a user's existing database-backed analysis disappear. If both database transports fail, the UI shows a retry state and does not create a local draft.
+
+Older `workspace_notes`, `legal_notes`, and virtual account-metadata records are read-only recovery inputs. They may be copied into the canonical account workspace, but new workspace writes must not create new virtual/device records.
 
 Two historical regressions are specifically prohibited:
 
-1. `workspace.js` once fell back to an account/session copy and then localStorage after `Failed to fetch`, creating split-brain drafts.
-2. `publishing-links.js` once called browser `rest('workspace_notes')`; when the optional table was unavailable, the virtual fallback encoded the entire article into `share_token`, creating huge URLs and sometimes `/published/undefined`.
+1. treating the direct account-database transport as if it were a conflicting persistence source and removing it; this caused `Failed to fetch` on `/api/workspaces` to make valid database records appear unavailable,
+2. calling browser `rest('workspace_notes')` for publishing; when the optional table was unavailable, an old virtual fallback encoded the entire article into `share_token`, creating huge URLs and sometimes `/published/undefined`.
 
-New publishing links must be obtained from `/api/workspaces`. New share tokens are compact server-generated random tokens. The public feed may expose short `pub-...` aliases for old malformed tokens so existing publications remain recoverable.
+New share tokens are compact random database/server tokens. The public feed may expose short `pub-...` aliases for old malformed tokens so existing publications remain recoverable. The publication-link UI consumes the workspace record returned by Save/Publish instead of doing a second storage lookup.
+
+The “attach full underlying research” option is part of the same workspace record (`share_scope`) and is persisted in the same Save/Publish operation. It must not perform a second independent write after publishing.
 
 Supabase `sb_secret_...` keys are opaque API keys, not JWTs. Server code must use `src/supabase-server-key.js`; it must never send an opaque secret as `Authorization: Bearer`.
 
 New Problem Spaces must reuse:
 
 - `createProblemSpaceStorage()` for metadata-backed domain/project records,
-- `/api/workspaces/:resourceType/:resourceId` for private analysis and publishing,
+- the shared canonical account workspace and its two database transports,
 - `workspace.js` for the editor and AI drafting,
-- `workspace-scope-toggle.js` for optional underlying-research attachment,
+- `workspace-scope-toggle.js` for optional underlying-research attachment state,
 - `/api/published-feed` for public articles,
 - the shared profile, discovery, and publication surfaces.
 
-Do not create browser-direct Supabase workspace dependencies or custom persistence paths for one Problem Space.
+Do not create localStorage workspace persistence, browser-direct optional-table publishing, or custom persistence paths for one Problem Space.
 
 ## Life Sciences
 
@@ -124,14 +127,20 @@ The guided brief captures the current state, problem, audience, requested action
 
 New Problem Spaces must work after deployment without requiring an ordinary user to open the Supabase SQL editor.
 
-1. The browser talks to an Atlas Harbor API route rather than a workspace table name.
-2. The API authenticates Supabase bearer tokens for private reads and writes.
-3. Shared bootstrap-scale data uses host-account metadata.
-4. User projects, preferences, drafts, and saved decisions use the user’s database-backed metadata.
-5. Workspace content never falls back to a device-only local copy.
-6. Collections are bounded and shared writes are serialized.
-7. A dedicated table may replace metadata later without changing the public API.
-8. Missing optional tables must never produce instructions telling an ordinary user to run SQL.
+1. Workspace content has one writable canonical database record in account metadata.
+2. `/api/workspaces` is the preferred transport for private reads and writes.
+3. Direct authenticated Supabase Auth metadata access is the allowed recovery transport to the same record if `/api/workspaces` is temporarily unreachable.
+4. Shared bootstrap-scale data uses host-account metadata.
+5. User projects, preferences, drafts, and saved decisions use database-backed account metadata.
+6. Workspace content never falls back to a device-only local copy.
+7. Optional legacy/virtual records are recovery inputs, not new write targets.
+8. Collections are bounded and shared writes are serialized.
+9. A dedicated table may replace metadata later without changing the public API.
+10. Missing optional tables must never produce instructions telling an ordinary user to run SQL.
+
+## CI dependency rule
+
+CI uses `npm ci`, so `package.json` and `package-lock.json` must stay synchronized. If a dependency is truly needed, update the lockfile in the same change. If code does not import/use a dependency, do not leave it in `package.json`. `test/package-lock-sync.test.js` guards this invariant.
 
 ## Provider keys
 
