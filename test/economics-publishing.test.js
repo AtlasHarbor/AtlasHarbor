@@ -1,0 +1,5 @@
+import test from'node:test';import assert from'node:assert/strict';import fs from'node:fs';
+const read=path=>fs.readFileSync(new URL(path,import.meta.url),'utf8');
+test('Economics stories mount the shared publishing workspace',()=>{const source=read('../public/economics.js');assert.match(source,/type:'economics_story'/);assert.match(source,/mountWorkspace/);assert.match(source,/installWorkspaceScopeToggle/);assert.match(source,/Write \/ publish your analysis/);assert.match(source,/\/account\?next=/)});
+test('Economics publication attachment is opt in and source linked',()=>{const source=read('../public/economics-publication-extension.js');assert.match(source,/share_scope!==['"]everything['"]/);assert.match(source,/ATTACHED ECONOMIC DECISION BRIEF/);assert.match(source,/\/api\/economics\/problems/);assert.match(source,/\/economics#/)});
+test('shared loading layer normalizes Atlas Harbor orange AH branding',()=>{assert.match(read('../public/loading-feedback.js'),/brand-normalizer\.js/);const brand=read('../public/brand-normalizer.js');assert.match(brand,/#ef6b3a/);assert.match(brand,/<span>AH<\/span>Atlas Harbor/)})
