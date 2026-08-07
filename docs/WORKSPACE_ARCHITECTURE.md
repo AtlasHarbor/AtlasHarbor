@@ -1,136 +1,164 @@
 # Workspace and publishing architecture
 
-Atlas Harbor uses one workspace and publishing system for every Problem Space. Legal, Economics, Propositions, Life Sciences, Lead Discovery, Logistics Planner, Baseball, and future spaces must extend this system rather than create their own persistence path.
+Atlas Harbor uses one workspace and publishing system for every Problem Space. Legal, Propositions, Economics, Lead Discovery, Logistics Planner, Life Sciences, Baseball, and future spaces must extend this system rather than create their own persistence path.
 
-## Non-negotiable source-of-truth rule
+## Core rule
 
-**There is one writable workspace source of truth: the Atlas Harbor database path. There is never a device-only workspace.**
+**One writable database source of truth. Multiple database transports are allowed. No local workspace copies.**
 
-The browser must load and save private analysis through:
-
-```text
-/api/workspaces/:resourceType/:resourceId
-```
-
-That API persists the canonical record in the signed-in user's Supabase-backed account metadata at:
+The canonical workspace record lives in Supabase account metadata at:
 
 ```text
 user_metadata.atlas_problem_spaces.publishing_workspace.notes
 ```
 
-Optional database adapters such as `workspace_notes` and older Legal records may be read and migrated server-side, but the browser must never create an alternate localStorage workspace or a virtual publication when the database path is unavailable.
+The browser must never create a second device-only copy of the workspace body, projections, publication state, or share token in `localStorage`.
 
-If the workspace API cannot reach the database, the UI must show a retryable database-unavailable state. It must not open an empty editor, create a local draft, or tell the user a device copy is authoritative.
+## Allowed transport order
 
-## Read recovery versus write authority
+Atlas Harbor may use two transports to reach the same canonical account-database record:
 
-Recovery is allowed for **reading existing database records**, not for creating a second writable truth.
+1. Same-origin Atlas Harbor workspace API: `/api/workspaces/:resourceType/:resourceId`
+2. Direct authenticated Supabase Auth user-metadata access using the browser's existing session and the public/publishable Supabase key
 
-Server read order:
+The second transport is a database transport, not a local fallback. It reads and writes the same `atlas_problem_spaces.publishing_workspace.notes` record and exists so a temporary Atlas Harbor API routing/deployment problem does not make a user's database-backed analysis disappear.
 
-1. canonical account metadata (`atlas_problem_spaces.publishing_workspace.notes`),
-2. optional `workspace_notes` table,
-3. older account-metadata virtual records created by previous Atlas Harbor versions,
-4. legacy Legal records such as `legal_notes`.
+If both database transports fail, the UI shows a retryable database error and does not open a device draft.
 
-When an older record is found, `/api/workspaces` may copy it into canonical account metadata. The older record is retained during migration so recovery is non-destructive.
+## Legacy recovery
 
-There is intentionally **no browser device-copy recovery layer** for workspace content.
+Older Atlas Harbor versions may have records in:
 
-## What broke before
+- `workspace_notes`
+- `legal_notes`
+- `user_metadata.atlas_virtual_tables.workspace_notes`
+- `user_metadata.atlas_virtual_tables.legal_notes`
 
-Two related regressions caused analysis and publications to appear missing.
+These are recovery inputs only. When one is found, Atlas Harbor may copy the newest valid record into the canonical account-metadata workspace. The original recovery record must not be deleted during the read/migration request.
 
-### 1. Browser fallback created split-brain workspaces
+New workspace writes must not create new virtual or device-local records.
 
-`public/workspace.js` previously caught `/api/workspaces` failures and fell back first to the session's embedded account copy and then to localStorage. The UI could therefore display and edit a record that was not the canonical database workspace.
+## What went wrong previously
 
-This produced messages such as:
+Two regressions caused the repeated Legal/Published failures.
 
-```text
-Using your saved account copy while the workspace service reconnects. (Failed to fetch)
-```
+### Regression 1: removing the database transport fallback
 
-That behavior is prohibited. A failed database request now produces a retry screen and no local draft.
+The workspace initially used `/api/workspaces` and could still reach the same Supabase account metadata directly if that route was temporarily unreachable. A later cleanup treated that direct account-database path as if it were a conflicting persistence layer and removed it.
 
-### 2. Direct `workspace_notes` publishing created giant share tokens
+When the same-origin workspace route then returned `Failed to fetch`, the UI could no longer reach the existing database record even though the record still existed in Supabase.
 
-`public/publishing-links.js` previously used the generic browser `rest('workspace_notes')` helper. When the optional `workspace_notes` table was unavailable, `supabase-client.js` fell back to a virtual metadata implementation. That legacy implementation encoded the entire publication JSON into `share_token` so a URL could become hundreds of characters long. A failed PATCH could also return no row, producing `/published/undefined`.
+The fix is **not** to create a local draft. The fix is to retain both transports to the same canonical database record.
 
-Publishing links now read exclusively from `/api/workspaces`. New publications receive the short random share token generated by `src/workspace-api.js`.
+### Regression 2: virtual publication tokens
 
-The server publication feed still recognizes older giant/undefined-token records for recovery. It exposes a short stable `pub-...` alias derived from publication identity without rewriting or deleting the original record.
+An older browser `rest('workspace_notes')` fallback could create a virtual record when the optional table was unavailable. Its share-token implementation encoded the entire publication record into the URL. That produced enormous `/published/eyJ...` links and could also produce `/published/undefined` when a later update returned no record.
 
-## Supabase server-key rule
+New publishing code must never call browser `workspace_notes` REST as its write path and must never encode publication content into `share_token`.
 
-Supabase opaque `sb_secret_...` keys are API keys, not JWTs. Sending one as `Authorization: Bearer` produces an invalid-JWT response. Server code must use:
+Canonical new share tokens are compact random server/database tokens. The public feed may expose short deterministic `pub-...` aliases for malformed legacy tokens so old publications remain readable without rewriting or deleting their stored records.
 
-- `supabaseSecretKey()`
-- `supabaseServiceHeaders()`
+## Attachment scope
 
-from `src/supabase-server-key.js`.
+`share_scope` is part of the workspace record itself.
+
+The “Attach the full underlying analysis/research” checkbox changes the in-memory workspace form state. The value is persisted in the same Save/Publish transaction as the analysis body. The attachment control must not perform a second independent database write after publishing.
+
+This prevents a successful publication from being followed by a failing scope-write request that makes the UI look broken.
+
+## Publication-link UI
+
+The workspace Save/Publish operation returns the saved canonical record, including `share_token`.
+
+The publication-link UI consumes that returned record through `atlas-publication-updated`; it does not refetch `workspace_notes` and it does not manufacture a token.
+
+Hard invariants:
+
+- never render `/published/undefined`
+- never encode the entire publication/article into the share token
+- never write workspace publication state through a browser-direct optional table
+- never require a second publication write merely to update the link panel
+
+## Supabase server keys
+
+Supabase `sb_secret_...` keys are opaque API keys, not JWTs. Server code must use `supabaseSecretKey()` and `supabaseServiceHeaders()` from `src/supabase-server-key.js`.
+
+Never send an opaque `sb_secret_...` key as `Authorization: Bearer ...`.
 
 ## Shared lifecycle
 
 Every Problem Space follows the same lifecycle:
 
-1. Define the public source problem, case, story, game, project, or research record.
-2. Mount the shared private database workspace for a signed-in user.
-3. Load the canonical workspace through `/api/workspaces`.
-4. Save drafts through `/api/workspaces` only.
-5. Publish through `/api/workspaces`; the server generates or preserves the share token.
-6. Show the article at `/published/:token`.
-7. By default, the article links to the underlying source page.
-8. When `share_scope: "everything"` is explicitly enabled, the publication may embed the underlying research/problem beneath the article.
+1. Define objective, decision, constraints, evidence, and open questions.
+2. Generate or collect domain research.
+3. Render domain-specific visualizations.
+4. Mount the shared private database workspace.
+5. Load/save the canonical account record through one of the allowed database transports.
+6. Publish a separate article with a compact share token.
+7. Optionally attach the full underlying research using `share_scope: "everything"` in the same workspace save.
+8. Recover old legacy/virtual records into the canonical account-metadata workspace when needed.
 
 ## Requirements for a new Problem Space
 
 A new space must reuse:
 
-- `createProblemSpaceStorage()` for metadata-backed domain/project records,
-- `/api/workspaces` for private analysis and publishing,
-- `workspace.js` for the editor, AI draft, projections, and sharing,
-- `workspace-scope-toggle.js` for optional full-research attachment,
-- `/api/published-feed` and the shared publication renderer,
-- account/profile/discovery integration,
-- the existing provider-key model.
+- `createProblemSpaceStorage()` for metadata-backed project records
+- `/api/workspaces` and the direct account-database transport for private analysis and publishing
+- `workspace.js` for the editor, AI draft, projections, and sharing
+- `workspace-scope-toggle.js` for optional full-research attachment state
+- `/api/published-feed` and the shared public publication renderer
+- account-local provider keys; provider secrets are never stored in the repository
+- profile, discovery, comments, and publication links
 
-A new space may add domain intake, provider adapters, normalization, visualization, and domain prompts. It may not fork persistence or publishing.
+A new space may add only its domain intake, provider adapters, normalization, visualizations, and domain prompts.
 
 ## Prohibited patterns
 
 Do not:
 
-- create or read a workspace from localStorage,
-- call Supabase `workspace_notes` directly from the browser for normal workspace publishing,
-- create virtual workspace/publication records when `/api/workspaces` fails,
-- encode an entire publication into a share token,
-- construct `/published/undefined`,
-- send `sb_secret_...` as a bearer token,
-- create a custom workspace table for one Problem Space,
-- delete legacy records during opportunistic recovery,
-- let an optional provider failure erase already loaded public content.
+- create a local/device workspace copy
+- use localStorage as workspace-body or projection persistence
+- remove the direct account-database transport merely because `/api/workspaces` is preferred
+- create a custom workspace or publication table for one Problem Space
+- write new virtual `workspace_notes` or `legal_notes` records
+- encode an entire publication into a share token
+- render `/published/undefined`
+- send `sb_secret_...` as a bearer token
+- delete legacy data during a read or opportunistic migration
+- let an optional provider failure erase already loaded public or private content
+
+## CI dependency invariant
+
+`package.json` and `package-lock.json` must remain synchronized. CI uses `npm ci`, which intentionally fails if a dependency is added to `package.json` without updating the lockfile.
+
+Do not add a package speculatively. If code does not import/use a package, remove the declaration. If a new dependency is actually required, regenerate and commit the lockfile in the same change.
+
+The regression test `test/package-lock-sync.test.js` verifies that root dependencies match.
 
 ## Testing contract
 
 Regression tests must verify:
 
-- `workspace.js` uses `/api/workspaces` and contains no workspace localStorage fallback,
-- publishing-link UI uses `/api/workspaces`, not browser `rest('workspace_notes')`,
-- new share tokens are compact server-generated tokens,
-- the public feed recovers legacy virtual/Legal publications and canonicalizes broken long tokens,
-- opaque Supabase keys are not bearer JWTs,
-- every new Problem Space mounts the shared workspace,
-- no schema migration is required for metadata-backed domain records.
+- both allowed database transports remain represented
+- no localStorage workspace persistence exists
+- direct-account fallback writes the same `atlas_problem_spaces.publishing_workspace.notes` record
+- attachment scope is saved as part of the workspace transaction
+- publication links consume the returned workspace record instead of refetching an optional table
+- opaque Supabase keys are not bearer JWTs
+- public feeds recover database and legacy account sources
+- compact publication-token behavior
+- `package.json` and `package-lock.json` dependency synchronization
+- each new Problem Space mounts the shared workspace
+- provider keys remain browser-local when appropriate
 
 ## Current shared Problem Spaces
 
 - Legal Systems Tracker
 - Economics
 - Propositions
-- Life Sciences
 - Lead Discovery
 - Logistics Planner
+- Life Sciences
 - Baseball Intelligence
 
-The same workspace/publishing contract applies to all of them.
+The persistence and publishing rules above apply equally to all of them.
