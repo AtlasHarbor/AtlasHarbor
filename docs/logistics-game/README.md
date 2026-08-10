@@ -1,21 +1,136 @@
 # Atlas Harbor Logistics Game
 
-The logistics game is an exception-driven control-tower simulation at `/game`. Routine production, safe dispatches, and ordinary movement can be delegated. The player intervenes when cost, service, customer trust, capacity, routing, or risk creates a meaningful tradeoff.
+The logistics game at `/game` is a global, exception-driven 3PL control-tower simulation. The player is the **General Manager & Lead Dispatcher**: you set policy, staff departments, build carrier relationships, control owned and contracted capacity, protect customer promises, and personally step into dispatch when a decision needs judgment.
+
+The first operating chapter begins with a U.S. recovery incident so the player learns the controls quickly. The company itself is global from the start through the Global 3PL Control Tower.
 
 The browser manual is available at `/game/docs`.
+
+## Core player role
+
+You are not meant to click every shipment forward. You manage the system.
+
+- **General Manager:** cash, staffing, departmental policy, customer trust, upgrades, carrier relationships, contracted capacity, and expansion.
+- **Lead Dispatcher:** exceptions, threatened promises, driver coordination, mode changes, expedites, recovery, and difficult capacity calls.
+- **3PL network builder:** decide what to own, what to contract, which carriers to develop, which international lanes to pursue, and where reputation matters.
+
+Routine work can be delegated. Unsafe, urgent, expensive, or ambiguous conditions escalate to the player.
+
+## Department management
+
+The green routine-operations indicator and **Manage departments** button both open the interactive control tower.
+
+The starting departments are:
+
+1. **Dispatch & Capacity — Diego Ramos**
+   - releases safe loads,
+   - checks available capacity and drivers,
+   - manages routine transportation,
+   - escalates breakdowns, shortages, and difficult routing decisions.
+2. **Production Control — Nia Brooks**
+   - manages inventory readiness,
+   - packaging and quality,
+   - production throughput,
+   - handoffs into transportation.
+3. **Customer Operations — Maya Chen**
+   - sends routine customer updates,
+   - watches promises,
+   - protects relationships,
+   - escalates material service risk.
+4. **Global Trade Desk — Amina Hassan**
+   - international documentation and handoffs,
+   - customs readiness,
+   - overseas partner coordination,
+   - global moves and exceptions.
+
+The player can change delegation, headcount, and operating policy. The first three department toggles map directly to the existing simulation automation flags, so the management screen changes what the game actually automates.
+
+## Fleet and capacity inventory
+
+Capacity is deliberately split into different economic choices:
+
+- owned tractors,
+- owned trailers,
+- contracted truck capacity,
+- contracted vessel/block-space capacity,
+- contracted air capacity,
+- potential carrier capacity that can be contracted later.
+
+Owned equipment provides control but carries maintenance exposure. Contracted equipment provides flexibility but depends on partner availability, rate levels, and relationship quality.
+
+The Fleet & Capacity tab shows status, base, capacity, condition where applicable, and assigned driver or provider. Preventive maintenance costs cash and temporarily removes an asset from service.
+
+## Carrier relationship book
+
+The Carrier Network tab is a playable relationship system rather than a static vendor list.
+
+Each fictional carrier has supported modes, geographic markets, service reputation, relationship score, relative rate level, visible capacity, and a named commercial contact. The player can call a carrier for an availability response or spend cash to contract capacity.
+
+## People, HR, and drivers
+
+The People & HR tab separates leadership from the dispatchable driver pool. Drivers have operating region, endorsements/experience, reliability, available hours, morale, and current availability.
+
+The player can offer a priority load to a driver. Acceptance is not guaranteed; reliability and morale influence the response. The recruiting pipeline lets the player spend cash to add drivers in Japan, India, Kenya, and Colombia, with more markets available as the game expands.
+
+## Global network
+
+The global planning network includes hubs in:
+
+- United States — Los Angeles / Long Beach and Savannah,
+- Colombia — Cartagena,
+- Netherlands — Rotterdam,
+- United Kingdom — Felixstowe,
+- United Arab Emirates — Jebel Ali / Dubai,
+- India — Nhava Sheva / Mumbai,
+- Kenya — Mombasa,
+- China — Shanghai and Shenzhen / Yantian,
+- South Korea — Busan,
+- Japan — Yokohama,
+- Indonesia — Tanjung Priok / Jakarta,
+- Australia — Sydney / Port Botany.
+
+The world map is a commercial planning view. Its arcs show candidate or active lanes, not literal vessel tracks or carrier quotations. The existing operational routing rules still apply to actual movements.
+
+Example global opportunities include China → U.S., Korea → Netherlands, UAE → India, Kenya → U.K., Japan → Australia, Indonesia → UAE, Colombia → U.S., and China → Australia air recovery.
+
+Booking an international lane consumes capacity cost immediately. The contract then advances on game time and posts revenue/trust when its simulated service window completes.
+
+## Game-term explainers
+
+Operational jargon must not be unexplained UI chrome. The game injects an accessible **info icon** next to supported terms and actions, including Management by exception, Challenge lane, Smart Dispatch, Recovery Desk, Network Visibility, Customer promise, Expedite, Air recovery, Intermodal rail, Priority handling, and Facility utilization.
+
+Clicking the icon explains what the term means and how the mechanic affects the game. The complete glossary is also available as a tab in the management console.
+
+### “Challenge lane” specifically
+
+**Challenge lane** is a commercial/network action, not a route edit. The player commits cash and effort against a competitor in a customer corridor. In the game it reduces visible rival strength and builds company experience/trust.
 
 ## Player walkthrough
 
 A new career begins Monday at 08:00 with three movements in progress and one urgent exception.
 
-1. **Take command.** A truck carrying a $420,000 holiday-toy contract has failed near Albuquerque.
-2. **Choose a recovery.** Send a replacement truck, transfer critical cartons through the Memphis air hub, or wait for repair.
-3. **Watch the routed network.** Truck markers follow roads. Rail, air, and ocean use mode-specific corridors.
-4. **Use Next decision.** Routine hours advance until judgment is required.
-5. **Review contracts.** Ready work can be dispatched by truck, rail, or air; shortages can be rushed; customer updates can protect trust.
-6. **Set delegation.** Team & automation determines which routine operations are handled automatically.
-7. **Grow the company.** Deliveries and decisions award experience; cash buys organizational upgrades.
-8. **Continue later.** Device and signed-in account persistence restore the career.
+1. **Take command.** Resolve the initial breakdown.
+2. **Open Manage departments.** Inspect what Dispatch, Production, Customer Operations, and Global Trade are doing.
+3. **Open the Global 3PL Control Tower.** Review carrier relationships, fleet inventory, drivers, and international opportunities.
+4. **Choose what to own or contract.** Preserve cash or build more control.
+5. **Use Next decision.** Routine work advances until judgment is required.
+6. **Coordinate people.** Call carriers, offer loads to drivers, recruit, and maintain equipment.
+7. **Protect customer promises.** Spend recovery money only when the service and relationship justify it.
+8. **Grow globally.** Book international lanes and manage the resulting capital and service exposure.
+9. **Continue later.** Device and signed-in account persistence restore the career, including the management layer.
+
+## Persistence
+
+The game still uses its existing game-progress model:
+
+```text
+localStorage["atlas-game-state"]
+user_metadata.atlas_problem_spaces.logistics_game.progress
+```
+
+The new management state is stored inside the same game object under `management`. It is merged into `window.__atlasGameState` before cloud synchronization, so department, fleet, carrier, driver, and global-contract decisions travel with the signed-in game career.
+
+This is game progress, not the publishing-workspace architecture used by Legal/Economics/Propositions.
 
 ## Route and percentage consistency
 
@@ -26,154 +141,76 @@ A movement can contain multiple legs, such as plant → packaging site → distr
 - The marker is interpolated along the same geometry used for the percentages.
 - Contract production/readiness progress is separate from vehicle journey progress.
 
-This prevents a card from reporting 75% while the marker visually appears only 20% through a different route representation.
-
 ## Hard routing invariants
 
-Every known location in `src/game-routing.js` declares:
-
-- a facility `kind`, such as port, airport, or land facility,
-- a `landmass` identifier.
-
-The routing layer enforces these rules before returning geometry:
+The existing operating-map routing layer still enforces:
 
 1. Trucks cannot connect different landmasses.
 2. Rail cannot connect different landmasses.
 3. Ocean movements must begin and end at ports.
 4. Only ocean or air may bridge different landmasses.
-5. Truck, rail, and ocean fallbacks do not substitute a straight line when a verified route or curated corridor is missing.
-6. An unconfigured route fails visibly instead of drawing a boat over land or a truck across water.
+5. Truck, rail, and ocean fallbacks do not invent straight-line substitutes when a configured route is missing.
+6. An unconfigured route fails visibly instead of drawing an impossible mode path.
 
-These are server-side constraints, not merely visual conventions.
-
-## Route geometry
-
-### Truck
-
-Truck routes request full GeoJSON geometry from OSRM using OpenStreetMap road data. Results are cached. If OSRM is unavailable, only a configured multi-point road corridor may be used; the system does not invent a direct line.
-
-### Rail
-
-Rail uses curated intermodal corridors through major rail hubs. They are operational corridors, not exact track-level geometry. If no corridor exists, the route fails rather than drawing an air-style arc.
-
-### Air
-
-Air uses curved point-to-point flight arcs. Air may connect different landmasses.
-
-### Ocean
-
-Ocean uses curated water corridors between ports. HarborPeak travels between Los Angeles and Savannah through the Pacific, Panama/Central American corridor, Caribbean, and Atlantic approach rather than across the continental United States.
-
-A future international location must declare its landmass and port/airport type before it can participate in route generation.
-
-### Routing endpoints
-
-```text
-GET  /api/game/routes/:mode/:from/:to
-POST /api/game/optimize
-```
-
-Supported modes are `truck`, `rail`, `air`, and `ocean`.
-
-The optimization endpoint validates every leg against the same mode and landmass rules. It cannot optimize an illegal road journey across an ocean.
-
-## Simulation time and ETA
-
-Distance comes from the displayed route. Simulation duration is distance divided by a compressed game speed for that mode. It is scenario time, not a carrier quote.
-
-## Persistence
-
-### Immediate device save
-
-```text
-localStorage["atlas-game-state"]
-```
-
-### Signed-in account save
-
-```text
-user_metadata.atlas_problem_spaces.logistics_game.progress
-```
-
-No logistics-specific table must be installed. The client can import a legacy `game_progress` record when that optional table exists.
-
-The saved state includes contracts, inventory, deadlines, routes, legs, progress, exceptions, cash, trust, service, staff morale, delegation, upgrades, experience, and simulation time.
-
-The simulation does not advance while the page is closed.
+The global management map does not bypass these rules; it is explicitly a planning/opportunity visualization.
 
 ## Optimization problems represented
 
-| Game decision | Optimization structure | Current implementation |
+| Game decision | Operations structure | Current implementation |
 |---|---|---|
-| Truck route | Shortest path | OSRM road routing with explicit fallback corridors |
-| Legal transport mode | Mode-constrained network path | Landmass and facility-type rules eliminate impossible modes |
-| Truck, rail, air, or ocean | Multi-objective path choice | Cost, time, service, and route feasibility |
-| Promise to protect | Weighted scheduling | Deadline, value, readiness, and customer tolerance |
-| Recovery spending | Knapsack / capital allocation | Limited cash competes across expedites, capacity, and upgrades |
-| Production | Capacity planning | Routine throughput with rush actions |
-| Disruptions | Stochastic control | Incidents change state and future outcomes |
-| Multi-leg orders | Network flow / transshipment | Plants, packaging, ports, hubs, and distribution centers |
-| Stop ordering | TSP / vehicle routing | API support exists; ordinary contracts retain required stop order |
-| Consolidated fleet | Capacitated VRP | Planned; a finite shared fleet is not yet implemented |
+| Road route | Shortest path | OSRM road routing with explicit fallbacks |
+| Legal transport mode | Mode-constrained network path | Landmass and facility-type rules |
+| Promise to protect | Weighted scheduling | Deadline, value, readiness, tolerance |
+| Recovery spending | Capital allocation | Cash competes across recovery, staffing, capacity, and upgrades |
+| Production | Capacity planning | Routine throughput plus rush decisions |
+| Departments | Queue/policy design | Delegation, headcount, policy, escalation |
+| Fleet strategy | Own vs. buy/contract | Owned road assets and contracted multimodal capacity |
+| Carrier management | Supplier portfolio | Reputation, relationship, rate, capacity, contact actions |
+| Driver staffing | Workforce allocation | Hours, reliability, morale, recruiting, load offers |
+| Global opportunities | Network portfolio | Lane buy cost, revenue, carrier assignment, service time |
+| Disruptions | Stochastic control | Exceptions change future outcomes |
+| Multi-leg orders | Network flow | Required processing and transshipment nodes |
 
-### Traveling-salesman clarification
+## Current limitations
 
-Most current contracts have a required origin, optional processing stop, and destination. Reordering these would violate the process, so ordinary contracts are not full TSP instances.
-
-A future consolidation scenario with several compatible customers, capacity, and time windows becomes a capacitated vehicle-routing problem.
-
-## Connection to Food Discovery
-
-The Food planner applies the same model at human scale:
-
-- the confirmed group location is an origin,
-- restaurants are destinations,
-- road distance is travel cost,
-- opening hours are time windows,
-- dietary requirements and dislikes are compatibility constraints,
-- diners are stakeholders with different objectives,
-- freshness and allergy questions are operational uncertainty,
-- the recommendation balances fairness and execution cost.
-
-See [`../food/README.md`](../food/README.md).
-
-## Known limitations
-
-1. Rail routes are approximate corridors, not exact railway tracks.
-2. OSRM is an external dependency.
-3. Simulation speeds are compressed.
-4. The game does not advance while closed.
-5. Competitor share is narrative rather than a market simulation.
-6. Vehicles do not yet draw from a finite shared tractor, driver, trailer, vessel, aircraft, or warehouse-door pool.
-7. Orders cannot yet be consolidated onto one vehicle.
-8. The priority recommendation is a transparent heuristic rather than an exact optimizer.
-9. AI advice is review-only.
-10. International ports and airports require explicit location metadata and corridors before use.
+1. Global management arcs are planning visualizations, not live AIS/flight or exact ocean routes.
+2. Carrier names, customers, people, rates, reputation, and opportunities are fictional scenario data.
+3. Rail corridors remain approximate.
+4. Road routing depends on OSRM / OpenStreetMap.
+5. Simulation speeds are compressed.
+6. The game does not advance while closed.
+7. Contracted capacity is represented at a management-inventory level rather than individual real-world vessel/tractor serials.
+8. Driver load acceptance is a game mechanic, not a labor-market model.
+9. Standard orders are not yet consolidated into a full capacitated VRP.
+10. AI advice remains review-only.
 
 ## Test checklist
 
-1. `/api/game/routes/truck/anaheim-pack/dallas-dc` returns road geometry and positive distance.
-2. `/api/game/routes/ocean/la-port/savannah-port` returns an ocean corridor.
-3. `/api/game/routes/ocean/la-port/dallas-dc` returns a validation error.
-4. A test point on another landmass cannot be connected by truck or rail.
-5. Air and port-to-port ocean are the only modes permitted across landmasses.
-6. Missing truck, rail, or ocean fallback corridors do not become straight lines.
-7. A marker remains on its route as progress changes.
-8. Overall progress remains monotonic across multiple legs.
-9. HarborPeak remains on the ocean corridor.
-10. Port incidents attach only to port-connected movements.
-11. Signed-out and signed-in progress restore correctly.
-12. Reset clears local and account progress after confirmation.
+1. `/game` loads `game-management.js` and `game-management.css`.
+2. Clicking the routine-departments indicator opens Departments.
+3. Department toggles update the base game delegation object.
+4. The management layer persists inside `atlas-game-state.management` and cloud game progress.
+5. Fleet shows owned and contracted capacity separately.
+6. Carrier cards expose reputation, relationship, capacity, call, and contract actions.
+7. People & HR supports driver load offers and recruiting.
+8. World Network includes every required international market above.
+9. Booking a global lane consumes cash and creates an active move.
+10. A completed global move posts revenue and trust after enough game hours.
+11. “Challenge lane” and other jargon receives an info icon and explainer.
+12. Existing operating-map routing constraints continue to pass.
 
 ## Source files
 
 ```text
 public/game.html
 public/game-v3.js
+public/game-management.js
+public/game-management.css
 public/game-route-bootstrap.js
 public/progress-v2.js
 public/game-ai.js
 public/game-docs.html
 src/game-routing.js
+test/game-management.test.js
 test/game-routing-constraints.test.js
 ```
