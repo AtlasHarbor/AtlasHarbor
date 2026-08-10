@@ -1,228 +1,233 @@
 # Atlas Harbor Logistics Game
 
-`/game` is a global, exception-driven 3PL control-tower simulation. The player is the **General Manager & Lead Dispatcher**: set policy, staff departments, manage owned, leased, contracted, and partner-accessible capacity, develop carrier relationships, protect customer promises, and step into dispatch when judgment matters.
+`/game` is a global, exception-driven 3PL management simulation. The player is the **General Manager & Lead Dispatcher**: protect customer promises, stay solvent, build a resilient global network, and personally handle exceptions while routine work remains delegated.
 
-The first exception is a U.S. truck breakdown because it is easy to understand as onboarding. The company is **not** U.S.-only. The main map is a live worldwide supply chain from the start.
+The first exception is U.S.-based for onboarding, but the company is worldwide from the start. The main map includes manufacturing, ports, airports, distribution centers, trucks, vessels, and air cargo across North America, Latin America, Europe, the Middle East, Africa, South Asia, East Asia, Southeast Asia, and Australia.
 
-The browser manual is available at `/game/docs`.
+The browser manual is `/game/docs`.
 
-## Core player role
+Detailed mechanics:
 
-You manage a company rather than clicking every shipment forward.
+- [`TIME_AND_MOVEMENT.md`](./TIME_AND_MOVEMENT.md) — authoritative game time, startup replay, route speed and vehicle positioning.
+- [`FINANCE_AND_WORKING_CAPITAL.md`](./FINANCE_AND_WORKING_CAPITAL.md) — Cash, A/R, A/P, payroll, fuel, collections, ledger, history and projections.
+- [`COMMAND_CENTER.md`](./COMMAND_CENTER.md) — contract decision portal, manual route planning and management workflow.
 
-- **General Manager:** cash, payroll, staffing, policy, customer trust, upgrades, carrier relationships, procurement, capacity strategy, and expansion.
-- **Lead Dispatcher:** exceptions, threatened promises, driver coordination, mode changes, expedites, recovery, and difficult capacity calls.
-- **3PL network builder:** choose what to own, what to lease, what to contract, which partner capacity to activate, which carriers to develop, and which lanes to pursue.
+## Player objective
 
-Routine work belongs to departments. Unsafe, urgent, expensive, or ambiguous situations escalate to the player.
+The persistent objective is:
 
-## Management economics invariant
+> **Protect promises. Stay solvent. Build the most resilient global 3PL.**
 
-Management actions are commitments, not magic buttons.
+The game should make the player think like both an operator and a manager. Time, service, capacity, people and money are connected systems.
 
-1. **No instant hiring.** Clicking Request 1 hire creates a staffing-agency requisition. The department headcount does not increase until the lead time finishes.
-2. **Agency hiring costs money.** Atlas Harbor models a standard staffing-agency placement fee of **20% of first-year salary**, plus onboarding/equipment cost. The fee is charged when the requisition is approved.
-3. **People remain a recurring cost.** Department staff and drivers contribute to annual payroll and monthly payroll. Labor cost accrues as game time advances.
-4. **Capacity has access models.** The control tower distinguishes **Owned**, **Leased**, **Contracted/on-hand**, and **Partner accessible** capacity.
-5. **Partner accessible is not inventory.** Carrier capacity remains only potential access until the player reviews and confirms a contract.
-6. **Leases create recurring cost.** Lower upfront cash does not mean free capacity; monthly lease commitments remain visible and accrue with game time.
-7. **Procurement has lead time.** Purchased, leased, and contracted capacity enters a pending pipeline and becomes usable only when its availability time arrives.
-8. **Important actions require review.** Staffing, reductions, delegation changes, policy changes, maintenance, equipment procurement, carrier capacity contracts, driver hires, driver load offers, and lane bookings all show a confirmation/review surface before execution.
-9. **Review must show consequences.** Financial reviews show current cash, upfront commitment, cash after confirmation, recurring payroll or lease cost when relevant, lead time, and the before/after inventory or headcount.
+## Decision workflow
 
-The purpose is to make the player think like a manager: cash today, recurring overhead tomorrow, and capacity availability later are different decisions.
+Tapping a customer contract opens a Dispatch Decision Portal showing:
 
-## Departments
+- true origin,
+- where the freight is now,
+- destination,
+- customer promise clock,
+- current exception/risk,
+- the control-tower recommendation,
+- alternatives and their tradeoffs,
+- a manual From / Via / Destination / Mode route planner.
 
-The green routine-operations indicator and **Manage departments** button open the interactive control tower.
+The recommendation is not decorative. Existing base-game actions such as truck, rail, air, production recovery, expedite, carrier/driver coordination and customer updates remain the underlying operating actions.
 
-1. **Dispatch & Capacity — Diego Ramos** — safe releases, capacity, drivers, transportation exceptions.
-2. **Production Control — Nia Brooks** — inventory readiness, packaging, quality, production, handoffs.
-3. **Customer Operations — Maya Chen** — routine updates, customer promises, relationship risk.
-4. **Global Trade Desk — Amina Hassan** — international handoffs, documentation, customs readiness, overseas partners, and global linehaul.
+## Departments and staffing
 
-Each department card shows, without requiring another click:
+The company has four operating departments:
 
-- active people,
-- pending staffing-agency hires,
-- department annual payroll,
-- salary for the next modeled hire,
-- agency fee rate,
-- expected hiring lead time,
-- operating policy and routine-work queue.
+1. Dispatch & Capacity — Diego Ramos
+2. Production Control — Nia Brooks
+3. Customer Operations — Maya Chen
+4. Global Trade Desk — Amina Hassan
 
-The player can change delegation and operating policy, but both are reviewed before taking effect. Reducing a position includes a severance cost and confirmation.
+Department cards show active headcount, pending hires, payroll, next-hire salary, agency fee, lead time, operating policy and queue.
 
-### Staffing model
+Hiring is a requisition, not an instant increment:
 
-Current modeled role economics are scenario values rather than wage-market claims:
+- modeled staffing-agency placement fee: **20% of first-year salary**,
+- onboarding/equipment cost,
+- role-specific lead time,
+- active headcount changes only when the start time is reached.
 
-- Dispatch & Capacity: $82,000 annual salary per modeled position,
-- Production Control: $76,000,
-- Customer Operations: $70,000,
-- Global Trade: $96,000.
+Drivers use the same delayed hiring principle.
 
-A staffing-agency requisition adds a 20% first-year placement fee plus onboarding cost. Lead times range from roughly 12 to 21 game days depending on role. Approved hires remain in `management.staffingPipeline` until their start time.
+## Capacity model
 
-Drivers use the same principle. Candidate approval starts an onboarding/notice-period pipeline; the driver is not dispatchable immediately.
+Fleet/capacity is intentionally separated into:
 
-## Budget and recurring cost
+- **Owned**
+- **Leased**
+- **Contracted/on hand**
+- **Partner accessible**
 
-The management console displays:
+Partner-accessible capacity is not controlled inventory. Procurement and carrier contracting use a Review Commitment surface with upfront cost, recurring cost where applicable, lead time and before/after capacity.
 
-- current cash,
-- annual people budget,
-- monthly people payroll,
-- monthly asset commitments,
-- pending staffing and capacity requisitions.
+## Working capital
 
-As game time advances, the management runtime accrues labor and recurring lease/asset overhead against company cash. This prevents payroll and leases from being purely decorative UI numbers.
+The main metric strip shows **Cash, A/R and A/P** together.
 
-## Fleet and capacity access
+Core rule:
 
-The Fleet & Capacity tab separates four concepts:
+```text
+Delivery -> A/R
+Customer settlement -> Cash
+Carrier / fuel / payroll / lease obligation -> A/P
+Vendor settlement -> Cash out
+```
 
-- **Owned:** Atlas Harbor controls the asset and carries maintenance exposure.
-- **Leased:** Atlas Harbor controls the asset during the lease and carries recurring monthly cost.
-- **Contracted/on hand:** capacity has been commercially committed and is available to operations, such as truck flex blocks, ocean FEU blocks, or air pallets.
-- **Partner accessible:** a carrier says capacity may be available. It is not controlled until a contract is approved.
+Normal customer terms are modeled at Net 30. A deterministic 3% of new invoices enter a late-payment path. Some late invoices become disputes, where the player can review collections/arbitration actions. Payables have their own schedules, including modeled biweekly payroll, monthly lease/fixed cost, carrier linehaul and road diesel.
 
-The at-a-glance matrix reports these categories separately for:
+The finance console includes:
 
-- trucks,
-- trailers,
-- ocean capacity in FEU,
-- air capacity in pallets.
+- Overview
+- A/R
+- A/P
+- Ledger
+- Calendar
+- Fuel
+- 30/60/90-day Project view
 
-The procurement catalog includes representative choices such as purchasing or leasing tractors, leasing trailers, contracting truck blocks, contracting ocean FEU, and contracting air pallets. Every acquisition has an upfront cost, availability lead time, and recurring cost where applicable.
+See `FINANCE_AND_WORKING_CAPITAL.md` for the exact reconciliation rules and projection equation.
 
-## Carrier network
+## Fuel cost model
 
-Carrier cards show service reputation, relationship strength, markets, commercial contact, and partner-accessible capacity by mode. Calling a carrier is an information/relationship action. Contracting capacity opens a review showing how much partner access will become committed inventory, cash impact, and expected availability.
+Road-diesel inputs are regional and source-labeled. Atlas Harbor uses official public sources where practical and explicit scenario baselines elsewhere.
 
-Carrier names and values are fictional scenario data.
+- U.S.: EIA weekly on-highway diesel; optional free `EIA_API_KEY` enables the official API adapter.
+- U.K.: public DESNZ weekly road-fuel CSV.
+- EU: European Commission Weekly Oil Bulletin is the preferred official reference; the Netherlands remains a labeled scenario baseline until a stable adapter is configured.
+- Other game countries remain labeled scenario baselines rather than pretending to be live.
 
-## Live global supply-chain layer
+Truck fuel is modeled as:
 
-`public/game-global-simulation.js` adds continuously moving multimodal traffic to the main Leaflet operating map.
+```text
+representative route km × 0.34 L/km × regional diesel USD/L
+```
 
-Facility types have operational meaning:
+Road diesel does not substitute for marine bunker or aviation fuel.
 
-- 🏭 manufacturing or processing origin,
-- ⚓ seaport,
-- ✈️ air-cargo gateway,
-- 🏬 distribution center.
+## Authoritative time
 
-Routine flows begin in different phases so the map immediately contains trucks, ships, and aircraft in multiple regions. A shipment changes icon as it changes mode.
+There is one simulation clock.
 
-Starting flows include Shenzhen → Yantian → Los Angeles → Inland Empire, Busan → Rotterdam → Venlo, Mumbai → Jebel Ali → Dubai, Nairobi → Mombasa → Felixstowe → Midlands, Yokohama → Sydney, Jakarta → Dubai, Cartagena → Savannah → Atlanta, and Shanghai air cargo → Sydney.
+At **1×, 15 real minutes = 1 game hour**. Players can also use 2× and 4× or Pause.
 
-Clicking a moving 🚚, 🚢, or ✈️ opens shipment detail with customer, cargo, current leg, carrier, overall cycle progress, current-leg progress, and access to the Global 3PL Control Tower.
+The clock state is persisted in the same career. Returning after time away reconciles elapsed time, and the first map load runs an approximately 18-second replay of the preceding operating window so the player can see ships, planes, trucks and working-capital balances move toward the authoritative current state.
 
-## Route realism boundary
+After the replay:
 
-- Existing U.S. truck operations use Atlas Harbor routing and OSRM/OpenStreetMap where configured.
-- Regional global drayage stays on the relevant landmass and uses representative waypoints.
-- Ocean services use curated maritime corridors rather than one straight segment.
-- Air cargo uses great-circle geometry.
-- Dateline-crossing paths are handled explicitly.
+- live marker position comes from game time,
+- finance settlement comes from game time,
+- staffing/procurement lead times come from game time,
+- pause freezes network progression,
+- 1×/2×/4× change the same underlying clock.
 
-These paths are simulation geometry, not AIS tracks, carrier schedules, quotations, or navigational instructions.
+## Global traffic
 
-## Global markets
+The loaded global runtime is `public/game-global-simulation-v2.js`.
 
-The management network and live simulation cover the United States, Colombia, Netherlands, United Kingdom, United Arab Emirates, India, Kenya, China, South Korea, Japan, Indonesia, and Australia.
+Representative movement speeds are game assumptions:
 
-**Fit global network** returns to the worldwide view. **Focus active chapter** zooms to the immediate U.S. exception. The U.S. chapter is an exception-management scene, not the geographic boundary of the company.
+- truck/drayage: 68 km/h,
+- ocean: 35 km/h,
+- air cargo: 820 km/h.
 
-## Global opportunity management
+The opening network includes multiple aircraft, not a single demonstration plane, including Shanghai→Sydney, Incheon→Los Angeles, Narita→Amsterdam, Dubai→Nairobi and Nairobi→London, alongside ocean and drayage flows.
 
-Bookable commercial opportunities span China → U.S., Korea → Netherlands, UAE ↔ India, Kenya → U.K., Japan → Australia, Indonesia → UAE, Colombia → U.S., and China → Australia air recovery.
+Clicking a global vehicle shows current game time, current leg, route progress, kilometers moved, kilometers remaining, modeled speed and distance moved in the last game hour.
 
-Lane booking is no longer a one-click cash event. The review surface shows carrier, buy cost, revenue if delivered, expected gross spread before overhead, risk, current cash, cash after confirmation, and service time. Revenue posts only after simulated delivery.
+## First-run onboarding
 
-## Game-term explainers
+`game-onboarding-v2.js` supplies the current guided tour.
 
-Operational jargon should not be unexplained UI chrome. Info buttons explain terms such as Management by exception, Challenge lane, Partner access, Lease, and Staffing agency.
+The walkthrough uses a dimmed overlay plus curved white SVG arrows pointing to the actual dashboard areas. It teaches:
 
-**Challenge lane** is a commercial action, not a physical route edit.
+1. overarching objective,
+2. authoritative network time and speed,
+3. customer promise/decision queue,
+4. Cash / A/R / A/P,
+5. live global map,
+6. company/department controls,
+7. how to restart the tour.
 
-## Performance and stability invariant
+The seen version is stored inside:
 
-The first global-management implementation installed a document-wide `MutationObserver`. Leaflet constantly mutates marker and map DOM, so that observer repeatedly rescanned the whole game and could create a runaway CPU/render loop.
+```text
+state.onboarding.dashboardTourVersion
+```
 
-Hard rules:
-
-1. Never observe `document.documentElement` or the full map subtree for game UI decoration.
-2. Do not rebuild Leaflet layers on every marker animation tick.
-3. The live global layer creates facilities/routes once and only updates vehicle marker positions on a bounded interval.
-4. Glossary decoration occurs only at initialization and explicit game render/state events.
-5. The World Network map exists only while its management tab is open.
-6. The retired `public/game-management.js` runtime must not return.
-7. Tests parse loaded custom game modules and reject a whole-document observer.
+Because onboarding state is inside the career, it works offline and syncs across devices for signed-in users.
 
 ## Persistence
 
-Game progress uses:
+The game intentionally supports offline play and account continuity:
 
 ```text
 localStorage["atlas-game-state"]
 user_metadata.atlas_problem_spaces.logistics_game.progress
 ```
 
-Management state remains inside the same game object under `management`, including department counts, staffing pipeline, capacity pipeline, owned/leased/contracted inventory, carrier-access counts, recurring-cost timestamps, drivers, and booked global opportunities.
+`progress-v2.js` applies newest-copy-wins and account isolation. Finance, management, time, tutorial state and physical operations all live inside that same career object.
 
-This game-progress model is separate from the publishing-workspace architecture used by Legal, Economics, Propositions, and other analytical Problem Spaces.
+This is different from Atlas Harbor's analytical publishing workspaces, which have their own database-only rules.
 
-## Operating routing invariants
+## Performance invariants
+
+1. No document-wide `MutationObserver` around Leaflet.
+2. Do not rebuild the map on every vehicle update.
+3. Vehicle pulses may communicate activity but may not add fake distance.
+4. Live global vehicles may not use an independent animation clock.
+5. The legacy base and command-center time intervals must not double-advance the career.
+6. The management world map exists only while its tab is open.
+7. Loaded custom browser modules must parse under `scripts/check-js.js`.
+
+## Routing invariants
 
 1. Trucks cannot connect different landmasses.
 2. Rail cannot connect different landmasses.
 3. Ocean movements must begin and end at ports.
 4. Only ocean or air may bridge different landmasses.
-5. Operating fallbacks do not invent impossible cross-mode paths.
-6. Missing operating routes fail visibly rather than silently drawing impossible geometry.
+5. Missing operating routes fail visibly rather than silently inventing impossible geometry.
+6. Global maritime and air paths are representative simulation corridors, not AIS, flight tracking, carrier schedules or navigation.
 
-## Current limitations
+## Test focus
 
-1. Global moving routes are representative game corridors, not live AIS/flight data.
-2. Customer, carrier, employee, facility, salary, fee, rate, reputation, and opportunity values are fictional scenario data.
-3. Global local-road geometry is representative rather than turn-by-turn routing.
-4. Rail remains approximate.
-5. Road routing in the operating chapter depends on OSRM/OpenStreetMap.
-6. Simulation speeds and hiring/procurement timelines are compressed for gameplay.
-7. The decision simulation does not advance while closed.
-8. Driver acceptance and staffing-market behavior are game mechanics, not labor-market predictions.
-9. AI advice remains review-only.
+Regression tests cover:
 
-## Test checklist
+- global traffic and freeze guardrails,
+- authoritative 1×/2×/4× time,
+- startup replay,
+- staffing agency / delayed hiring,
+- owned/leased/contracted/partner capacity,
+- confirmation surfaces,
+- Cash/A/R/A/P accounting conversions,
+- Net 30 and 3% late-payment behavior,
+- payroll/lease A/P,
+- fuel-source adapters and fallback labeling,
+- projection arithmetic,
+- versioned curved-arrow onboarding,
+- local + account persistence.
 
-1. `/game` loads `game-management-v3.js`, `game-management-v3.css`, and `game-global-simulation.js`.
-2. Older management runtimes are not loaded.
-3. Loaded custom modules parse as JavaScript.
-4. No loaded management module contains a document-wide `MutationObserver`.
-5. Department hiring uses a 20% staffing-agency fee and pending start time rather than instant headcount.
-6. Department cards show active headcount, pending hires, payroll, salary, fee, and lead time.
-7. Fleet cards distinguish owned, leased, contracted, and partner-accessible capacity.
-8. Capacity procurement uses review, cost, recurring commitments, and lead time.
-9. Financial and operational commitments use the shared review/confirmation surface.
-10. Labor and recurring asset commitments accrue against cash as game time advances.
-11. The global map continues showing moving truck, ocean, and air traffic.
-12. Existing operating routing constraints continue to pass.
-
-## Source files
+## Primary files
 
 ```text
 public/game.html
 public/game-v3.js
-public/game-map-bridge.js
+public/game-time-authority.js
+public/game-global-simulation-v2.js
 public/game-management-v3.js
-public/game-management.css
-public/game-management-v3.css
-public/game-global-simulation.js
-public/game-global-simulation.css
+public/game-finance.js
+public/game-onboarding-v2.js
 public/progress-v2.js
-public/game-docs.html
+src/game-routing.js
+src/game-fuel.js
 test/game-management.test.js
-test/game-routing-constraints.test.js
+test/game-network-time.test.js
+test/game-finance.test.js
+test/game-fuel.test.js
+test/game-onboarding-v2.test.js
 ```
