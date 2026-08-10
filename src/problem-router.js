@@ -27,6 +27,7 @@ const directory=path.dirname(fileURLToPath(import.meta.url));
 export function createProblemRouter({service=createProblemSpacesService(),env=process.env}={}){
  const router=express.Router(),legal=createLegalService({env}),storage=createProblemSpaceStorage({env}),economicsService=createEconomicsService({storage,env});
  economicsService.startScheduler();legal.startScheduler();
+ router.get('/runtime-config.js',(_req,res)=>{const configured=Boolean(env.SUPABASE_URL&&env.SUPABASE_PUBLISHABLE_KEY),payload={configured,supabaseUrl:configured?env.SUPABASE_URL:null,supabasePublishableKey:configured?env.SUPABASE_PUBLISHABLE_KEY:null};res.set('Cache-Control','no-store');res.type('application/javascript').send(`window.__ATLAS_CONFIG__=${JSON.stringify(payload)};`)});
  router.use(createGameClientRouter());router.use(createBaseballSearchRouter());router.use(createBaseballProspectRouter({legal}));router.use(createGameRoutingRouter());router.use(createLegalRouter({service:legal}));
  router.get(['/economics','/economics/{*path}'],(_req,res)=>res.sendFile(path.join(directory,'../public/economics.html')));
  router.get(['/prop','/prop/{*path}'],(_req,res)=>res.sendFile(path.join(directory,'../public/prop.html')));
