@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="Run a living global 3PL by exception. Manage departments, people, carriers, fleet capacity, customer promises, and international lanes without drowning in busywork.">
+  <meta name="description" content="Run a living global 3PL by exception. Manage departments, people, carriers, fleet capacity, customer promises, working capital, and international lanes without drowning in busywork.">
   <title>Atlas Harbor Logistics · Run the Global Network</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,8 +15,10 @@
   <link rel="stylesheet" href="/game-management-v3.css">
   <link rel="stylesheet" href="/game-global-simulation.css">
   <link rel="stylesheet" href="/game-network-time.css">
+  <link rel="stylesheet" href="/game-finance.css">
   <link rel="stylesheet" href="/game-interactions.css">
   <link rel="stylesheet" href="/game-command-center.css">
+  <link rel="stylesheet" href="/game-onboarding-v2.css">
 </head>
 <body>
   <header class="control-header">
@@ -36,11 +38,11 @@
   </section>
   <main>
     <section class="game-shell">
-      <aside class="orders-panel"><div class="panel-heading"><div><p class="eyebrow">LIVE CONTRACTS</p><h2>Customer promises</h2></div><button id="generate-issue" class="secondary" title="Optional: inject a simulated disruption to practice exception management.">Run scenario drill</button></div><p class="panel-help">Routine work is delegated. <b>Tap any contract to open its decision portal.</b> You will see where the freight is, where it needs to go, the strongest modeled option, alternative routes or recovery choices, and the tradeoff attached to each decision. Your first exception is U.S.-based, but the map is a live global supply chain with manufacturing, ports, distribution centers, vessels, aircraft, and drayage moving around the world.</p><div id="order-list"></div></aside>
+      <aside class="orders-panel"><div class="panel-heading"><div><p class="eyebrow">LIVE CONTRACTS</p><h2>Customer promises</h2></div><button id="generate-issue" class="secondary" title="Optional: inject a simulated disruption to practice exception management.">Run scenario drill</button></div><p class="panel-help">Routine work is delegated. <b>Tap any contract to open its decision portal.</b> You will see where the freight is, where it needs to go, the strongest modeled option, alternatives, and the tradeoff attached to each decision. Delivery creates receivables rather than magical instant cash, so service decisions also affect working capital.</p><div id="order-list"></div></aside>
       <section class="map-panel" id="map-panel">
         <div class="toolbar"><div class="automation-state"><span class="pulse"></span><strong id="automation-copy">Routine operations running</strong></div><div><button id="fit-map" class="secondary">Fit global network</button><button id="show-all" class="secondary">Open global control tower</button></div></div>
         <div class="map-stage"><div id="map" aria-label="Interactive global logistics operating map"></div><div class="map-scoreboard"><span><b id="routine-count">7</b> routine moves handled</span><span><b id="decision-count">1</b> decision waiting</span></div><div id="map-action-card" class="map-action-card" hidden></div><div id="decision-card" class="decision-card" hidden></div><div id="map-toast" class="map-toast" hidden aria-live="polite"></div><div id="map-alert-stack" class="map-alert-stack"></div></div>
-        <div class="map-help">The map and clock now use the same network time. On load, Atlas Harbor briefly fast-forwards the previous operating window so you can see how ships, aircraft, and trucks arrived at their current positions; after that replay, every marker advances only as game time advances. Click a moving 🚚, 🚢, or ✈️ to see route distance, modeled speed, current-leg progress, and how far it moved in the last game hour.</div>
+        <div class="map-help">The map, game clock, and working-capital ledger use the same network time. On load, Atlas Harbor briefly fast-forwards the previous operating window so you can see how ships, aircraft, trucks, and balances reached their current positions; after that, live movement and settlements advance only with game time.</div>
       </section>
     </section>
     <section class="operations-deck">
@@ -50,9 +52,9 @@
     </section>
   </main>
   <div id="modal" class="modal" hidden><div><button id="modal-close" class="modal-close" aria-label="Close">×</button><p class="eyebrow" id="modal-eyebrow">DECISION</p><h2 id="modal-title">Review action</h2><div id="modal-copy"></div><div class="modal-actions"><button id="confirm-action">Confirm</button><button id="cancel-action" class="secondary">Cancel</button></div></div></div>
-  <div id="intro" class="intro" hidden><div class="intro-card"><p class="eyebrow">YOUR FIRST MORNING AS GM & LEAD DISPATCHER</p><h1>A customer launch is already in trouble.</h1><p>Your first live exception is a U.S. truck breakdown near Albuquerque, but your company is already moving supply chains worldwide: Asian manufacturing, ocean and air linehaul, port handoffs, and destination distribution all continue while you manage by exception.</p><div class="intro-stakes"><span>💰 $420K contract</span><span>⏱ 7 hours left</span><span>🌍 Global network already moving</span></div><button id="take-command">Take command</button><small>Routine shipments are already moving. The company should work without constant clicking; you own the policies and exceptions.</small></div></div>
-  <p class="disclaimer">Fictional operating scenario. Customer, carrier, employee, competitor, salary, rate, speed, and capacity values are scenario estimates for gameplay and do not imply affiliation, live telemetry, or market quotations. International paths are representative game corridors designed to respect mode and geography; they are not live carrier schedules, AIS tracks, quotations, or navigational instructions.</p>
+  <div id="intro" class="intro" hidden><div class="intro-card"><p class="eyebrow">YOUR FIRST MORNING AS GM & LEAD DISPATCHER</p><h1>A customer launch is already in trouble.</h1><p>Your first live exception is a U.S. truck breakdown near Albuquerque, but your company is already moving supply chains worldwide. You are responsible for both the physical network and the company behind it: customer promises, cash, receivables, payables, staffing, carrier commitments, and capacity.</p><div class="intro-stakes"><span>💰 $420K contract</span><span>⏱ 7 hours left</span><span>🌍 Global network already moving</span></div><button id="take-command">Take command</button><small>The opening walkthrough will point out the network clock, decision queue, working capital, live map, and company controls. Your progress works offline and syncs to your account when signed in.</small></div></div>
+  <p class="disclaimer">Fictional operating scenario. Customer, carrier, employee, competitor, salary, rate, speed, regional fuel baseline, and capacity values are scenario estimates for gameplay and do not imply affiliation, live telemetry, or market quotations. Official fuel feeds are labeled when live; other country fuel values are explicitly marked as scenario baselines.</p>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <script src="/game-map-bridge.js"></script><script src="/loading-feedback.js"></script><script src="/game-route-bootstrap.js"></script><script src="/game-time-authority.js"></script><script type="module" src="/game-v3.js"></script><script type="module" src="/progress-v2.js"></script><script type="module" src="/game-ai.js"></script><script type="module" src="/game-management-v3.js"></script><script type="module" src="/game-global-simulation-v2.js"></script><script type="module" src="/account-indicator.js"></script><script type="module" src="/game-interactions.js"></script><script type="module" src="/game-command-center.js"></script>
+  <script src="/game-map-bridge.js"></script><script src="/loading-feedback.js"></script><script src="/game-route-bootstrap.js"></script><script src="/game-time-authority.js"></script><script type="module" src="/game-v3.js"></script><script type="module" src="/progress-v2.js"></script><script type="module" src="/game-ai.js"></script><script type="module" src="/game-management-v3.js"></script><script type="module" src="/game-global-simulation-v2.js"></script><script type="module" src="/game-finance.js"></script><script type="module" src="/account-indicator.js"></script><script type="module" src="/game-interactions.js"></script><script type="module" src="/game-command-center.js"></script><script type="module" src="/game-onboarding-v2.js"></script>
 </body>
 </html>
