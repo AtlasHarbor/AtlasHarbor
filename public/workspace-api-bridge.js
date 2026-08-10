@@ -1,4 +1,5 @@
 const nativeFetch = window.fetch.bind(window);
+window.__atlasNativeFetch = window.__atlasNativeFetch || nativeFetch;
 
 function headerValue(headers, name) {
   if (!headers) return '';
@@ -70,8 +71,6 @@ window.fetch = async function atlasWorkspaceFetch(input, init = {}) {
   }
 
   if (table === 'legal_notes' && method === 'GET' && eq(url.searchParams, 'case_slug')) {
-    // The workspace API already checks and migrates legacy Legal records while
-    // loading workspace_notes, so the browser-side optional legacy query is done.
     return new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 
