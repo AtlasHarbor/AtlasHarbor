@@ -36,13 +36,13 @@ Critical account/workspace requests use the preserved native fetch transport whe
 
 ## Public publication-feed invariant
 
-**Being signed in must never reduce the public publication feed.**
+**Being signed in must never change, reduce, filter, or otherwise alter the public publication list.**
 
-`/api/published-feed` queries public `workspace_notes` and legacy public rows with the anonymous/publishable Supabase role regardless of whether the viewer supplies a bearer token. The bearer token is used only to identify the current viewer and enrich owner-specific controls or recover that viewer's already-shared account-metadata records.
+The list endpoint `GET /api/published-feed` is deliberately session-independent. The browser removes `Authorization` from that exact list request and sends it with omitted credentials. The server independently removes any viewer Authorization header before the published-feed router handles the list. This defense-in-depth rule makes the public list request the same whether a session exists or not.
 
-Do not forward the viewer's bearer token into public table reads. Supabase RLS policies can differ between `anon` and `authenticated`; doing so previously caused signed-out users to see the correct feed while signed-in users saw an empty feed.
+Public `workspace_notes` and legacy public rows are queried with the anonymous/publishable Supabase role. Do not forward the viewer's bearer token into the list request or into public table reads. Supabase RLS policies can differ between `anon` and `authenticated`; doing so previously caused signed-out users to see the correct feed while signed-in users saw an empty feed.
 
-Authenticated feed responses vary by `Authorization` and are not publicly cached as interchangeable with anonymous responses.
+Publication detail is different: `GET /api/published-feed/:token` may use viewer authentication so the server can identify the owner and expose owner-only controls such as discovery visibility. Authentication on a detail request must not alter whether the shared publication itself is readable.
 
 ## Legacy recovery
 
@@ -75,11 +75,11 @@ A later recovery restored direct Supabase access but began that path by fetching
 
 The repair is to check the authenticated account metadata already present in the signed-in session first, preserve a native fetch function before UI wrappers are installed, and provide `/runtime-config.js` as a non-fetch fallback for the public Supabase connection values.
 
-### Regression 3: signed-in public feed changed Supabase RLS role
+### Regression 3: signed-in public feed changed request identity
 
-The publication feed previously forwarded the viewer's bearer token when no server secret was available. That made public table reads run as `authenticated` instead of `anon`. Because RLS policies can differ by role, signed-out users could see the correct feed while signed-in users received zero rows.
+The publication page continued attaching the viewer bearer token to the public list request. Earlier server behavior could then use authenticated Supabase visibility for public rows. Because RLS policies can differ by role, signed-out users could see the correct feed while signed-in users received zero rows.
 
-Public feed table reads are now always anonymous/publishable. Authentication may enrich the result but may never hide public rows.
+Changing only the downstream table headers was not a strong enough invariant because the browser was still making a different request for signed-in users. The final rule is stricter: the list request itself is anonymous in the browser and the server strips Authorization again before list processing. Login state cannot participate in public-list discovery.
 
 ### Regression 4: virtual publication tokens
 
@@ -109,7 +109,8 @@ Hard invariants:
 - never encode the entire publication/article into the share token
 - never write workspace publication state through a browser-direct optional table
 - never require a second publication write merely to update the link panel
-- never let authentication reduce rows in `/published`
+- never let authentication change rows in `/published`
+- never send viewer Authorization on `GET /api/published-feed`
 
 ## Supabase server keys
 
@@ -152,6 +153,7 @@ Do not:
 - use localStorage as workspace-body or projection persistence
 - remove the direct account-database transport merely because `/api/workspaces` is preferred
 - make direct database recovery depend exclusively on `fetch('/api/config')`
+- send a viewer bearer token on the public publication-list request
 - forward a viewer bearer token into public publication table reads
 - create a custom workspace or publication table for one Problem Space
 - write new virtual `workspace_notes` or `legal_notes` records
@@ -177,8 +179,10 @@ Regression tests must verify:
 - no localStorage workspace persistence exists
 - direct-account fallback writes the same `atlas_problem_spaces.publishing_workspace.notes` record
 - public runtime config has a script-based fallback independent of patched `window.fetch`
-- signed-in and signed-out public feeds return the same public rows even when authenticated RLS would differ
+- signed-in and signed-out public feeds return the same public rows
+- `GET /api/published-feed` is stripped of viewer Authorization in both browser and server layers
 - public table reads never inherit the viewer bearer token
+- publication detail may retain authentication for owner controls
 - attachment scope is saved as part of the workspace transaction
 - publication links consume the returned workspace record instead of refetching an optional table
 - opaque Supabase keys are not bearer JWTs
