@@ -46,19 +46,32 @@ The canonical record is stored in the signed-in user's account metadata:
 user_metadata.atlas_problem_spaces.publishing_workspace.notes
 ```
 
-There are two allowed ways to reach that **same** database record:
+There are resilient ways to reach that **same** database record:
 
 1. preferred: `/api/workspaces/:resourceType/:resourceId`,
-2. recovery transport: direct authenticated Supabase Auth user-metadata access with the existing browser session and publishable key.
+2. immediate read recovery: the authenticated Supabase account metadata already present in the signed-in session,
+3. fresh read/write recovery: direct authenticated Supabase Auth metadata access with the existing browser session and publishable key.
 
-The second path is not a local copy and not a second persistence layer. It exists so a temporary Atlas Harbor API routing/deployment failure does not make a user's existing database-backed analysis disappear. If both database transports fail, the UI shows a retry state and does not create a local draft.
+These are not separate workspaces. They represent the same account-database record. The session copy is read-only recovery state from the authenticated Supabase session; new workspace changes are still persisted only to the account database. If all database transports fail and no matching authenticated account record is available, the UI shows a retry state and does not create a local draft.
+
+Direct recovery must not depend exclusively on `fetch('/api/config')`. Atlas Harbor preserves the native browser fetch before loading-feedback wrappers are installed and provides `/runtime-config.js` as a script-tag fallback for the public Supabase URL and publishable key. Those public connection values may be cached; analysis bodies, projections, publication state, and share tokens may not.
+
+### Public-feed invariant
+
+**Logging in must never make `/published` show fewer public stories.**
+
+Public `workspace_notes` and legacy publication rows are queried with the anonymous/publishable Supabase role whether or not the viewer is signed in. A viewer bearer token is used only for viewer identity, ownership controls, and recovery of that viewer's already-shared account records. It is never forwarded into the public table query, because Supabase RLS can return different rows for `anon` and `authenticated` roles.
+
+Authenticated feed responses vary by `Authorization`; they must not be cached as interchangeable with anonymous responses.
 
 Older `workspace_notes`, `legal_notes`, and virtual account-metadata records are read-only recovery inputs. They may be copied into the canonical account workspace, but new workspace writes must not create new virtual/device records.
 
-Two historical regressions are specifically prohibited:
+Historical regressions that are specifically prohibited:
 
-1. treating the direct account-database transport as if it were a conflicting persistence source and removing it; this caused `Failed to fetch` on `/api/workspaces` to make valid database records appear unavailable,
-2. calling browser `rest('workspace_notes')` for publishing; when the optional table was unavailable, an old virtual fallback encoded the entire article into `share_token`, creating huge URLs and sometimes `/published/undefined`.
+1. removing the direct account-database recovery transport, which made valid analysis appear unavailable after `/api/workspaces` returned `Failed to fetch`,
+2. making that recovery path call `/api/config` through the same failing fetch stack before it could reach Supabase,
+3. forwarding a logged-in viewer's bearer token into public publication table reads, which allowed signed-out `/published` to work while signed-in `/published` returned an empty feed under different RLS policies,
+4. calling browser `rest('workspace_notes')` for publishing; when the optional table was unavailable, an old virtual fallback encoded the entire article into `share_token`, creating huge URLs and sometimes `/published/undefined`.
 
 New share tokens are compact random database/server tokens. The public feed may expose short `pub-...` aliases for old malformed tokens so existing publications remain recoverable. The publication-link UI consumes the workspace record returned by Save/Publish instead of doing a second storage lookup.
 
@@ -69,13 +82,13 @@ Supabase `sb_secret_...` keys are opaque API keys, not JWTs. Server code must us
 New Problem Spaces must reuse:
 
 - `createProblemSpaceStorage()` for metadata-backed domain/project records,
-- the shared canonical account workspace and its two database transports,
+- the shared canonical account workspace and its resilient database transports,
 - `workspace.js` for the editor and AI drafting,
 - `workspace-scope-toggle.js` for optional underlying-research attachment state,
 - `/api/published-feed` for public articles,
 - the shared profile, discovery, and publication surfaces.
 
-Do not create localStorage workspace persistence, browser-direct optional-table publishing, or custom persistence paths for one Problem Space.
+Do not create localStorage workspace persistence, browser-direct optional-table publishing, auth-dependent public-feed visibility, or custom persistence paths for one Problem Space.
 
 ## Life Sciences
 
@@ -129,14 +142,16 @@ New Problem Spaces must work after deployment without requiring an ordinary user
 
 1. Workspace content has one writable canonical database record in account metadata.
 2. `/api/workspaces` is the preferred transport for private reads and writes.
-3. Direct authenticated Supabase Auth metadata access is the allowed recovery transport to the same record if `/api/workspaces` is temporarily unreachable.
-4. Shared bootstrap-scale data uses host-account metadata.
-5. User projects, preferences, drafts, and saved decisions use database-backed account metadata.
-6. Workspace content never falls back to a device-only local copy.
-7. Optional legacy/virtual records are recovery inputs, not new write targets.
-8. Collections are bounded and shared writes are serialized.
-9. A dedicated table may replace metadata later without changing the public API.
-10. Missing optional tables must never produce instructions telling an ordinary user to run SQL.
+3. Authenticated session metadata is allowed for immediate read recovery of that same account record.
+4. Direct authenticated Supabase Auth metadata access is the fresh recovery transport if `/api/workspaces` is temporarily unreachable.
+5. Public publication table reads remain anonymous regardless of viewer login state.
+6. Shared bootstrap-scale data uses host-account metadata.
+7. User projects, preferences, drafts, and saved decisions use database-backed account metadata.
+8. Workspace content never falls back to a device-only local copy.
+9. Optional legacy/virtual records are recovery inputs, not new write targets.
+10. Collections are bounded and shared writes are serialized.
+11. A dedicated table may replace metadata later without changing the public API.
+12. Missing optional tables must never produce instructions telling an ordinary user to run SQL.
 
 ## CI dependency rule
 
