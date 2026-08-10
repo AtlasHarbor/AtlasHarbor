@@ -2,13 +2,13 @@
 
 The logistics game at `/game` is a global, exception-driven 3PL control-tower simulation. The player is the **General Manager & Lead Dispatcher**: you set policy, staff departments, build carrier relationships, control owned and contracted capacity, protect customer promises, and personally step into dispatch when a decision needs judgment.
 
-The first operating chapter begins with a U.S. recovery incident so the player learns the controls quickly. The company itself is global from the start through the Global 3PL Control Tower.
+The first live operating chapter begins with a U.S. recovery incident so the player learns the controls quickly, but the main map now opens on the full global network. The U.S. routes are the active chapter; global hubs and lighter opportunity lanes show the wider commercial footprint.
 
 The browser manual is available at `/game/docs`.
 
 ## Core player role
 
-You are not meant to click every shipment forward. You manage the system.
+You manage the system rather than clicking every shipment forward.
 
 - **General Manager:** cash, staffing, departmental policy, customer trust, upgrades, carrier relationships, contracted capacity, and expansion.
 - **Lead Dispatcher:** exceptions, threatened promises, driver coordination, mode changes, expedites, recovery, and difficult capacity calls.
@@ -22,59 +22,24 @@ The green routine-operations indicator and **Manage departments** button both op
 
 The starting departments are:
 
-1. **Dispatch & Capacity — Diego Ramos**
-   - releases safe loads,
-   - checks available capacity and drivers,
-   - manages routine transportation,
-   - escalates breakdowns, shortages, and difficult routing decisions.
-2. **Production Control — Nia Brooks**
-   - manages inventory readiness,
-   - packaging and quality,
-   - production throughput,
-   - handoffs into transportation.
-3. **Customer Operations — Maya Chen**
-   - sends routine customer updates,
-   - watches promises,
-   - protects relationships,
-   - escalates material service risk.
-4. **Global Trade Desk — Amina Hassan**
-   - international documentation and handoffs,
-   - customs readiness,
-   - overseas partner coordination,
-   - global moves and exceptions.
+1. **Dispatch & Capacity — Diego Ramos** — safe releases, capacity, drivers, transportation exceptions.
+2. **Production Control — Nia Brooks** — inventory readiness, packaging, quality, production, handoffs.
+3. **Customer Operations — Maya Chen** — routine updates, promises, relationship risk.
+4. **Global Trade Desk — Amina Hassan** — international handoffs, customs readiness, documentation, overseas partners.
 
-The player can change delegation, headcount, and operating policy. The first three department toggles map directly to the existing simulation automation flags, so the management screen changes what the game actually automates.
+The player can change delegation, headcount, and policy. The first three department switches map directly to the base simulation automation flags.
 
-## Fleet and capacity inventory
+## Fleet, carriers, HR, and drivers
 
-Capacity is deliberately split into different economic choices:
+Capacity is deliberately split between owned assets and contracted capacity. Owned tractors and trailers create control and maintenance exposure; contracted truck, vessel/block-space, and air capacity create flexibility and partner dependence.
 
-- owned tractors,
-- owned trailers,
-- contracted truck capacity,
-- contracted vessel/block-space capacity,
-- contracted air capacity,
-- potential carrier capacity that can be contracted later.
+Carrier relationships include service reputation, relationship strength, geographic markets, visible capacity, rate level, and a commercial contact. The player can call carriers and contract additional capacity.
 
-Owned equipment provides control but carries maintenance exposure. Contracted equipment provides flexibility but depends on partner availability, rate levels, and relationship quality.
-
-The Fleet & Capacity tab shows status, base, capacity, condition where applicable, and assigned driver or provider. Preventive maintenance costs cash and temporarily removes an asset from service.
-
-## Carrier relationship book
-
-The Carrier Network tab is a playable relationship system rather than a static vendor list.
-
-Each fictional carrier has supported modes, geographic markets, service reputation, relationship score, relative rate level, visible capacity, and a named commercial contact. The player can call a carrier for an availability response or spend cash to contract capacity.
-
-## People, HR, and drivers
-
-The People & HR tab separates leadership from the dispatchable driver pool. Drivers have operating region, endorsements/experience, reliability, available hours, morale, and current availability.
-
-The player can offer a priority load to a driver. Acceptance is not guaranteed; reliability and morale influence the response. The recruiting pipeline lets the player spend cash to add drivers in Japan, India, Kenya, and Colombia, with more markets available as the game expands.
+People & HR separates leadership from the dispatchable driver pool. Drivers have a region, reliability, available hours, morale, and current availability. The player can offer priority loads and recruit additional drivers in markets including Japan, India, Kenya, and Colombia.
 
 ## Global network
 
-The global planning network includes hubs in:
+The planning network includes hubs in:
 
 - United States — Los Angeles / Long Beach and Savannah,
 - Colombia — Cartagena,
@@ -89,61 +54,64 @@ The global planning network includes hubs in:
 - Indonesia — Tanjung Priok / Jakarta,
 - Australia — Sydney / Port Botany.
 
-The world map is a commercial planning view. Its arcs show candidate or active lanes, not literal vessel tracks or carrier quotations. The existing operational routing rules still apply to actual movements.
+The **main game map opens globally** and overlays these commercial hubs and opportunity lanes on top of the active operating chapter. **Fit global network** returns to that full view. **Focus active chapter** zooms back to the current U.S. dispatch work. The control-tower World Network tab provides the detailed lane-booking view.
 
-Example global opportunities include China → U.S., Korea → Netherlands, UAE → India, Kenya → U.K., Japan → Australia, Indonesia → UAE, Colombia → U.S., and China → Australia air recovery.
+Planning arcs are not literal vessel tracks or carrier quotations. Existing operational routing rules still apply to actual truck, rail, air, and ocean movements.
 
-Booking an international lane consumes capacity cost immediately. The contract then advances on game time and posts revenue/trust when its simulated service window completes.
+Example opportunities include China → U.S., Korea → Netherlands, UAE → India, Kenya → U.K., Japan → Australia, Indonesia → UAE, Colombia → U.S., and China → Australia air recovery.
+
+## Performance and stability invariant
+
+The global management expansion originally installed a document-wide `MutationObserver` that rescanned headings, buttons, and other UI every time any child node changed. Leaflet continuously mutates DOM nodes for markers and map layers, so the observer could repeatedly scan the entire game while the map was updating. On some machines this created a runaway CPU/render loop and could freeze the browser or computer.
+
+That runtime has been retired.
+
+Hard rules:
+
+1. **Do not observe `document.documentElement` or the whole game subtree for glossary/UI decoration.**
+2. Glossary info icons are decorated only at initialization and after explicit Atlas Harbor game state/render events.
+3. Management refreshes are batched with a short timer instead of responding to every DOM mutation.
+4. The global planning overlay uses one dedicated Leaflet layer group; it is replaced as a unit instead of leaking map layers.
+5. The main Leaflet map is exposed through `game-map-bridge.js` only so the global overlay can reuse the existing map rather than creating a second always-on map.
+6. The separate World Network map is created only while that management tab is open and is removed when the dialog closes.
+7. The retired `public/game-management.js` observer-heavy runtime must not be reintroduced.
+
+Regression tests parse the stable browser modules and explicitly reject a whole-document `MutationObserver` in the loaded management runtime.
 
 ## Game-term explainers
 
-Operational jargon must not be unexplained UI chrome. The game injects an accessible **info icon** next to supported terms and actions, including Management by exception, Challenge lane, Smart Dispatch, Recovery Desk, Network Visibility, Customer promise, Expedite, Air recovery, Intermodal rail, Priority handling, and Facility utilization.
+Operational jargon should not be unexplained UI chrome. Accessible info buttons explain terms including Management by exception, Challenge lane, Smart Dispatch, Recovery Desk, Network Visibility, Customer promise, Expedite, Air recovery, Intermodal rail, Priority handling, and Facility utilization.
 
-Clicking the icon explains what the term means and how the mechanic affects the game. The complete glossary is also available as a tab in the management console.
-
-### “Challenge lane” specifically
-
-**Challenge lane** is a commercial/network action, not a route edit. The player commits cash and effort against a competitor in a customer corridor. In the game it reduces visible rival strength and builds company experience/trust.
+**Challenge lane** is a commercial action, not a physical reroute: the player spends cash and effort to compete for business in a corridor where a rival is strong.
 
 ## Player walkthrough
 
-A new career begins Monday at 08:00 with three movements in progress and one urgent exception.
-
-1. **Take command.** Resolve the initial breakdown.
-2. **Open Manage departments.** Inspect what Dispatch, Production, Customer Operations, and Global Trade are doing.
-3. **Open the Global 3PL Control Tower.** Review carrier relationships, fleet inventory, drivers, and international opportunities.
-4. **Choose what to own or contract.** Preserve cash or build more control.
-5. **Use Next decision.** Routine work advances until judgment is required.
-6. **Coordinate people.** Call carriers, offer loads to drivers, recruit, and maintain equipment.
-7. **Protect customer promises.** Spend recovery money only when the service and relationship justify it.
-8. **Grow globally.** Book international lanes and manage the resulting capital and service exposure.
-9. **Continue later.** Device and signed-in account persistence restore the career, including the management layer.
+1. **Take command.** Resolve the initial U.S. breakdown.
+2. **Look at the global map.** See the active U.S. chapter in the context of the wider 3PL network.
+3. **Open Manage departments.** Inspect Dispatch, Production, Customer Operations, and Global Trade.
+4. **Review Fleet & Capacity.** Decide what to own and what to contract.
+5. **Work the Carrier Network.** Call partners and reserve capacity.
+6. **Manage People & HR.** Offer loads and recruit where the network needs coverage.
+7. **Use Next decision.** Routine work advances until judgment is required.
+8. **Book global opportunities.** Take international lanes when the cash, service, and carrier relationship make sense.
+9. **Protect customer promises.** Spend recovery money selectively.
 
 ## Persistence
 
-The game still uses its existing game-progress model:
+The game uses its existing progress model:
 
 ```text
 localStorage["atlas-game-state"]
 user_metadata.atlas_problem_spaces.logistics_game.progress
 ```
 
-The new management state is stored inside the same game object under `management`. It is merged into `window.__atlasGameState` before cloud synchronization, so department, fleet, carrier, driver, and global-contract decisions travel with the signed-in game career.
+Management state is stored inside the same game object under `management`, so department, fleet, carrier, driver, and global-contract decisions travel with the signed-in game career.
 
-This is game progress, not the publishing-workspace architecture used by Legal/Economics/Propositions.
+This game-progress storage is separate from the publishing-workspace architecture used by Legal, Economics, Propositions, and other analytical Problem Spaces.
 
-## Route and percentage consistency
+## Routing invariants
 
-A movement can contain multiple legs, such as plant → packaging site → distribution center.
-
-- **Current-leg progress** is distance completed on the active leg.
-- **Overall progress** is cumulative routed distance completed across all legs divided by total routed distance.
-- The marker is interpolated along the same geometry used for the percentages.
-- Contract production/readiness progress is separate from vehicle journey progress.
-
-## Hard routing invariants
-
-The existing operating-map routing layer still enforces:
+The operating routing layer continues to enforce:
 
 1. Trucks cannot connect different landmasses.
 2. Rail cannot connect different landmasses.
@@ -152,9 +120,9 @@ The existing operating-map routing layer still enforces:
 5. Truck, rail, and ocean fallbacks do not invent straight-line substitutes when a configured route is missing.
 6. An unconfigured route fails visibly instead of drawing an impossible mode path.
 
-The global management map does not bypass these rules; it is explicitly a planning/opportunity visualization.
+The global planning overlay does not bypass those rules.
 
-## Optimization problems represented
+## Optimization structures represented
 
 | Game decision | Operations structure | Current implementation |
 |---|---|---|
@@ -173,38 +141,42 @@ The global management map does not bypass these rules; it is explicitly a planni
 
 ## Current limitations
 
-1. Global management arcs are planning visualizations, not live AIS/flight or exact ocean routes.
+1. Global planning arcs are not live AIS/flight paths or exact ocean routes.
 2. Carrier names, customers, people, rates, reputation, and opportunities are fictional scenario data.
 3. Rail corridors remain approximate.
-4. Road routing depends on OSRM / OpenStreetMap.
+4. Road routing depends on OSRM/OpenStreetMap.
 5. Simulation speeds are compressed.
 6. The game does not advance while closed.
-7. Contracted capacity is represented at a management-inventory level rather than individual real-world vessel/tractor serials.
+7. Contracted capacity is represented at a management-inventory level rather than individual real-world serials.
 8. Driver load acceptance is a game mechanic, not a labor-market model.
 9. Standard orders are not yet consolidated into a full capacitated VRP.
 10. AI advice remains review-only.
 
 ## Test checklist
 
-1. `/game` loads `game-management.js` and `game-management.css`.
-2. Clicking the routine-departments indicator opens Departments.
-3. Department toggles update the base game delegation object.
-4. The management layer persists inside `atlas-game-state.management` and cloud game progress.
-5. Fleet shows owned and contracted capacity separately.
-6. Carrier cards expose reputation, relationship, capacity, call, and contract actions.
-7. People & HR supports driver load offers and recruiting.
-8. World Network includes every required international market above.
-9. Booking a global lane consumes cash and creates an active move.
-10. A completed global move posts revenue and trust after enough game hours.
-11. “Challenge lane” and other jargon receives an info icon and explainer.
-12. Existing operating-map routing constraints continue to pass.
+1. `/game` loads `game-map-bridge.js`, `game-management-v2.js`, and `game-management.css`.
+2. The retired `game-management.js` runtime is not loaded.
+3. The stable management module parses as JavaScript and contains no document-wide `MutationObserver`.
+4. The main map opens on the global network and exposes a Focus active chapter control.
+5. Clicking the routine-departments indicator opens Departments.
+6. Department toggles update base-game delegation.
+7. Management persists inside `atlas-game-state.management` and signed-in account game progress.
+8. Fleet shows owned and contracted capacity separately.
+9. Carrier cards expose reputation, relationship, call, and contract actions.
+10. People & HR supports driver load offers and recruiting.
+11. World Network includes every required international market above.
+12. Booking a global lane consumes cash and creates an active move.
+13. Completed global moves post revenue/trust after enough game hours.
+14. “Challenge lane” and other jargon receive an info explainer.
+15. Existing operating-map routing constraints continue to pass.
 
 ## Source files
 
 ```text
 public/game.html
 public/game-v3.js
-public/game-management.js
+public/game-map-bridge.js
+public/game-management-v2.js
 public/game-management.css
 public/game-route-bootstrap.js
 public/progress-v2.js
