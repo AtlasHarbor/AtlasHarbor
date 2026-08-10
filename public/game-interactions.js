@@ -31,8 +31,11 @@ function pulse(element){
  element.classList.add('game-action-ack');
  setTimeout(()=>element.classList.remove('game-action-ack'),420);
 }
-function markSelectedOrder(card){
+function clearSelectedOrders(){
  $$('.order-card.selected').forEach(item=>{item.classList.remove('selected');item.removeAttribute('aria-current')});
+}
+function markSelectedOrder(card){
+ clearSelectedOrders();
  card.classList.add('selected');
  card.setAttribute('aria-current','true');
 }
@@ -103,10 +106,15 @@ document.addEventListener('click',event=>{
  const orderCard=event.target.closest('.order-card[data-order]');
  if(orderCard){pulse(orderCard);revealContractDetails(orderCard);return}
  const fleet=event.target.closest('.fleet-card[data-move]');
- if(fleet){pulse(fleet);acknowledge('Opening movement details…');return}
+ if(fleet){clearSelectedOrders();pulse(fleet);acknowledge('Opening movement details…');return}
  const button=event.target.closest('button');
  if(!button||button.disabled)return;
  pulse(button);
+ if(button.matches('.map-action-close')){
+  clearSelectedOrders();
+  acknowledge('Contract details closed.');
+  return;
+ }
  const text=feedbackFor(button);
  if(text)acknowledge(text);
 },{capture:false});
