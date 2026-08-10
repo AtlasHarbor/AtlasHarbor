@@ -4,6 +4,8 @@ import fs from 'node:fs';
 
 const read=path=>fs.readFileSync(new URL(path,import.meta.url),'utf8');
 
+test('stable browser game modules parse as JavaScript',()=>{for(const path of['../public/game-map-bridge.js','../public/game-management-v2.js'])assert.doesNotThrow(()=>new Function(read(path)),`${path} must parse`)});
+
 test('game loads only the stable global 3PL management runtime',()=>{const html=read('../public/game.html');assert.match(html,/game-management\.css/);assert.match(html,/game-map-bridge\.js/);assert.match(html,/game-management-v2\.js/);assert.doesNotMatch(html,/src="\/game-management\.js"/);assert.match(html,/General Manager & Lead Dispatcher/);assert.match(html,/Global 3PL Control Tower/i)});
 
 test('stable management runtime never observes the whole document',()=>{const js=read('../public/game-management-v2.js');assert.doesNotMatch(js,/new MutationObserver/);assert.doesNotMatch(js,/document\.documentElement[\s\S]*subtree:true/);assert.match(js,/scheduleRefresh/);assert.match(js,/setTimeout\(\(\)=>\{renderDeck/)});
