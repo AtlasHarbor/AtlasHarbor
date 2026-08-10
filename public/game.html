@@ -3,14 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="Run a living logistics network by exception. Protect customer promises, coordinate people and carriers, and grow a global 3PL without drowning in busywork.">
-  <title>Atlas Harbor Logistics · Run the Network</title>
+  <meta name="description" content="Run a living global 3PL by exception. Manage departments, people, carriers, fleet capacity, customer promises, and international lanes without drowning in busywork.">
+  <title>Atlas Harbor Logistics · Run the Global Network</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
   <link rel="stylesheet" href="/game.css">
   <link rel="stylesheet" href="/game-v3.css">
+  <link rel="stylesheet" href="/game-management.css">
 </head>
 <body>
   <header class="control-header">
@@ -26,27 +27,27 @@
   <section class="briefing-strip">
     <div><p class="eyebrow">MANAGEMENT BY EXCEPTION</p><strong id="chapter-title">Chapter 1 · Win the first customer</strong><span id="objective-copy">Resolve the urgent breakdown and deliver three priority orders.</span></div>
     <div class="objective-progress"><span id="objective-label">0 / 3 deliveries</span><div><i id="objective-bar" style="width:0%"></i></div></div>
-    <button id="open-team" class="secondary">Team & automation</button>
+    <button id="open-team" class="secondary">Manage departments</button>
   </section>
   <main>
     <section class="game-shell">
-      <aside class="orders-panel"><div class="panel-heading"><div><p class="eyebrow">LIVE CONTRACTS</p><h2>Customer promises</h2></div><button id="generate-issue" class="secondary">Create disruption</button></div><p class="panel-help">Routine work is delegated. Open a contract only when you want to change its plan.</p><div id="order-list"></div></aside>
+      <aside class="orders-panel"><div class="panel-heading"><div><p class="eyebrow">LIVE CONTRACTS</p><h2>Customer promises</h2></div><button id="generate-issue" class="secondary">Create disruption</button></div><p class="panel-help">Routine work is delegated. Open a contract only when you want to change its plan. The first operating chapter starts in the U.S.; your global carrier and lane network is managed from the control tower below.</p><div id="order-list"></div></aside>
       <section class="map-panel" id="map-panel">
-        <div class="toolbar"><div class="automation-state"><span class="pulse"></span><strong id="automation-copy">Routine operations running</strong></div><div><button id="fit-map" class="secondary">Fit network</button><button id="show-all" class="secondary">Show every route</button></div></div>
+        <div class="toolbar"><div class="automation-state"><span class="pulse"></span><strong id="automation-copy">Routine operations running</strong></div><div><button id="fit-map" class="secondary">Fit active chapter</button><button id="show-all" class="secondary">Show every active route</button></div></div>
         <div class="map-stage"><div id="map" aria-label="Interactive logistics operating map"></div><div class="map-scoreboard"><span><b id="routine-count">7</b> routine moves handled</span><span><b id="decision-count">1</b> decision waiting</span></div><div id="map-action-card" class="map-action-card" hidden></div><div id="decision-card" class="decision-card" hidden></div><div id="map-toast" class="map-toast" hidden aria-live="polite"></div><div id="map-alert-stack" class="map-alert-stack"></div></div>
-        <div class="map-help">Truck routes follow the road network. Rail, air, and ocean movements use mode-specific corridors. The displayed percentage is distance traveled along the complete routed journey.</div>
+        <div class="map-help">This map shows the current operating chapter. Truck routes follow the road network; rail, air, and ocean use mode-specific corridors. Open the Global 3PL Control Tower for international hubs, carrier capacity, and lanes across Asia, Europe, the Middle East, Africa, Oceania, Latin America, and North America.</div>
       </section>
     </section>
     <section class="operations-deck">
       <div class="deck-heading"><div><p class="eyebrow">ACTIVE NETWORK</p><h2>Movements in progress</h2></div><p>Progress continues while routine operations are delegated. Each card shows overall journey progress and current-leg progress separately.</p></div><div id="fleet-list" class="fleet-list"></div>
       <div class="lower-grid"><section><div class="deck-heading"><div><p class="eyebrow">PEOPLE</p><h2>Your control-tower team</h2></div></div><div id="staff-list" class="staff-list"></div></section><section><div class="deck-heading"><div><p class="eyebrow">COMPETITION</p><h2>Market pressure</h2></div></div><div id="rival-list" class="rival-list"></div></section><section><div class="deck-heading"><div><p class="eyebrow">OPERATIONS FEED</p><h2>Your story so far</h2></div></div><div id="event-feed" class="event-feed" aria-live="polite"></div></section></div>
-      <div class="lower-grid utility-grid"><section><div class="deck-heading"><div><p class="eyebrow">UPGRADES</p><h2>Build a smarter company</h2></div></div><div id="upgrade-list" class="upgrade-list"></div></section><section class="ai-planner" id="advisor-host"><p class="eyebrow">DECISION SUPPORT</p><h2>Plan the network</h2><p>Generate a weighted dispatch recommendation, or describe an unusual recovery move for review.</p><button id="optimize-network" type="button" class="secondary">Optimize current priorities</button><textarea id="plan-input" rows="4" placeholder="Example: protect the Target launch, use air only for the late cartons, and have Maya call the buyer."></textarea><button id="draft-plan">Draft a reviewable plan</button><div id="plan-review"></div></section><section class="reset-zone"><div><p class="eyebrow">SIMULATION</p><h2>Need a clean start?</h2><p>Reset only this logistics career. Your account and other Atlas Harbor work remain untouched.</p></div><button id="reset-game" class="danger">Reset my game</button></section></div>
+      <div class="lower-grid utility-grid"><section><div class="deck-heading"><div><p class="eyebrow">UPGRADES</p><h2>Build a smarter company</h2></div></div><div id="upgrade-list" class="upgrade-list"></div></section><section class="ai-planner" id="advisor-host"><p class="eyebrow">DECISION SUPPORT</p><h2>Plan the network</h2><p>Generate a weighted dispatch recommendation, or describe an unusual recovery move for review.</p><button id="optimize-network" type="button" class="secondary">Optimize current priorities</button><textarea id="plan-input" rows="4" placeholder="Example: protect the launch, use air only for the late cartons, have Maya call the buyer, and ask Diego for alternate capacity."></textarea><button id="draft-plan">Draft a reviewable plan</button><div id="plan-review"></div></section><section class="reset-zone"><div><p class="eyebrow">SIMULATION</p><h2>Need a clean start?</h2><p>Reset only this logistics career. Your account and other Atlas Harbor work remain untouched.</p></div><button id="reset-game" class="danger">Reset my game</button></section></div>
     </section>
   </main>
   <div id="modal" class="modal" hidden><div><button id="modal-close" class="modal-close" aria-label="Close">×</button><p class="eyebrow" id="modal-eyebrow">DECISION</p><h2 id="modal-title">Review action</h2><div id="modal-copy"></div><div class="modal-actions"><button id="confirm-action">Confirm</button><button id="cancel-action" class="secondary">Cancel</button></div></div></div>
-  <div id="intro" class="intro" hidden><div class="intro-card"><p class="eyebrow">YOUR FIRST MORNING</p><h1>A holiday launch is already in trouble.</h1><p>A truck carrying licensed toys to Walmart has broken down near Albuquerque. The customer promise is in seven hours, your new team is watching, and a competitor is offering to take the lane.</p><div class="intro-stakes"><span>💰 $420K contract</span><span>⏱ 7 hours left</span><span>❤️ First customer trust</span></div><button id="take-command">Take command</button><small>Routine shipments are already moving. You only step in when judgment matters.</small></div></div>
-  <p class="disclaimer">Fictional operating scenario. Customer and competitor names are fictional archetypes and do not imply affiliation.</p>
+  <div id="intro" class="intro" hidden><div class="intro-card"><p class="eyebrow">YOUR FIRST MORNING AS GM & LEAD DISPATCHER</p><h1>A customer launch is already in trouble.</h1><p>Your first live exception is a U.S. truck breakdown near Albuquerque, but you are building a global 3PL. Your job is to run departments, people, carriers, contracted capacity, and international lanes—and personally step into dispatch when judgment matters.</p><div class="intro-stakes"><span>💰 $420K contract</span><span>⏱ 7 hours left</span><span>🌍 Global network available</span></div><button id="take-command">Take command</button><small>Routine shipments are already moving. The company should work without constant clicking; you own the policies and exceptions.</small></div></div>
+  <p class="disclaimer">Fictional operating scenario. Customer, carrier, employee, and competitor names are fictional archetypes and do not imply affiliation. Global network arcs are game planning views rather than literal carrier routes or quotations.</p>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <script src="/loading-feedback.js"></script><script src="/game-route-bootstrap.js"></script><script type="module" src="/game-v3.js"></script><script type="module" src="/progress-v2.js"></script><script type="module" src="/game-ai.js"></script><script type="module" src="/account-indicator.js"></script>
+  <script src="/loading-feedback.js"></script><script src="/game-route-bootstrap.js"></script><script type="module" src="/game-v3.js"></script><script type="module" src="/progress-v2.js"></script><script type="module" src="/game-ai.js"></script><script type="module" src="/game-management.js"></script><script type="module" src="/account-indicator.js"></script>
 </body>
 </html>
