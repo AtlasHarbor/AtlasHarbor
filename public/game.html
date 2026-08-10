@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="/game-management.css">
   <link rel="stylesheet" href="/game-management-v3.css">
   <link rel="stylesheet" href="/game-global-simulation.css">
+  <link rel="stylesheet" href="/game-interactions.css">
 </head>
 <body>
   <header class="control-header">
@@ -33,7 +34,7 @@
   </section>
   <main>
     <section class="game-shell">
-      <aside class="orders-panel"><div class="panel-heading"><div><p class="eyebrow">LIVE CONTRACTS</p><h2>Customer promises</h2></div><button id="generate-issue" class="secondary">Create disruption</button></div><p class="panel-help">Routine work is delegated. Open a contract only when you want to change its plan. Your first exception is U.S.-based, but the map is a live global supply chain with manufacturing, ports, distribution centers, vessels, aircraft, and drayage moving around the world.</p><div id="order-list"></div></aside>
+      <aside class="orders-panel"><div class="panel-heading"><div><p class="eyebrow">LIVE CONTRACTS</p><h2>Customer promises</h2></div><button id="generate-issue" class="secondary" title="Optional: inject a simulated disruption to practice exception management.">Run scenario drill</button></div><p class="panel-help">Routine work is delegated. <b>Tap any contract to open its details and actions.</b> On mobile, the action sheet opens immediately so you never have to hunt for what changed. Your first exception is U.S.-based, but the map is a live global supply chain with manufacturing, ports, distribution centers, vessels, aircraft, and drayage moving around the world.</p><div id="order-list"></div></aside>
       <section class="map-panel" id="map-panel">
         <div class="toolbar"><div class="automation-state"><span class="pulse"></span><strong id="automation-copy">Routine operations running</strong></div><div><button id="fit-map" class="secondary">Fit global network</button><button id="show-all" class="secondary">Open global control tower</button></div></div>
         <div class="map-stage"><div id="map" aria-label="Interactive global logistics operating map"></div><div class="map-scoreboard"><span><b id="routine-count">7</b> routine moves handled</span><span><b id="decision-count">1</b> decision waiting</span></div><div id="map-action-card" class="map-action-card" hidden></div><div id="decision-card" class="decision-card" hidden></div><div id="map-toast" class="map-toast" hidden aria-live="polite"></div><div id="map-alert-stack" class="map-alert-stack"></div></div>
@@ -50,6 +51,6 @@
   <div id="intro" class="intro" hidden><div class="intro-card"><p class="eyebrow">YOUR FIRST MORNING AS GM & LEAD DISPATCHER</p><h1>A customer launch is already in trouble.</h1><p>Your first live exception is a U.S. truck breakdown near Albuquerque, but your company is already moving supply chains worldwide: Asian manufacturing, ocean and air linehaul, port handoffs, and destination distribution all continue while you manage by exception.</p><div class="intro-stakes"><span>💰 $420K contract</span><span>⏱ 7 hours left</span><span>🌍 Global network already moving</span></div><button id="take-command">Take command</button><small>Routine shipments are already moving. The company should work without constant clicking; you own the policies and exceptions.</small></div></div>
   <p class="disclaimer">Fictional operating scenario. Customer, carrier, employee, competitor, salary, rate, and capacity values are scenario estimates for gameplay and do not imply affiliation or market quotations. International paths are representative game corridors designed to respect mode and geography; they are not live carrier schedules, AIS tracks, quotations, or navigational instructions.</p>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <script src="/game-map-bridge.js"></script><script src="/loading-feedback.js"></script><script src="/game-route-bootstrap.js"></script><script type="module" src="/game-v3.js"></script><script type="module" src="/progress-v2.js"></script><script type="module" src="/game-ai.js"></script><script type="module" src="/game-management-v3.js"></script><script type="module" src="/game-global-simulation.js"></script><script type="module" src="/account-indicator.js"></script>
+  <script src="/game-map-bridge.js"></script><script src="/loading-feedback.js"></script><script src="/game-route-bootstrap.js"></script><script type="module" src="/game-v3.js"></script><script type="module" src="/progress-v2.js"></script><script type="module" src="/game-ai.js"></script><script type="module" src="/game-management-v3.js"></script><script type="module" src="/game-global-simulation.js"></script><script type="module" src="/account-indicator.js"></script><script type="module" src="/game-interactions.js"></script>
 </body>
 </html>
