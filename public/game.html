@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="/game-management.css">
   <link rel="stylesheet" href="/game-management-v3.css">
   <link rel="stylesheet" href="/game-global-simulation.css">
+  <link rel="stylesheet" href="/game-network-time.css">
   <link rel="stylesheet" href="/game-interactions.css">
   <link rel="stylesheet" href="/game-command-center.css">
 </head>
@@ -39,7 +40,7 @@
       <section class="map-panel" id="map-panel">
         <div class="toolbar"><div class="automation-state"><span class="pulse"></span><strong id="automation-copy">Routine operations running</strong></div><div><button id="fit-map" class="secondary">Fit global network</button><button id="show-all" class="secondary">Open global control tower</button></div></div>
         <div class="map-stage"><div id="map" aria-label="Interactive global logistics operating map"></div><div class="map-scoreboard"><span><b id="routine-count">7</b> routine moves handled</span><span><b id="decision-count">1</b> decision waiting</span></div><div id="map-action-card" class="map-action-card" hidden></div><div id="decision-card" class="decision-card" hidden></div><div id="map-toast" class="map-toast" hidden aria-live="polite"></div><div id="map-alert-stack" class="map-alert-stack"></div></div>
-        <div class="map-help">This is your live global 3PL network. Factories feed ports and airports by truck; ships and aircraft run international corridors; destination drayage moves freight into distribution centers. Click a moving 🚚, 🚢, or ✈️ to inspect the customer, cargo, current leg, carrier, and progress. Use Focus active chapter when you want to zoom into the current U.S. exception.</div>
+        <div class="map-help">The map and clock now use the same network time. On load, Atlas Harbor briefly fast-forwards the previous operating window so you can see how ships, aircraft, and trucks arrived at their current positions; after that replay, every marker advances only as game time advances. Click a moving 🚚, 🚢, or ✈️ to see route distance, modeled speed, current-leg progress, and how far it moved in the last game hour.</div>
       </section>
     </section>
     <section class="operations-deck">
@@ -50,8 +51,8 @@
   </main>
   <div id="modal" class="modal" hidden><div><button id="modal-close" class="modal-close" aria-label="Close">×</button><p class="eyebrow" id="modal-eyebrow">DECISION</p><h2 id="modal-title">Review action</h2><div id="modal-copy"></div><div class="modal-actions"><button id="confirm-action">Confirm</button><button id="cancel-action" class="secondary">Cancel</button></div></div></div>
   <div id="intro" class="intro" hidden><div class="intro-card"><p class="eyebrow">YOUR FIRST MORNING AS GM & LEAD DISPATCHER</p><h1>A customer launch is already in trouble.</h1><p>Your first live exception is a U.S. truck breakdown near Albuquerque, but your company is already moving supply chains worldwide: Asian manufacturing, ocean and air linehaul, port handoffs, and destination distribution all continue while you manage by exception.</p><div class="intro-stakes"><span>💰 $420K contract</span><span>⏱ 7 hours left</span><span>🌍 Global network already moving</span></div><button id="take-command">Take command</button><small>Routine shipments are already moving. The company should work without constant clicking; you own the policies and exceptions.</small></div></div>
-  <p class="disclaimer">Fictional operating scenario. Customer, carrier, employee, competitor, salary, rate, and capacity values are scenario estimates for gameplay and do not imply affiliation or market quotations. International paths are representative game corridors designed to respect mode and geography; they are not live carrier schedules, AIS tracks, quotations, or navigational instructions.</p>
+  <p class="disclaimer">Fictional operating scenario. Customer, carrier, employee, competitor, salary, rate, speed, and capacity values are scenario estimates for gameplay and do not imply affiliation, live telemetry, or market quotations. International paths are representative game corridors designed to respect mode and geography; they are not live carrier schedules, AIS tracks, quotations, or navigational instructions.</p>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <script src="/game-map-bridge.js"></script><script src="/loading-feedback.js"></script><script src="/game-route-bootstrap.js"></script><script type="module" src="/game-v3.js"></script><script type="module" src="/progress-v2.js"></script><script type="module" src="/game-ai.js"></script><script type="module" src="/game-management-v3.js"></script><script type="module" src="/game-global-simulation.js"></script><script type="module" src="/account-indicator.js"></script><script type="module" src="/game-interactions.js"></script><script type="module" src="/game-command-center.js"></script>
+  <script src="/game-map-bridge.js"></script><script src="/loading-feedback.js"></script><script src="/game-route-bootstrap.js"></script><script src="/game-time-authority.js"></script><script type="module" src="/game-v3.js"></script><script type="module" src="/progress-v2.js"></script><script type="module" src="/game-ai.js"></script><script type="module" src="/game-management-v3.js"></script><script type="module" src="/game-global-simulation-v2.js"></script><script type="module" src="/account-indicator.js"></script><script type="module" src="/game-interactions.js"></script><script type="module" src="/game-command-center.js"></script>
 </body>
 </html>
