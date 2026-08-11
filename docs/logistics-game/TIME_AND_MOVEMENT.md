@@ -74,11 +74,13 @@ Pause must stop both physical network progression and new time-based finance set
 
 ## Startup catch-up replay
 
-On opening the operating map, the game visually replays up to the previous 24 game hours over roughly **18 real seconds**. For a fresh career starting at Mon 08:00, the visual replay begins around Mon 00:00.
+On opening the operating map, the game visually replays up to the previous 24 game hours over roughly **10 real seconds**. For a fresh career starting at Mon 08:00, the visual replay begins around Mon 00:00.
 
 The replay is historical visualization only; it does not rewind or duplicate persisted state. It fast-forwards vehicle markers from calculated earlier positions to the authoritative current position, while an on-map time rail shows replay time and progress.
 
-The finance layer listens to the same replay event and interpolates displayed Cash/A/R/A/P from the nearest saved balance toward the authoritative current balances. It does not create invoices, settle bills, or mutate cash during the replay.
+`public/game-replay-controller.js` is loaded before the global and finance modules. The older global runtime still describes its original visualization duration internally, but the controller accelerates only the named `replayStep` animation callback to the 10-second target and changes the `atlas-global-replay-start` event duration before finance consumes it. This keeps ships/trucks/planes and Cash/A/R/A/P on the same visible replay timeline. Reduced-motion replays that are already shorter than 10 seconds are left alone.
+
+The finance layer interpolates displayed Cash/A/R/A/P from the nearest saved balance toward the authoritative current balances. It does not create invoices, settle bills, or mutate cash during the replay.
 
 After replay finishes:
 
@@ -107,8 +109,9 @@ These run alongside ocean and drayage flows and use the same authoritative time 
 2. Never allow both legacy time intervals to advance the same career alongside the authoritative clock.
 3. At 1×, sub-hour real time must accumulate.
 4. Replay may animate historical positions/balances quickly, but live mode must derive from authoritative game time.
-5. Pulsing/halo animation may signal activity but must not alter geographic progress.
-6. Financial replay may not create, pay, collect or duplicate accounting entries.
-7. A/R, A/P, payroll, lease accrual and arbitration resolution must use game hours rather than wall-clock-only timers.
-8. Global movement remains representative simulation geometry, not AIS, flight tracking, freight quotations or navigation.
-9. Performance guardrails remain: no document-wide `MutationObserver` and no full map rebuild on every movement tick.
+5. The physical replay and finance replay must reach authoritative “now” on the same visible duration.
+6. Pulsing/halo animation may signal activity but must not alter geographic progress.
+7. Financial replay may not create, pay, collect or duplicate accounting entries.
+8. A/R, A/P, payroll, lease accrual and arbitration resolution must use game hours rather than wall-clock-only timers.
+9. Global movement remains representative simulation geometry, not AIS, flight tracking, freight quotations or navigation.
+10. Performance guardrails remain: no document-wide `MutationObserver` and no full map rebuild on every movement tick.
