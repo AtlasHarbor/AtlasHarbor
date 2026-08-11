@@ -39,7 +39,6 @@ const DEFINITIONS={
  'DP':['Double Plays','Double plays in which the fielder participated.']
 };
 
-const esc=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 let dialog;
 function ensureDialog(){
  if(dialog)return dialog;
@@ -60,13 +59,14 @@ function decorate(root=document){
  const labels=root.querySelectorAll('.decision-grid span');
  for(const label of labels){
   if(label.querySelector('.baseball-stat-info'))continue;
-  const key=label.textContent.trim();const item=DEFINITIONS[key];if(!item)continue;
-  label.classList.add('baseball-stat-label');
-  const button=document.createElement('button');button.type='button';button.className='baseball-stat-info';button.dataset.stat=key;button.setAttribute('aria-label',`Explain ${key}`);button.title=`${key}: ${item[0]} — ${item[1]}`;button.textContent='i';label.append(button);
+  const key=label.textContent.trim(),item=DEFINITIONS[key];if(!item)continue;
+  const tip=`${key}: ${item[0]} — ${item[1]}`;
+  label.classList.add('baseball-stat-label');label.title=tip;
+  const button=document.createElement('button');button.type='button';button.className='baseball-stat-info';button.dataset.stat=key;button.setAttribute('aria-label',`Explain ${key}`);button.title=tip;button.textContent='i';label.append(button);
  }
 }
 const style=document.createElement('style');
-style.textContent=`.baseball-stat-label{display:inline-flex!important;align-items:center;gap:5px}.baseball-stat-info{display:inline-grid;place-items:center;width:18px;height:18px;padding:0;border:1px solid #9ba7a2;border-radius:50%;background:#fff;color:#173b32;font:800 11px/1 system-ui;cursor:help;vertical-align:middle}.baseball-stat-info:hover,.baseball-stat-info:focus-visible{background:#173b32;color:#fff;border-color:#173b32;outline:none}.baseball-stat-dialog{position:fixed;inset:0;z-index:3000;background:#10241dcc;display:grid;place-items:center;padding:20px}.baseball-stat-dialog[hidden]{display:none}.baseball-stat-dialog>div{position:relative;width:min(480px,100%);background:#fffdf7;border:1px solid #d7d2c6;border-radius:16px;padding:24px;box-shadow:0 24px 70px #0005;color:#173b32}.baseball-stat-dialog h2{margin:4px 38px 10px 0}.baseball-stat-dialog p{line-height:1.55}.baseball-stat-close{position:absolute;right:12px;top:10px;border:0;background:transparent;font-size:26px;cursor:pointer}`;
+style.textContent=`.baseball-stat-label{display:inline-flex!important;align-items:center;gap:5px;cursor:help}.baseball-stat-info{display:inline-grid;place-items:center;width:18px;height:18px;padding:0;border:1px solid #9ba7a2;border-radius:50%;background:#fff;color:#173b32;font:800 11px/1 system-ui;cursor:pointer;vertical-align:middle}.baseball-stat-info:hover,.baseball-stat-info:focus-visible{background:#173b32;color:#fff;border-color:#173b32;outline:none}.baseball-stat-dialog{position:fixed;inset:0;z-index:3000;background:#10241dcc;display:grid;place-items:center;padding:20px}.baseball-stat-dialog[hidden]{display:none}.baseball-stat-dialog>div{position:relative;width:min(480px,100%);background:#fffdf7;border:1px solid #d7d2c6;border-radius:16px;padding:24px;box-shadow:0 24px 70px #0005;color:#173b32}.baseball-stat-dialog h2{margin:4px 38px 10px 0}.baseball-stat-dialog p{line-height:1.55}.baseball-stat-close{position:absolute;right:12px;top:10px;border:0;background:transparent;font-size:26px;cursor:pointer}`;
 document.head.append(style);
 document.addEventListener('click',event=>{const button=event.target.closest?.('.baseball-stat-info');if(!button)return;event.preventDefault();event.stopPropagation();show(button.dataset.stat)});
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&dialog&&!dialog.hidden)dialog.hidden=true});
