@@ -30,10 +30,12 @@
   state.updatedAt=Date.now();
   write(state);
  }
- function loadRuntimePolish(){
-  if(document.querySelector('script[data-game-runtime-polish]'))return;
-  const script=document.createElement('script');script.type='module';script.src='/game-runtime-polish.js';script.dataset.gameRuntimePolish='true';document.body.append(script);
+ function loadModule(src,key){
+  if(document.querySelector(`script[data-${key}]`))return;
+  const script=document.createElement('script');script.type='module';script.src=src;script.dataset[key]='true';document.body.append(script);
  }
+ function loadRuntimePolish(){loadModule('/game-runtime-polish.js','gameRuntimePolish')}
+ function loadCommandExperience(){loadModule('/game-command-loop-v2.js','gameCommandLoopV2');loadModule('/game-entity-interactions-v2.js','gameEntityInteractionsV2')}
  document.addEventListener('click',suppressLegacyTour,true);
  holdIncident();
  window.addEventListener('atlas-game-changed',event=>{
@@ -47,4 +49,5 @@
   releaseIncident(state);
  });
  loadRuntimePolish();
+ loadCommandExperience();
 })();
