@@ -1,7 +1,57 @@
-import'./problem-nav.js';import'./workspace-enhancements.js';import'./publishing-links.js';import{user,configurationStatus}from'./supabase-client.js';
-const style=document.createElement('style');style.textContent=`.atlas-account-indicator{position:fixed;right:16px;bottom:16px;z-index:1000;display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:999px;background:#fffdf7;border:1px solid #d8d2c4;box-shadow:0 8px 25px #173b3230;color:#173b32;text-decoration:none;font:700 11px system-ui}.atlas-account-dot{width:9px;height:9px;border-radius:50%;background:#c95a4c}.atlas-account-indicator.ok .atlas-account-dot{background:#64a35d}.atlas-account-indicator.warn .atlas-account-dot{background:#e3a33d}`;document.head.append(style);
-const guidance='Write what you think will happen, why, and what evidence would change your view.';function fixGuidance(root=document){root.querySelectorAll?.('textarea').forEach(el=>{if(el.value.trim()===guidance){el.value='';el.placeholder=guidance}else if(!el.placeholder&&/what you think will happen/i.test(el.getAttribute('aria-label')||''))el.placeholder=guidance})}fixGuidance();new MutationObserver(records=>records.forEach(r=>r.addedNodes.forEach(n=>{if(n.nodeType===1)fixGuidance(n)}))).observe(document.documentElement,{subtree:true,childList:true});
-const link=document.createElement('a');link.className='atlas-account-indicator';link.href='/account';link.innerHTML='<span class="atlas-account-dot"></span><span>Checking account…</span>';document.body.append(link);
-const status=await configurationStatus(),current=user();if(!status.ok){link.classList.add('warn');link.querySelector('span:last-child').textContent='Setup needed';link.title=status.error||'Open Account for setup help'}else if(current){link.classList.add('ok');link.querySelector('span:last-child').textContent='Logged in';link.title='Open account settings'}else{link.classList.add('ok');link.querySelector('span:last-child').textContent='Sign in';link.title='Open account'}
-async function mountBaseballWorkspace(){const game=location.pathname.match(/^\/baseball\/games\/(\d+)/),player=location.pathname.match(/^\/baseball\/players\/(\d+)/),team=location.pathname.match(/^\/baseball\/teams\/(\d+)/);if(!game&&!player&&!team)return;const css=document.createElement('link');css.rel='stylesheet';css.href='/workspace.css';document.head.append(css);const host=document.createElement('div');host.id='baseball-workspace';document.querySelector('article')?.append(host);try{const {mountWorkspace}=await import('./workspace.js');if(game){const r=await fetch(`/api/baseball/games/${game[1]}`),data=await r.json();await mountWorkspace(host,{type:'baseball_game',id:game[1],title:data.game?.name||document.querySelector('h1')?.textContent||'Baseball game',context:data.game})}else if(player){let r=await fetch(`/api/baseball/prospect-players/${player[1]}`);if(!r.ok)r=await fetch(`/api/baseball/players/${player[1]}`);const data=await r.json();await mountWorkspace(host,{type:'baseball_player',id:player[1],title:data.player?.name||document.querySelector('h1')?.textContent||'Baseball player',context:data.player})}else{const r=await fetch(`/api/baseball/teams/${team[1]}`),data=await r.json();await mountWorkspace(host,{type:'baseball_team',id:team[1],title:data.team?.name||document.querySelector('h1')?.textContent||'Baseball team',context:data.team})}fixGuidance(host)}catch(e){host.innerHTML=`<section class="workspace"><p>Publishing workspace unavailable: ${e.message}</p></section>`}}mountBaseballWorkspace();
+import'./problem-nav.js';
+import'./workspace-enhancements.js';
+import'./publishing-links.js';
+import{user,configurationStatus}from'./supabase-client.js';
+
+const style=document.createElement('style');
+style.textContent=`.atlas-account-indicator{position:fixed;right:16px;bottom:16px;z-index:1000;display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:999px;background:#fffdf7;border:1px solid #d8d2c4;box-shadow:0 8px 25px #173b3230;color:#173b32;text-decoration:none;font:700 11px system-ui}.atlas-account-dot{width:9px;height:9px;border-radius:50%;background:#c95a4c}.atlas-account-indicator.ok .atlas-account-dot{background:#64a35d}.atlas-account-indicator.warn .atlas-account-dot{background:#e3a33d}`;
+document.head.append(style);
+
+const guidance='Write what you think will happen, why, and what evidence would change your view.';
+function fixGuidance(root=document){
+ root.querySelectorAll?.('textarea').forEach(el=>{
+  if(el.value.trim()===guidance){el.value='';el.placeholder=guidance}
+  else if(!el.placeholder&&/what you think will happen/i.test(el.getAttribute('aria-label')||''))el.placeholder=guidance;
+ });
+}
+fixGuidance();
+new MutationObserver(records=>records.forEach(r=>r.addedNodes.forEach(n=>{if(n.nodeType===1)fixGuidance(n)}))).observe(document.documentElement,{subtree:true,childList:true});
+
+const link=document.createElement('a');
+link.className='atlas-account-indicator';
+link.href='/account';
+link.innerHTML='<span class="atlas-account-dot"></span><span>Checking account…</span>';
+document.body.append(link);
+
+async function mountBaseballWorkspace(){
+ const game=location.pathname.match(/^\/baseball\/games\/(\d+)/),player=location.pathname.match(/^\/baseball\/players\/(\d+)/),team=location.pathname.match(/^\/baseball\/teams\/(\d+)/);
+ if(!game&&!player&&!team)return;
+ await import('./baseball-stat-help.js').catch(()=>null);
+ const {installWorkspaceTransportFallback}=await import('./workspace-transport-fallback.js');
+ installWorkspaceTransportFallback();
+ const css=document.createElement('link');css.rel='stylesheet';css.href='/workspace.css';document.head.append(css);
+ const host=document.createElement('div');host.id='baseball-workspace';document.querySelector('article')?.append(host);
+ try{
+  const {mountWorkspace}=await import('./workspace.js');
+  if(game){
+   const r=await fetch(`/api/baseball/games/${game[1]}`),data=await r.json();
+   await mountWorkspace(host,{type:'baseball_game',id:game[1],title:data.game?.name||document.querySelector('h1')?.textContent||'Baseball game',context:data.game});
+  }else if(player){
+   let r=await fetch(`/api/baseball/prospect-players/${player[1]}`);if(!r.ok)r=await fetch(`/api/baseball/players/${player[1]}`);
+   const data=await r.json();
+   await mountWorkspace(host,{type:'baseball_player',id:player[1],title:data.player?.name||document.querySelector('h1')?.textContent||'Baseball player',context:data.player});
+  }else{
+   const r=await fetch(`/api/baseball/teams/${team[1]}`),data=await r.json();
+   await mountWorkspace(host,{type:'baseball_team',id:team[1],title:data.team?.name||document.querySelector('h1')?.textContent||'Baseball team',context:data.team});
+  }
+  fixGuidance(host);
+ }catch(e){host.innerHTML=`<section class="workspace"><p>Publishing workspace unavailable: ${e.message}</p></section>`}
+}
+
+if(location.pathname.startsWith('/baseball/'))mountBaseballWorkspace();
 if(location.pathname.startsWith('/dropshipping'))import('./dropshipping-category-patch.js');
+
+const status=await configurationStatus(),current=user();
+if(!status.ok){link.classList.add('warn');link.querySelector('span:last-child').textContent='Setup needed';link.title=status.error||'Open Account for setup help'}
+else if(current){link.classList.add('ok');link.querySelector('span:last-child').textContent='Logged in';link.title='Open account settings'}
+else{link.classList.add('ok');link.querySelector('span:last-child').textContent='Sign in';link.title='Open account'}
