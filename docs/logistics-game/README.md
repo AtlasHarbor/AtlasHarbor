@@ -1,6 +1,6 @@
 # Atlas Harbor Logistics Game
 
-`/game` is a global, exception-driven 3PL management simulation. The player is the **General Manager & Lead Dispatcher**: protect customer promises, stay solvent, build a resilient global network, and personally handle exceptions while routine work remains delegated.
+`/game` is a global, exception-driven 3PL management simulation. The player is the **General Manager & Lead Dispatcher**: clear customer orders, protect customer promises, stay solvent, build a resilient global network, and personally handle exceptions while routine work remains delegated.
 
 The first exception is U.S.-based for onboarding, but the company is worldwide from the start. The main map includes manufacturing, ports, airports, distribution centers, trucks, vessels, and air cargo across North America, Latin America, Europe, the Middle East, Africa, South Asia, East Asia, Southeast Asia, and Australia.
 
@@ -16,9 +16,9 @@ Detailed mechanics:
 
 The persistent objective is:
 
-> **Protect promises. Stay solvent. Build the most resilient global 3PL.**
+> **Fill customer orders. Protect promises. Stay solvent. Build the most resilient global 3PL.**
 
-The game should make the player think like both an operator and a manager. Time, service, capacity, people and money are connected systems.
+Operationally this means the player should keep the order queue moving, resolve exceptions before customer promises fail, avoid spending recovery money blindly, collect receivables, pay obligations, maintain enough capacity and staff, and preserve liquidity. The game should make the player think like both an operator and a manager. Time, service, capacity, people and money are connected systems.
 
 ## Decision workflow
 
@@ -34,6 +34,12 @@ Tapping a customer contract opens a Dispatch Decision Portal showing:
 - a manual From / Via / Destination / Mode route planner.
 
 The recommendation is not decorative. Existing base-game actions such as truck, rail, air, production recovery, expedite, carrier/driver coordination and customer updates remain the underlying operating actions.
+
+On mobile, the Dispatch Decision Portal occupies the usable screen above the safe area rather than appearing as a low off-screen card. Its close button is always visible in the sticky header. A player may inspect a decision and close it without committing an action.
+
+Base-game exception decisions receive the same rule: a visible top-right close button, a high mobile sheet position, and Escape support. Closing an exception sheet does **not** execute a choice.
+
+The `decisions waiting` map counter and the top-level Alerts metric are navigation controls. Activating either opens the next unresolved exception/decision instead of behaving like passive text.
 
 ## Departments and staffing
 
@@ -116,7 +122,9 @@ There is one simulation clock.
 
 At **1×, 15 real minutes = 1 game hour**. Players can also use 2× and 4× or Pause.
 
-The clock state is persisted in the same career. Returning after time away reconciles elapsed time, and the first map load runs an approximately 18-second replay of the preceding operating window so the player can see ships, planes, trucks and working-capital balances move toward the authoritative current state.
+The clock state is persisted in the same career. Returning after time away reconciles elapsed time. The first map load runs an approximately **10-second synchronized replay** of the preceding operating window so the player can visibly watch ships, planes, trucks and working-capital balances move from the prior replay point to the authoritative current state.
+
+`public/game-replay-controller.js` shortens the older 18-second visualization target to 10 seconds without changing the number of historical game hours represented. It also changes the replay event's duration before the finance listener consumes it, so the physical network and Cash/A/R/A/P animation finish together. Reduced-motion replays that are already shorter than 10 seconds are not lengthened.
 
 After the replay:
 
@@ -142,11 +150,23 @@ Clicking a global vehicle shows current game time, current leg, route progress, 
 
 ## First-run onboarding
 
-`game-onboarding-v2.js` supplies the current guided tour.
+`game-onboarding-v2.js` supplies the current versioned walkthrough; the stored walkthrough version is currently **3**.
 
-The walkthrough uses a dimmed overlay plus curved white SVG arrows pointing to the actual dashboard areas. It teaches:
+The walkthrough uses a dimmed overlay, a dedicated white/orange spotlight rectangle, and curved white SVG arrows pointing to the actual dashboard areas. Dashboard targets themselves are **not** raised above the overlay; that older technique caused the highlighted element to cover the coachmark on mobile.
 
-1. overarching objective,
+Every step now:
+
+1. computes the target's document position,
+2. scrolls the target into a usable part of the mobile viewport,
+3. waits for the scroll to settle,
+4. draws the spotlight, arrow and coachmark,
+5. exposes Next, Exit tour and a top-right × close control.
+
+Tapping the dark scrim or pressing Escape also exits. The initial welcome card has its own × close and can be dismissed by tapping outside it; dismissal enters the game without forcing a walkthrough.
+
+The tour teaches:
+
+1. the overarching objective — fill/clear orders, protect promises and stay solvent,
 2. authoritative network time and speed,
 3. customer promise/decision queue,
 4. Cash / A/R / A/P,
@@ -173,7 +193,7 @@ user_metadata.atlas_problem_spaces.logistics_game.progress
 
 `progress-v2.js` applies newest-copy-wins and account isolation. Finance, management, time, tutorial state and physical operations all live inside that same career object.
 
-This is different from Atlas Harbor's analytical publishing workspaces, which have their own database-only rules.
+**This is intentionally different from Atlas Harbor analytical/publishing workspaces.** The logistics career has a local copy because offline play is a product requirement. Legal, Baseball analysis, Economics analysis and other publishing workspaces must never use this game persistence rule; their canonical editable analysis is database-only. See the root `README.md` and `docs/WORKSPACE_ARCHITECTURE.md` before changing any shared persistence behavior.
 
 ## Performance invariants
 
@@ -184,6 +204,7 @@ This is different from Atlas Harbor's analytical publishing workspaces, which ha
 5. The legacy base and command-center time intervals must not double-advance the career.
 6. The management world map exists only while its tab is open.
 7. Loaded custom browser modules must parse under `scripts/check-js.js`.
+8. Tour navigation may programmatically scroll, but it must not raise live dashboard elements above the walkthrough overlay.
 
 ## Routing invariants
 
@@ -200,7 +221,7 @@ Regression tests cover:
 
 - global traffic and freeze guardrails,
 - authoritative 1×/2×/4× time,
-- startup replay,
+- synchronized ~10-second startup replay,
 - staffing agency / delayed hiring,
 - owned/leased/contracted/partner capacity,
 - confirmation surfaces,
@@ -210,6 +231,8 @@ Regression tests cover:
 - fuel-source adapters and fallback labeling,
 - projection arithmetic,
 - versioned curved-arrow onboarding,
+- mobile scroll/spotlight/close behavior,
+- actionable decision counters,
 - local + account persistence.
 
 ## Primary files
@@ -218,10 +241,12 @@ Regression tests cover:
 public/game.html
 public/game-v3.js
 public/game-time-authority.js
+public/game-replay-controller.js
 public/game-global-simulation-v2.js
 public/game-management-v3.js
 public/game-finance.js
 public/game-onboarding-v2.js
+public/game-mobile-navigation.js
 public/progress-v2.js
 src/game-routing.js
 src/game-fuel.js
