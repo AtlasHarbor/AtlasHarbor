@@ -16,7 +16,10 @@ function fixGuidance(root=document){
  });
 }
 fixGuidance();
-new MutationObserver(records=>records.forEach(r=>r.addedNodes.forEach(n=>{if(n.nodeType===1)fixGuidance(n)}))).observe(document.documentElement,{subtree:true,childList:true});
+window.addEventListener('atlas-workspace-loaded',event=>{
+ const host=event.detail?.host;
+ queueMicrotask(()=>fixGuidance(host||document));
+});
 
 const link=document.createElement('a');
 link.className='atlas-account-indicator';
