@@ -1,0 +1,1 @@
+const fs=require('fs');const assert=require('assert');const gate=fs.readFileSync('public/game-first-run-gate.js','utf8');assert.match(gate,/suppressLegacyTour/);assert.match(gate,/take-command/);assert.match(gate,/tutorialDone=true/);assert.match(gate,/dashboardTourVersion:TOUR_VERSION/);console.log('opening flow suppresses legacy second tour');
