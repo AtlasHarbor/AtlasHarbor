@@ -1,6 +1,7 @@
 import'./problem-nav.js';
 import'./workspace-enhancements.js';
 import'./publishing-links.js';
+import'./baseball-profile-enhancements.js';
 import{user,configurationStatus}from'./supabase-client.js';
 
 const style=document.createElement('style');
