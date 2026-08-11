@@ -4,6 +4,7 @@
  const root=document.documentElement;
  const intro=()=>document.querySelector('#intro');
  const read=()=>{try{return JSON.parse(localStorage.getItem(GAME_KEY)||'{}')}catch{return{}}};
+ const write=state=>{try{localStorage.setItem(GAME_KEY,JSON.stringify(state));window.__atlasGameState=structuredClone(state)}catch{}};
  const unseen=state=>Boolean(state?.orders)&&Number(state?.onboarding?.dashboardTourVersion||0)<TOUR_VERSION;
  function holdIncident(){
   const state=read();
@@ -18,6 +19,18 @@
   const node=intro();
   if(node){node.hidden=false;node.scrollTop=0;node.querySelector('.intro-card')?.scrollTo?.({top:0,behavior:'auto'});}
  }
+ function suppressLegacyTour(event){
+  const button=event.target.closest?.('#take-command');
+  if(!button)return;
+  const state=read();
+  if(!state?.orders)return;
+  state.tutorialDone=true;
+  state.onboardingComplete=true;
+  state.onboarding={...(state.onboarding||{}),dashboardTourVersion:TOUR_VERSION,dashboardTourSeenAt:state.onboarding?.dashboardTourSeenAt||Date.now(),incidentBriefSeenAt:Date.now()};
+  state.updatedAt=Date.now();
+  write(state);
+ }
+ document.addEventListener('click',suppressLegacyTour,true);
  holdIncident();
  window.addEventListener('atlas-game-changed',event=>{
   const state=event.detail||read();
