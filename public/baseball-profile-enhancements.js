@@ -4,30 +4,136 @@ const match=location.pathname.match(PLAYER_PATH);
 if(match){
  const esc=value=>String(value??'—').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
  const style=document.createElement('style');
- style.textContent=`.report-nav{position:sticky;top:0;z-index:1500;gap:18px}.baseball-profile-search{position:relative;flex:1;width:min(46vw,620px);max-width:620px;margin:0 auto}.profile-search-toggle{display:none}.profile-search-panel{position:relative}.profile-search-form{height:46px;display:flex;align-items:center;gap:9px;padding:0 10px 0 14px;border:1px solid #d5cfc2;border-radius:14px;background:#fff;box-shadow:0 6px 18px #173b3210}.profile-search-form:focus-within{border-color:#ef6b3a;box-shadow:0 0 0 3px #ef6b3a20,0 8px 22px #173b3214}.profile-search-icon{font-size:22px;line-height:1;color:#6d7b75;transform:rotate(-15deg)}.profile-search-form input{min-width:0;flex:1;border:0;outline:0;background:transparent;color:#173b32;font:700 14px "DM Sans",system-ui}.profile-search-form input::placeholder{color:#84918b;font-weight:600}.profile-search-close{display:none;border:0;background:transparent;color:#173b32;font-size:26px;line-height:1;cursor:pointer}.profile-search-results{position:absolute;left:0;right:0;top:54px;z-index:1600;overflow:auto;max-height:min(66vh,520px);padding:7px;background:#fffdf7;border:1px solid #d8d2c4;border-radius:16px;box-shadow:0 20px 55px #173b3230}.profile-search-results[hidden]{display:none}.profile-search-result{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:11px;width:100%;padding:11px 12px;border-radius:11px;color:#173b32;text-decoration:none}.profile-search-result:hover,.profile-search-result.is-active,.profile-search-result:focus-visible{background:#f1eee5;outline:none}.profile-search-type{display:inline-grid;place-items:center;min-width:48px;padding:5px 7px;border-radius:999px;background:#173b32;color:#fff;font-size:9px;font-weight:900;letter-spacing:.7px;text-transform:uppercase}.profile-search-result strong,.profile-search-result small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.profile-search-result strong{font:700 14px "DM Sans",system-ui}.profile-search-result small{margin-top:3px;color:#687971;font-size:11px}.profile-search-arrow{color:#ef6b3a;font-size:18px;font-weight:900}.profile-search-status{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.ohtani-two-way{border-color:#e6b48d;background:linear-gradient(145deg,#fff8eb,#fffdf7)}.ohtani-two-way-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.ohtani-two-way-badge{display:inline-flex;align-items:center;padding:7px 10px;border-radius:999px;background:#ef6b3a;color:#fff;font-size:9px;font-weight:900;letter-spacing:1px}.ohtani-two-way-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px}.ohtani-stat-card{padding:18px;border:1px solid #ded8cc;border-radius:16px;background:#fffdf7}.ohtani-stat-card h3{margin:5px 0 0}.ohtani-stat-card .decision-grid{grid-template-columns:repeat(auto-fit,minmax(82px,1fr));gap:7px}.ohtani-stat-card .decision-grid div{padding:9px}.ohtani-stat-card .decision-grid strong{font-size:15px}@media(max-width:900px){.report-nav{padding:10px 14px}.baseball-profile-search{flex:0;width:auto;max-width:none;margin:0 0 0 auto}.profile-search-toggle{display:inline-flex;align-items:center;gap:7px;min-height:44px;padding:0 13px;border:1px solid #d5cfc2;border-radius:12px;background:#fff;color:#173b32;font:800 12px "DM Sans",system-ui;cursor:pointer}.profile-search-toggle span{font-size:20px;transform:rotate(-15deg)}.profile-search-panel{display:none;position:absolute;inset:0;z-index:1700;padding:10px 12px;background:#fbf8ef}.baseball-profile-search.is-open .profile-search-panel{display:block}.baseball-profile-search.is-open .profile-search-toggle{visibility:hidden}.profile-search-form{height:54px;border-radius:13px}.profile-search-form input{font-size:16px}.profile-search-close{display:block;min-width:40px;min-height:40px}.profile-search-results{position:fixed;left:10px;right:10px;top:72px;max-height:calc(100dvh - 86px);border-radius:14px}.profile-search-result{min-height:58px;padding:12px}.profile-search-type{min-width:45px}.ohtani-two-way-head{display:block}.ohtani-two-way-badge{margin-top:8px}.ohtani-two-way-grid{grid-template-columns:1fr}}`;
+ style.textContent=`
+ .report-nav{position:sticky;top:0;z-index:1500;gap:14px}
+ .baseball-profile-search-launch{display:grid;place-items:center;flex:0 0 auto;width:46px;height:46px;margin-left:auto;padding:0;border:1px solid #d5cfc2;border-radius:50%;background:#fffdf7;color:#173b32;box-shadow:0 6px 18px #173b3214;cursor:pointer}
+ .baseball-profile-search-launch:hover,.baseball-profile-search-launch:focus-visible{border-color:#ef6b3a;box-shadow:0 0 0 3px #ef6b3a22,0 8px 24px #173b321a;outline:none}
+ .baseball-profile-search-launch svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round}
+ .baseball-profile-search-overlay{position:fixed;inset:0;z-index:7000;background:#10241db8;backdrop-filter:blur(2px)}
+ .baseball-profile-search-overlay[hidden]{display:none}
+ .baseball-profile-search-surface{position:absolute;left:0;right:0;top:0;max-height:min(78dvh,680px);overflow:auto;padding:calc(14px + env(safe-area-inset-top)) max(18px,calc((100vw - 980px)/2)) 20px;background:#fbf8ef;border-bottom:1px solid #d8d2c4;box-shadow:0 22px 70px #071d195c}
+ .baseball-profile-search-head{display:flex;align-items:center;gap:12px}
+ .baseball-profile-search-form{display:flex;align-items:center;gap:11px;flex:1;height:58px;padding:0 14px;border:2px solid #d5cfc2;border-radius:16px;background:#fff}
+ .baseball-profile-search-form:focus-within{border-color:#ef6b3a;box-shadow:0 0 0 4px #ef6b3a1f}
+ .baseball-profile-search-form svg{width:22px;height:22px;fill:none;stroke:#6d7b75;stroke-width:2.2;stroke-linecap:round}
+ .baseball-profile-search-form input{min-width:0;flex:1;border:0;outline:0;background:transparent;color:#173b32;font:700 17px "DM Sans",system-ui}
+ .baseball-profile-search-form input::placeholder{color:#84918b;font-weight:600}
+ .baseball-profile-search-close{display:grid;place-items:center;flex:0 0 auto;width:48px;height:48px;padding:0;border:1px solid #d5cfc2;border-radius:50%;background:#fffdf7;color:#173b32;font-size:29px;line-height:1;cursor:pointer}
+ .baseball-profile-search-close:hover,.baseball-profile-search-close:focus-visible{background:#173b32;color:#fff;outline:none}
+ .baseball-profile-search-meta{display:flex;justify-content:space-between;gap:12px;margin:12px 2px 8px;color:#687971;font:700 11px "DM Sans",system-ui}
+ .baseball-profile-search-results{display:grid;gap:6px}
+ .baseball-profile-search-results[hidden]{display:none}
+ .baseball-profile-search-result{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;min-height:62px;padding:11px 13px;border:1px solid transparent;border-radius:13px;color:#173b32;text-decoration:none}
+ .baseball-profile-search-result:hover,.baseball-profile-search-result.is-active,.baseball-profile-search-result:focus-visible{background:#fff;border-color:#dfd8cb;box-shadow:0 6px 18px #173b3210;outline:none}
+ .baseball-profile-search-type{display:inline-grid;place-items:center;min-width:50px;padding:6px 8px;border-radius:999px;background:#173b32;color:#fff;font-size:9px;font-weight:900;letter-spacing:.7px;text-transform:uppercase}
+ .baseball-profile-search-result strong,.baseball-profile-search-result small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .baseball-profile-search-result strong{font:700 15px "DM Sans",system-ui}
+ .baseball-profile-search-result small{margin-top:3px;color:#687971;font-size:11px}
+ .baseball-profile-search-arrow{color:#ef6b3a;font-size:20px;font-weight:900}
+ body.baseball-profile-search-open{overflow:hidden}
+ .ohtani-two-way{border-color:#e6b48d;background:linear-gradient(145deg,#fff8eb,#fffdf7)}
+ .ohtani-two-way-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+ .ohtani-two-way-badge{display:inline-flex;align-items:center;padding:7px 10px;border-radius:999px;background:#ef6b3a;color:#fff;font-size:9px;font-weight:900;letter-spacing:1px}
+ .ohtani-two-way-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px}
+ .ohtani-stat-card{padding:18px;border:1px solid #ded8cc;border-radius:16px;background:#fffdf7}
+ .ohtani-stat-card h3{margin:5px 0 0}
+ .ohtani-stat-card .decision-grid{grid-template-columns:repeat(auto-fit,minmax(82px,1fr));gap:7px}
+ .ohtani-stat-card .decision-grid div{padding:9px}
+ .ohtani-stat-card .decision-grid strong{font-size:15px}
+ @media(max-width:900px){
+   .report-nav{padding:10px 14px}
+   .baseball-profile-search-launch{width:44px;height:44px}
+   .baseball-profile-search-surface{max-height:100dvh;min-height:0;padding:calc(10px + env(safe-area-inset-top)) 12px calc(18px + env(safe-area-inset-bottom))}
+   .baseball-profile-search-head{align-items:flex-start}
+   .baseball-profile-search-form{height:54px;padding:0 12px}
+   .baseball-profile-search-form input{font-size:16px}
+   .baseball-profile-search-close{width:46px;height:46px}
+   .baseball-profile-search-meta{margin-top:10px}
+   .baseball-profile-search-result{min-height:60px;padding:12px 10px}
+   .baseball-profile-search-type{min-width:46px}
+   .ohtani-two-way-head{display:block}
+   .ohtani-two-way-badge{margin-top:8px}
+   .ohtani-two-way-grid{grid-template-columns:1fr}
+ }
+ @media(prefers-reduced-motion:reduce){.baseball-profile-search-result,.baseball-profile-search-launch{scroll-behavior:auto}}
+ `;
  document.head.append(style);
 
- const json=async url=>{const response=await fetch(url,{headers:{Accept:'application/json'}});if(!response.ok)throw new Error(String(response.status));return response.json()};
+ const searchIcon='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l5 5"></path></svg>';
+ const json=async(url,signal)=>{const response=await fetch(url,{headers:{Accept:'application/json'},signal});if(!response.ok)throw new Error(String(response.status));return response.json()};
  const nav=document.querySelector('.report-nav');
+
  if(nav){
-  const shell=document.createElement('div');
-  shell.className='baseball-profile-search';
-  shell.innerHTML='<button class="profile-search-toggle" type="button" aria-expanded="false" aria-controls="profile-search-panel" aria-label="Search baseball"><span aria-hidden="true">⌕</span><b>Search</b></button><div class="profile-search-panel" id="profile-search-panel"><form class="profile-search-form" role="search"><span class="profile-search-icon" aria-hidden="true">⌕</span><input type="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Search players, teams, games…" aria-label="Search baseball" aria-autocomplete="list" aria-controls="profile-search-results"><button class="profile-search-close" type="button" aria-label="Close search">×</button></form><div class="profile-search-results" id="profile-search-results" role="listbox" hidden></div><p class="profile-search-status" aria-live="polite"></p></div>';
-  nav.insertBefore(shell,nav.querySelector('nav'));
-  const toggle=shell.querySelector('.profile-search-toggle'),form=shell.querySelector('form'),input=shell.querySelector('input'),results=shell.querySelector('.profile-search-results'),status=shell.querySelector('.profile-search-status'),close=shell.querySelector('.profile-search-close');
-  let timer=0,items=[],active=-1,requestNumber=0;
+  const launch=document.createElement('button');
+  launch.type='button';
+  launch.className='baseball-profile-search-launch';
+  launch.setAttribute('aria-label','Search baseball');
+  launch.setAttribute('aria-expanded','false');
+  launch.innerHTML=searchIcon;
+  nav.insertBefore(launch,nav.querySelector('nav'));
+
+  const overlay=document.createElement('div');
+  overlay.className='baseball-profile-search-overlay';
+  overlay.hidden=true;
+  overlay.innerHTML=`<section class="baseball-profile-search-surface" role="dialog" aria-modal="true" aria-label="Search baseball">
+    <div class="baseball-profile-search-head">
+      <form class="baseball-profile-search-form" role="search">${searchIcon}<input type="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Search players, teams, games…" aria-label="Search baseball" aria-autocomplete="list" aria-controls="baseball-profile-search-results"><button type="submit" hidden aria-hidden="true"></button></form>
+      <button class="baseball-profile-search-close" type="button" aria-label="Close search">×</button>
+    </div>
+    <div class="baseball-profile-search-meta"><span>Type at least 2 letters</span><span class="baseball-profile-search-status" aria-live="polite"></span></div>
+    <div class="baseball-profile-search-results" id="baseball-profile-search-results" role="listbox" hidden></div>
+  </section>`;
+  document.body.append(overlay);
+
+  const surface=overlay.querySelector('.baseball-profile-search-surface'),form=overlay.querySelector('form'),input=overlay.querySelector('input'),results=overlay.querySelector('.baseball-profile-search-results'),status=overlay.querySelector('.baseball-profile-search-status'),close=overlay.querySelector('.baseball-profile-search-close');
+  let timer=0,items=[],active=-1,requestNumber=0,controller=null,restoreFocus=null;
   const href=item=>item.type==='player'?`/baseball/players/${item.id}`:item.type==='team'?`/baseball/teams/${item.id}`:`/baseball/games/${item.id}`;
-  const closeResults=()=>{results.hidden=true;active=-1;input.removeAttribute('aria-activedescendant')};
-  const closeMobile=()=>{shell.classList.remove('is-open');toggle.setAttribute('aria-expanded','false');closeResults()};
-  const openMobile=()=>{shell.classList.add('is-open');toggle.setAttribute('aria-expanded','true');requestAnimationFrame(()=>input.focus())};
-  const setActive=index=>{const links=[...results.querySelectorAll('.profile-search-result[href]')];links.forEach(link=>link.classList.remove('is-active'));if(!links.length){active=-1;return}active=(index+links.length)%links.length;links[active].classList.add('is-active');links[active].scrollIntoView({block:'nearest'});input.setAttribute('aria-activedescendant',links[active].id)};
-  const render=list=>{items=list.slice(0,14);results.innerHTML=items.length?items.map((item,index)=>`<a id="profile-search-option-${index}" class="profile-search-result" role="option" href="${href(item)}"><span class="profile-search-type">${esc(item.level||item.type)}</span><span><strong>${esc(item.name)}</strong><small>${esc(item.subtitle||'Baseball result')}</small></span><span class="profile-search-arrow">→</span></a>`).join(''):'<div class="profile-search-result"><span></span><span><strong>No matches yet</strong><small>Try a player, team, or matchup.</small></span></div>';results.hidden=false;status.textContent=`${items.length} result${items.length===1?'':'s'}`;active=-1};
-  const search=async query=>{const serial=++requestNumber;status.textContent='Searching baseball…';const encoded=encodeURIComponent(query),responses=await Promise.allSettled([json(`/api/baseball/search?q=${encoded}`),json(`/api/baseball/prospect-search?q=${encoded}&levels=mlb,aaa,aa,higha,lowa`)]);if(serial!==requestNumber)return;const combined=responses.flatMap(result=>result.status==='fulfilled'?(result.value.results||[]):[]),seen=new Set(),merged=combined.filter(item=>{const key=`${item.type}:${item.id}`;if(!item.id||seen.has(key))return false;seen.add(key);return true});if(!combined.length&&responses.every(result=>result.status==='rejected')){closeResults();status.textContent='Search is temporarily unavailable.';return}render(merged)};
-  input.addEventListener('input',()=>{clearTimeout(timer);const query=input.value.trim();if(query.length<2){closeResults();status.textContent='Type at least 2 letters';return}timer=setTimeout(()=>search(query),220)});
-  input.addEventListener('keydown',event=>{if(event.key==='ArrowDown'){event.preventDefault();if(!results.hidden)setActive(active+1)}else if(event.key==='ArrowUp'){event.preventDefault();if(!results.hidden)setActive(active-1)}else if(event.key==='Enter'&&!results.hidden&&items.length){event.preventDefault();location.href=href(items[active>=0?active:0])}else if(event.key==='Escape'){event.preventDefault();if(!results.hidden)closeResults();else closeMobile()}});
+  const closeResults=()=>{results.hidden=true;results.innerHTML='';items=[];active=-1;input.removeAttribute('aria-activedescendant')};
+  const closeSearch=()=>{clearTimeout(timer);controller?.abort();controller=null;overlay.hidden=true;document.body.classList.remove('baseball-profile-search-open');launch.setAttribute('aria-expanded','false');closeResults();status.textContent='';restoreFocus?.focus?.();restoreFocus=null};
+  const openSearch=()=>{restoreFocus=document.activeElement;overlay.hidden=false;document.body.classList.add('baseball-profile-search-open');launch.setAttribute('aria-expanded','true');requestAnimationFrame(()=>input.focus())};
+  const setActive=index=>{const links=[...results.querySelectorAll('.baseball-profile-search-result[href]')];links.forEach(link=>link.classList.remove('is-active'));if(!links.length){active=-1;return}active=(index+links.length)%links.length;links[active].classList.add('is-active');links[active].scrollIntoView({block:'nearest'});input.setAttribute('aria-activedescendant',links[active].id)};
+  const render=list=>{
+   items=list.slice(0,12);
+   results.innerHTML=items.length?items.map((item,index)=>`<a id="baseball-profile-search-option-${index}" class="baseball-profile-search-result" role="option" href="${href(item)}"><span class="baseball-profile-search-type">${esc(item.level||item.type)}</span><span><strong>${esc(item.name)}</strong><small>${esc(item.subtitle||'Baseball result')}</small></span><span class="baseball-profile-search-arrow">→</span></a>`).join(''):'<div class="baseball-profile-search-result"><span></span><span><strong>No matches yet</strong><small>Try another player, team, or matchup.</small></span></div>';
+   results.hidden=false;
+   status.textContent=`${items.length} result${items.length===1?'':'s'}`;
+   active=-1;
+  };
+  const search=async query=>{
+   const serial=++requestNumber;
+   controller?.abort();
+   controller=new AbortController();
+   status.textContent='Searching…';
+   const encoded=encodeURIComponent(query);
+   const responses=await Promise.allSettled([
+    json(`/api/baseball/search?q=${encoded}`,controller.signal),
+    json(`/api/baseball/prospect-search?q=${encoded}&levels=mlb,aaa,aa,higha,lowa`,controller.signal)
+   ]);
+   if(serial!==requestNumber||controller.signal.aborted)return;
+   const combined=responses.flatMap(result=>result.status==='fulfilled'?(result.value.results||[]):[]);
+   const seen=new Set();
+   const merged=combined.filter(item=>{const key=`${item.type}:${item.id}`;if(!item.id||seen.has(key))return false;seen.add(key);return true});
+   if(!combined.length&&responses.every(result=>result.status==='rejected')){closeResults();status.textContent='Search is temporarily unavailable.';return}
+   render(merged);
+  };
+  input.addEventListener('input',()=>{
+   clearTimeout(timer);
+   const query=input.value.trim();
+   if(query.length<2){controller?.abort();closeResults();status.textContent='';return}
+   timer=setTimeout(()=>search(query),280);
+  });
+  input.addEventListener('keydown',event=>{
+   if(event.key==='ArrowDown'){event.preventDefault();if(!results.hidden)setActive(active+1)}
+   else if(event.key==='ArrowUp'){event.preventDefault();if(!results.hidden)setActive(active-1)}
+   else if(event.key==='Enter'&&!results.hidden&&items.length){event.preventDefault();location.href=href(items[active>=0?active:0])}
+   else if(event.key==='Escape'){event.preventDefault();closeSearch()}
+  });
   form.addEventListener('submit',event=>{event.preventDefault();if(items.length)location.href=href(items[active>=0?active:0])});
-  toggle.addEventListener('click',openMobile);close.addEventListener('click',closeMobile);
-  document.addEventListener('click',event=>{if(!shell.contains(event.target))closeResults()});
+  launch.addEventListener('click',openSearch);
+  close.addEventListener('click',closeSearch);
+  overlay.addEventListener('pointerdown',event=>{if(event.target===overlay)closeSearch()});
+  surface.addEventListener('pointerdown',event=>event.stopPropagation());
+  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!overlay.hidden)closeSearch()});
  }
 
  const statFrom=(stats,prefix)=>{const keys=Object.keys(stats||{}).filter(key=>key===prefix||key.startsWith(`${prefix}:`)).sort((a,b)=>Number(b.endsWith(':1'))-Number(a.endsWith(':1')));for(const key of keys){const split=(stats[key]||[]).find(item=>item?.stat&&Object.keys(item.stat).length);if(split?.stat)return split.stat}return{}};
