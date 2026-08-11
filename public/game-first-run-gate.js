@@ -30,6 +30,10 @@
   state.updatedAt=Date.now();
   write(state);
  }
+ function loadRuntimePolish(){
+  if(document.querySelector('script[data-game-runtime-polish]'))return;
+  const script=document.createElement('script');script.type='module';script.src='/game-runtime-polish.js';script.dataset.gameRuntimePolish='true';document.body.append(script);
+ }
  document.addEventListener('click',suppressLegacyTour,true);
  holdIncident();
  window.addEventListener('atlas-game-changed',event=>{
@@ -42,4 +46,5 @@
   if(unseen(state)){root.classList.add('atlas-first-run-tour');const node=intro();if(node)node.hidden=true;return;}
   releaseIncident(state);
  });
+ loadRuntimePolish();
 })();
