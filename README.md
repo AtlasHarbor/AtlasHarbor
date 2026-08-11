@@ -34,50 +34,130 @@ Routine collection and ranking should be automated. The user should spend time o
 - `/published` — public user analysis.
 - `/problems` — the public directory and requests for future spaces.
 
-## Workspace and publishing architecture
+# Persistence and database handoff
 
-**One writable source of truth: the Supabase-backed account workspace. Never create a device-only workspace.**
+Read this section **before changing storage, authentication, workspace bootstrap, publishing, or the logistics career**. Atlas Harbor intentionally has two different persistence contracts. They must not be merged into one generic fallback strategy.
 
-Every Problem Space uses the same private workspace, sharing rules, public feed, and profile/discovery surfaces. The full contract and incident history are documented in [`docs/WORKSPACE_ARCHITECTURE.md`](docs/WORKSPACE_ARCHITECTURE.md).
+## Contract A — analytical workspaces and publishing
 
-The canonical record is stored in the signed-in user's account metadata:
+Legal analysis, Baseball analysis, Economics analysis and other publishable Problem Space workspaces use **one writable database source of truth**.
+
+Canonical private workspace record:
 
 ```text
 user_metadata.atlas_problem_spaces.publishing_workspace.notes
 ```
 
-There are resilient ways to reach that **same** database record:
+Rules:
 
-1. preferred: `/api/workspaces/:resourceType/:resourceId`,
-2. immediate read recovery: the authenticated Supabase account metadata already present in the signed-in session,
-3. fresh read/write recovery: direct authenticated Supabase Auth metadata access with the existing browser session and publishable key.
+- The editable analysis is database-backed account state.
+- Do **not** create a `localStorage` analysis/workspace fallback.
+- Do **not** create a device-only draft when the database cannot be reached.
+- Do **not** create a second browser virtual table or optional-table write path.
+- Multiple transports are allowed only when they reach the **same canonical account record**.
+- Public publishing is derived from the saved workspace record; publishing must not invent a second persistence model.
 
-These are not separate workspaces. They represent the same account-database record. The session copy is read-only recovery state from the authenticated Supabase session; new workspace changes are still persisted only to the account database. If all database transports fail and no matching authenticated account record is available, the UI shows a retry state and does not create a local draft.
+The complete contract is in [`docs/WORKSPACE_ARCHITECTURE.md`](docs/WORKSPACE_ARCHITECTURE.md).
 
-Direct recovery must not depend exclusively on `fetch('/api/config')`. Atlas Harbor preserves the native browser fetch before loading-feedback wrappers are installed and provides `/runtime-config.js` as a script-tag fallback for the public Supabase URL and publishable key. Those public connection values may be cached; analysis bodies, projections, publication state, and share tokens may not.
+### Workspace transport order
 
-### Public-feed invariant
+A signed-in analytical workspace may reach the same canonical account record through these recovery layers:
+
+1. preferred: `GET/PUT /api/workspaces/:resourceType/:resourceId`,
+2. immediate read recovery: the authenticated Supabase `user_metadata` already present in the signed-in session,
+3. fresh read/write recovery: direct authenticated Supabase Auth metadata access using the existing user session plus the public/publishable Supabase key.
+
+These are transports, not separate stores.
+
+Direct recovery must not depend exclusively on `fetch('/api/config')`. Atlas Harbor preserves native browser fetch before loading-feedback wrappers and exposes `/runtime-config.js` as a script-resource fallback for the **public** Supabase URL and publishable key. Those public connection values may be cached; analysis bodies, projections, publication state and share tokens may not.
+
+Baseball additionally installs `workspace-transport-fallback.js`: if normal browser `fetch()` throws while reaching `/api/workspaces/...`, it retries the **same authenticated Atlas Harbor workspace endpoint** using `XMLHttpRequest`. That does not create a Baseball-specific store; it is another transport to the same API/database record. This matters for a player's **first** analysis, because there may be no matching session-metadata row to recover yet.
+
+If every database transport fails and no matching authenticated account record is already available, show a retryable database error. Do not fabricate an editable local copy.
+
+## Contract B — logistics game career
+
+The `/game` career intentionally supports offline play, so it has a synchronized local representation and account representation:
+
+```text
+localStorage["atlas-game-state"]
+user_metadata.atlas_problem_spaces.logistics_game.progress
+```
+
+`public/progress-v2.js` uses newest-copy-wins plus account ownership isolation:
+
+- a newer offline career can sync up after sign-in,
+- a newer account career can refresh the device copy,
+- one account's local career must not overwrite another account on a shared browser,
+- game time, finance, staffing, fleet, tutorial state and operations all belong to the same career object.
+
+**Never copy this offline-game rule into Legal/Baseball/Economics publishing workspaces.** Offline game continuity and database-only analytical workspaces are deliberately different product requirements.
+
+## Incident history — do not regress these fixes
+
+Several failures looked like “lost analysis” even though the underlying data had not necessarily been deleted. These are now architectural regression cases.
+
+### 1. `/api/workspaces` failed and direct database recovery had been removed
+
+Symptom:
+
+```text
+PRIVATE DATABASE WORKSPACE
+Analysis could not load
+Database workspace unavailable: Failed to fetch
+```
+
+A cleanup correctly removed device-only workspace persistence but incorrectly removed the direct account-database transport too. A temporary API transport failure therefore made valid account analysis appear unavailable.
+
+**Fix:** keep one database source of truth but allow multiple database transports to that same record.
+
+### 2. The recovery path depended on `/api/config` through the same failing fetch stack
+
+Symptom included two network failures, such as:
+
+```text
+Database workspace unavailable: Failed to fetch. Workspace service: Failed to fetch
+```
+
+The supposed direct-database fallback first tried to fetch configuration from the same origin using the same failing browser fetch mechanism.
+
+**Fix:** read matching authenticated session metadata immediately; preserve native fetch; provide `/runtime-config.js` as a script fallback for public connection configuration.
+
+### 3. Signed-out `/published` worked while signed-in `/published` showed zero stories
+
+Cause: a logged-in bearer token changed the Supabase RLS role for what should have been a public publication query. Anonymous and authenticated roles could therefore return different public rows.
+
+**Hard invariant:** `GET /api/published-feed` is a session-independent public list request. Viewer Authorization must not affect that list. The browser strips viewer auth for the list request and the server independently removes any Authorization header before the public feed router. Authentication may be used on publication **detail/owner-control** flows, but signing in must never reduce the public list.
+
+### 4. Legacy browser publishing created giant share URLs or `/published/undefined`
+
+An old browser-side virtual `workspace_notes` fallback could encode an entire publication object into `share_token` when an optional table was unavailable.
+
+**Fix:** new share tokens are compact random database/server tokens. Public-feed recovery can expose stable short `pub-...` aliases for malformed historical tokens. The publication-link UI consumes the canonical workspace returned by Save/Publish instead of performing another independent storage lookup.
+
+### 5. Attachment scope performed a second write after publishing
+
+The “attach full underlying research” switch used to perform another workspace request after the main Save/Publish. A successful publication could therefore be followed by a misleading failure.
+
+**Fix:** `share_scope` is part of the same canonical workspace Save/Publish transaction. The scope control only changes workspace UI state until the next canonical save.
+
+### 6. Baseball first-analysis bootstrap failed even after Legal recovery worked
+
+Legal often had an existing account-metadata analysis that could be recovered immediately. A Baseball player with no prior analysis did not. The bootstrap treated “no saved row yet” plus a failed fetch as if the workspace itself could not exist.
+
+**Fix:** a missing existing row is a valid empty workspace state for an authenticated user, and Baseball has a same-endpoint XHR transport fallback for `/api/workspaces/...`. Baseball uses the same `baseball_player` workspace and publishing architecture as Legal.
+
+## Public-feed invariant
 
 **Logging in must never make `/published` show fewer public stories.**
 
-Public `workspace_notes` and legacy publication rows are queried with the anonymous/publishable Supabase role whether or not the viewer is signed in. A viewer bearer token is used only for viewer identity, ownership controls, and recovery of that viewer's already-shared account records. It is never forwarded into the public table query, because Supabase RLS can return different rows for `anon` and `authenticated` roles.
-
-Authenticated feed responses vary by `Authorization`; they must not be cached as interchangeable with anonymous responses.
+Public `workspace_notes` and legacy publication rows are queried with the anonymous/publishable Supabase role whether or not the viewer is signed in. The public list request itself must not carry viewer Authorization. Viewer identity is reserved for ownership controls and account recovery where needed.
 
 Older `workspace_notes`, `legal_notes`, and virtual account-metadata records are read-only recovery inputs. They may be copied into the canonical account workspace, but new workspace writes must not create new virtual/device records.
 
-Historical regressions that are specifically prohibited:
-
-1. removing the direct account-database recovery transport, which made valid analysis appear unavailable after `/api/workspaces` returned `Failed to fetch`,
-2. making that recovery path call `/api/config` through the same failing fetch stack before it could reach Supabase,
-3. forwarding a logged-in viewer's bearer token into public publication table reads, which allowed signed-out `/published` to work while signed-in `/published` returned an empty feed under different RLS policies,
-4. calling browser `rest('workspace_notes')` for publishing; when the optional table was unavailable, an old virtual fallback encoded the entire article into `share_token`, creating huge URLs and sometimes `/published/undefined`.
-
-New share tokens are compact random database/server tokens. The public feed may expose short `pub-...` aliases for old malformed tokens so existing publications remain recoverable. The publication-link UI consumes the workspace record returned by Save/Publish instead of doing a second storage lookup.
-
-The “attach full underlying research” option is part of the same workspace record (`share_scope`) and is persisted in the same Save/Publish operation. It must not perform a second independent write after publishing.
-
 Supabase `sb_secret_...` keys are opaque API keys, not JWTs. Server code must use `src/supabase-server-key.js`; it must never send an opaque secret as `Authorization: Bearer`.
+
+## Shared workspace/publishing components
 
 New Problem Spaces must reuse:
 
@@ -88,7 +168,19 @@ New Problem Spaces must reuse:
 - `/api/published-feed` for public articles,
 - the shared profile, discovery, and publication surfaces.
 
-Do not create localStorage workspace persistence, browser-direct optional-table publishing, auth-dependent public-feed visibility, or custom persistence paths for one Problem Space.
+Do not create localStorage workspace persistence, browser-direct optional-table publishing, auth-dependent public-feed visibility, or a custom persistence path for one Problem Space.
+
+## Logistics game handoff
+
+The logistics game is a worldwide 3PL management simulation. Its current objective is:
+
+> **Fill customer orders. Protect promises. Stay solvent. Build the most resilient global 3PL.**
+
+At 1×, **15 real minutes = 1 game hour**. The game clock, physical network, staffing/procurement lead times and working capital use the same saved career time. On load, a synchronized approximately **10-second** replay visualizes the prior operating window moving toward the authoritative current state; it does not create separate visual progress.
+
+The game walkthrough is versioned in `state.onboarding.dashboardTourVersion`. The current walkthrough scrolls each mobile target into a usable viewport position before drawing a dedicated spotlight and curved white SVG arrow. It has explicit Exit/× controls and must never elevate a live dashboard element above the tour overlay. `decisions waiting` and Alerts counters are actionable navigation controls, and decision/exception surfaces must always be closable without committing an action.
+
+See [`docs/logistics-game/README.md`](docs/logistics-game/README.md) for the complete mechanics.
 
 ## Life Sciences
 
@@ -140,18 +232,20 @@ The guided brief captures the current state, problem, audience, requested action
 
 New Problem Spaces must work after deployment without requiring an ordinary user to open the Supabase SQL editor.
 
-1. Workspace content has one writable canonical database record in account metadata.
-2. `/api/workspaces` is the preferred transport for private reads and writes.
+1. Analytical workspace content has one writable canonical database record in account metadata.
+2. `/api/workspaces` is the preferred analytical-workspace transport.
 3. Authenticated session metadata is allowed for immediate read recovery of that same account record.
 4. Direct authenticated Supabase Auth metadata access is the fresh recovery transport if `/api/workspaces` is temporarily unreachable.
-5. Public publication table reads remain anonymous regardless of viewer login state.
-6. Shared bootstrap-scale data uses host-account metadata.
-7. User projects, preferences, drafts, and saved decisions use database-backed account metadata.
-8. Workspace content never falls back to a device-only local copy.
-9. Optional legacy/virtual records are recovery inputs, not new write targets.
-10. Collections are bounded and shared writes are serialized.
-11. A dedicated table may replace metadata later without changing the public API.
-12. Missing optional tables must never produce instructions telling an ordinary user to run SQL.
+5. Browser transport fallbacks may reach the same API/database record but may not create another store.
+6. Public publication-list requests remain anonymous/session-independent regardless of viewer login state.
+7. Shared bootstrap-scale data uses host-account metadata.
+8. User projects, preferences, drafts and saved decisions use database-backed account metadata unless the product explicitly requires offline behavior.
+9. Analytical workspace content never falls back to a device-only editable copy.
+10. The logistics **game career is the explicit offline exception** and synchronizes local + account copies using newest-copy-wins.
+11. Optional legacy/virtual records are recovery inputs, not new write targets.
+12. Collections are bounded and shared writes are serialized.
+13. A dedicated table may replace metadata later without changing the public API.
+14. Missing optional tables must never produce instructions telling an ordinary user to run SQL.
 
 ## CI dependency rule
 
