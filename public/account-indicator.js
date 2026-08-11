@@ -27,29 +27,44 @@ link.href='/account';
 link.innerHTML='<span class="atlas-account-dot"></span><span>Checking account…</span>';
 document.body.append(link);
 
+let baseballWorkspacePromise=null;
+const baseballWorkspaceController=new AbortController();
+window.addEventListener('pagehide',()=>baseballWorkspaceController.abort(),{once:true});
+
+async function baseballJson(url){const response=await fetch(url,{headers:{Accept:'application/json'},signal:baseballWorkspaceController.signal});if(!response.ok)throw new Error(`Baseball data request failed (${response.status}).`);return response.json()}
 async function mountBaseballWorkspace(){
- const game=location.pathname.match(/^\/baseball\/games\/(\d+)/),player=location.pathname.match(/^\/baseball\/players\/(\d+)/),team=location.pathname.match(/^\/baseball\/teams\/(\d+)/);
- if(!game&&!player&&!team)return;
- await import('./baseball-stat-help.js').catch(()=>null);
- const {installWorkspaceTransportFallback}=await import('./workspace-transport-fallback.js');
- installWorkspaceTransportFallback();
- const css=document.createElement('link');css.rel='stylesheet';css.href='/workspace.css';document.head.append(css);
- const host=document.createElement('div');host.id='baseball-workspace';document.querySelector('article')?.append(host);
- try{
-  const {mountWorkspace}=await import('./workspace.js');
-  if(game){
-   const r=await fetch(`/api/baseball/games/${game[1]}`),data=await r.json();
-   await mountWorkspace(host,{type:'baseball_game',id:game[1],title:data.game?.name||document.querySelector('h1')?.textContent||'Baseball game',context:data.game});
-  }else if(player){
-   let r=await fetch(`/api/baseball/prospect-players/${player[1]}`);if(!r.ok)r=await fetch(`/api/baseball/players/${player[1]}`);
-   const data=await r.json();
-   await mountWorkspace(host,{type:'baseball_player',id:player[1],title:data.player?.name||document.querySelector('h1')?.textContent||'Baseball player',context:data.player});
-  }else{
-   const r=await fetch(`/api/baseball/teams/${team[1]}`),data=await r.json();
-   await mountWorkspace(host,{type:'baseball_team',id:team[1],title:data.team?.name||document.querySelector('h1')?.textContent||'Baseball team',context:data.team});
-  }
-  fixGuidance(host);
- }catch(e){host.innerHTML=`<section class="workspace"><p>Publishing workspace unavailable: ${e.message}</p></section>`}
+ if(baseballWorkspacePromise)return baseballWorkspacePromise;
+ baseballWorkspacePromise=(async()=>{
+  const game=location.pathname.match(/^\/baseball\/games\/(\d+)/),player=location.pathname.match(/^\/baseball\/players\/(\d+)/),team=location.pathname.match(/^\/baseball\/teams\/(\d+)/);
+  if(!game&&!player&&!team)return;
+  await import('./baseball-stat-help.js').catch(()=>null);
+  const {installWorkspaceTransportFallback}=await import('./workspace-transport-fallback.js');
+  installWorkspaceTransportFallback();
+  if(!document.querySelector('link[data-baseball-workspace-css]')){const css=document.createElement('link');css.rel='stylesheet';css.href='/workspace.css';css.dataset.baseballWorkspaceCss='true';document.head.append(css)}
+  let host=document.querySelector('#baseball-workspace');if(!host){host=document.createElement('div');host.id='baseball-workspace';document.querySelector('article')?.append(host)}
+  if(!host||host.dataset.mounting==='true'||host.dataset.mounted==='true')return;
+  host.dataset.mounting='true';
+  try{
+   const {mountWorkspace}=await import('./workspace.js');
+   if(game){
+    const data=await baseballJson(`/api/baseball/games/${game[1]}`);
+    if(baseballWorkspaceController.signal.aborted)return;
+    await mountWorkspace(host,{type:'baseball_game',id:game[1],title:data.game?.name||document.querySelector('h1')?.textContent||'Baseball game',context:data.game});
+   }else if(player){
+    let data;
+    try{data=await baseballJson(`/api/baseball/prospect-players/${player[1]}`)}catch(error){if(error.name==='AbortError')throw error;data=await baseballJson(`/api/baseball/players/${player[1]}`)}
+    if(baseballWorkspaceController.signal.aborted)return;
+    await mountWorkspace(host,{type:'baseball_player',id:player[1],title:data.player?.name||document.querySelector('h1')?.textContent||'Baseball player',context:data.player});
+   }else{
+    const data=await baseballJson(`/api/baseball/teams/${team[1]}`);
+    if(baseballWorkspaceController.signal.aborted)return;
+    await mountWorkspace(host,{type:'baseball_team',id:team[1],title:data.team?.name||document.querySelector('h1')?.textContent||'Baseball team',context:data.team});
+   }
+   host.dataset.mounted='true';
+   fixGuidance(host);
+  }catch(e){if(e.name!=='AbortError')host.innerHTML=`<section class="workspace"><p>Publishing workspace unavailable: ${e.message}</p></section>`}finally{delete host.dataset.mounting}
+ })();
+ return baseballWorkspacePromise;
 }
 
 if(location.pathname.startsWith('/baseball/'))mountBaseballWorkspace();
