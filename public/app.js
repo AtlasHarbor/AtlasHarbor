@@ -9,6 +9,8 @@ let searchTimer;
 const escapeHtml = (value) => String(value ?? '—').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const formatDate = (value, options = {}) => new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', ...options }).format(new Date(value));
 const label = (key) => key.replace(/([A-Z])/g, ' $1').replace(/^./, (char) => char.toUpperCase());
+const slug = (value) => String(value || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const playerHref = (player) => `/baseball/players/${player.id}/${slug(player.name)}`;
 
 async function requestJson(url) {
   const response = await fetch(url, { headers: { Accept: 'application/json' } });
@@ -25,14 +27,8 @@ function metricGrid(values, limit = 24) {
   return cells ? `<div class="stat-grid">${cells}</div>` : '<p class="empty-state">No data has been published yet.</p>';
 }
 
-function section(title, body) {
-  return `<section class="report-section"><h3>${escapeHtml(title)}</h3>${body}</section>`;
-}
-
-function weatherText(weather) {
-  if (!weather) return 'Forecast pending';
-  return [weather.condition, weather.temperature != null ? `${weather.temperature}°` : null, weather.wind].filter(Boolean).join(' · ') || 'Forecast pending';
-}
+function section(title, body) { return `<section class="report-section"><h3>${escapeHtml(title)}</h3>${body}</section>`; }
+function weatherText(weather) { if (!weather) return 'Forecast pending'; return [weather.condition, weather.temperature != null ? `${weather.temperature}°` : null, weather.wind].filter(Boolean).join(' · ') || 'Forecast pending'; }
 
 function renderGameCard(game) {
   const away = game.away?.name ?? 'Away';
@@ -41,12 +37,8 @@ function renderGameCard(game) {
     <div class="game-card-top"><span class="game-date">${escapeHtml(formatDate(game.date))}</span><span class="status-pill">${escapeHtml(game.status ?? 'Scheduled')}</span></div>
     <div class="team-row"><strong>${escapeHtml(away)}</strong><span>at</span><strong>${escapeHtml(home)}</strong></div>
     <p class="venue-line">${escapeHtml(game.venue ?? 'Venue TBD')}</p>
-    <div class="starter-grid">
-      <div><small>Away starter</small><b>${escapeHtml(game.awayPitcher ?? 'TBD')}</b></div>
-      <div><small>Home starter</small><b>${escapeHtml(game.homePitcher ?? 'TBD')}</b></div>
-    </div>
-    <div class="weather-strip"><span>☁</span><b>${escapeHtml(weatherText(game.weather))}</b></div>
-    <span class="open-report">Open matchup report →</span>
+    <div class="starter-grid"><div><small>Away starter</small><b>${escapeHtml(game.awayPitcher ?? 'TBD')}</b></div><div><small>Home starter</small><b>${escapeHtml(game.homePitcher ?? 'TBD')}</b></div></div>
+    <div class="weather-strip"><span>☁</span><b>${escapeHtml(weatherText(game.weather))}</b></div><span class="open-report">Open matchup report →</span>
   </button>`;
 }
 
@@ -58,6 +50,7 @@ async function loadGames() {
     const list = Array.isArray(payload.games) ? payload.games : [];
     games.innerHTML = list.length ? list.map(renderGameCard).join('') : '<div class="schedule-empty"><h3>No upcoming games found</h3><p>MLB has not published games in the current window.</p></div>';
     games.querySelectorAll('[data-game-id]').forEach((button) => button.addEventListener('click', () => loadGame(button.dataset.gameId)));
+    window.dispatchEvent(new CustomEvent('atlas-baseball-results-rendered'));
   } catch (error) {
     console.error('Schedule load failed', error);
     games.innerHTML = '<div class="schedule-error"><h3>Schedule temporarily unavailable</h3><p>The MLB data service did not respond. Try again in a moment.</p><button id="retry-schedule">Retry schedule</button></div>';
@@ -69,9 +62,10 @@ async function search(query) {
   try {
     const payload = await requestJson(`/api/baseball/search?q=${encodeURIComponent(query)}`);
     const items = Array.isArray(payload.results) ? payload.results : [];
-    results.innerHTML = items.length ? items.map((item) => `<button class="result" data-type="${escapeHtml(item.type)}" data-id="${escapeHtml(item.id)}"><span class="type-badge">${escapeHtml(item.type)}</span><span><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.subtitle)}</small></span><span class="arrow">→</span></button>`).join('') : '<div class="result">No matching teams, games, or players.</div>';
+    results.innerHTML = items.length ? items.map((item) => `<button class="result" data-type="${escapeHtml(item.type)}" data-id="${escapeHtml(item.id)}" data-name="${escapeHtml(item.name)}"><span class="type-badge">${escapeHtml(item.type)}</span><span><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.subtitle)}</small></span><span class="arrow">→</span></button>`).join('') : '<div class="result">No matching teams, games, or players.</div>';
     results.hidden = false;
     status.textContent = `${items.length} result${items.length === 1 ? '' : 's'}`;
+    window.dispatchEvent(new CustomEvent('atlas-baseball-results-rendered'));
   } catch (error) {
     console.error('Search failed', error);
     results.hidden = true;
@@ -82,11 +76,7 @@ async function search(query) {
 input?.addEventListener('input', () => {
   clearTimeout(searchTimer);
   const query = input.value.trim();
-  if (query.length < 2) {
-    results.hidden = true;
-    status.textContent = 'Type at least 2 letters';
-    return;
-  }
+  if (query.length < 2) { results.hidden = true; status.textContent = 'Type at least 2 letters'; return; }
   status.textContent = 'Searching teams, games, and players…';
   searchTimer = setTimeout(() => search(query), 250);
 });
@@ -100,8 +90,8 @@ results?.addEventListener('click', (event) => {
   else loadGame(button.dataset.id);
 });
 
-function playerButton(player) {
-  return `<button data-player-id="${escapeHtml(player.id)}"><b>${escapeHtml(player.name)}</b><small>${escapeHtml(player.position)}</small></button>`;
+function playerLink(player) {
+  return `<a class="player-report-link" href="${playerHref(player)}" data-player-id="${escapeHtml(player.id)}" data-name="${escapeHtml(player.name)}"><b>${escapeHtml(player.name)}</b><small>${escapeHtml(player.position)}</small></a>`;
 }
 
 async function loadGame(id) {
@@ -110,68 +100,58 @@ async function loadGame(id) {
     const { game } = await requestJson(`/api/baseball/games/${id}`);
     const side = (key, title) => {
       const team = game.teams?.[key] ?? {};
-      const lineup = team.battingOrder?.length ? `<ol>${team.battingOrder.map((player) => `<li>${playerButton(player)}</li>`).join('')}</ol>` : '<p>Lineup has not been posted.</p>';
-      const bench = (team.bench ?? []).map(playerButton).join('') || '<p>Bench not posted.</p>';
-      const bullpen = (team.bullpen ?? []).map(playerButton).join('') || '<p>Bullpen not posted.</p>';
+      const lineup = team.battingOrder?.length ? `<ol>${team.battingOrder.map((player) => `<li>${playerLink(player)}</li>`).join('')}</ol>` : '<p>Lineup has not been posted.</p>';
+      const bench = (team.bench ?? []).map(playerLink).join('') || '<p>Bench not posted.</p>';
+      const bullpen = (team.bullpen ?? []).map(playerLink).join('') || '<p>Bullpen not posted.</p>';
       return `<div class="lineup-card"><h3>${escapeHtml(title)} lineup</h3>${lineup}<h4>Bench</h4><div class="roster">${bench}</div><h4>Bullpen</h4><div class="roster">${bullpen}</div></div>`;
     };
     detail.innerHTML = `<div class="detail-head"><div><p class="eyebrow">GAME REPORT · ${escapeHtml(game.status)}</p><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(formatDate(game.date))} · ${escapeHtml(game.venue)} · ${escapeHtml(game.seriesDescription)}</p></div></div>${metricGrid({ gameType: game.gameType, dayNight: game.dayNight, scheduledInnings: game.scheduledInnings, doubleHeader: game.doubleHeader, awayStarter: game.probablePitchers?.away, homeStarter: game.probablePitchers?.home, weather: game.weather?.condition, temperature: game.weather?.temperature, wind: game.weather?.wind })}<div class="lineup-grid">${side('away', game.away?.name ?? 'Away')}${side('home', game.home?.name ?? 'Home')}</div>`;
-    activatePlayerLinks();
     showDetail('Game report ready');
-  } catch (error) {
-    console.error('Game load failed', error);
-    status.textContent = 'Game report unavailable.';
-  }
+  } catch (error) { console.error('Game load failed', error); status.textContent = 'Game report unavailable.'; }
+}
+
+function teamStanding(team) {
+  const standing = team.standing ?? {}, record = team.record;
+  if (team.seasonPhase === 'postseason') return `<div class="team-season-summary postseason"><p class="eyebrow">POSTSEASON</p><h3>${record ? `${record.wins}-${record.losses} regular-season record` : 'Postseason baseball'}</h3><p>${escapeHtml(team.nextGame?.seriesDescription ?? 'Postseason schedule and series context replace the regular-season division race.')}</p>${metricGrid({ nextGame: team.nextGame?.status, series: team.nextGame?.seriesDescription }, 4)}</div>`;
+  return `<div class="team-season-summary"><p class="eyebrow">REGULAR SEASON · ${escapeHtml(team.season)}</p><h3>${record ? `${record.wins}-${record.losses}` : 'Standing unavailable'}</h3>${metricGrid({ wins: record?.wins, losses: record?.losses, pct: record?.pct, divisionPlace: standing.divisionRank ? `#${standing.divisionRank}` : null, gamesBack: standing.gamesBack, leaguePlace: standing.leagueRank ? `#${standing.leagueRank}` : null, wildCard: standing.wildCardRank ? `#${standing.wildCardRank}` : null, streak: standing.streak }, 10)}</div>`;
 }
 
 async function loadTeam(id) {
-  status.textContent = 'Loading team, lineup, bench, and IL…';
+  status.textContent = 'Loading team record, standings, roster, and IL…';
   try {
     const { team } = await requestJson(`/api/baseball/teams/${id}`);
-    const lineup = team.lineup?.players?.length ? `<ol class="lineup-list">${team.lineup.players.map((player) => `<li>${playerButton(player)}</li>`).join('')}</ol>` : '<p>The next lineup has not been posted by MLB yet.</p>';
-    const bench = (team.bench ?? []).map((player) => `<div class="bench-card">${playerButton(player)}${metricGrid(player.pinchHitting, 6)}</div>`).join('') || '<p>No bench data returned.</p>';
-    const injured = team.injuredList?.length ? `<div class="roster">${team.injuredList.map((player) => `<button data-player-id="${escapeHtml(player.id)}"><b>${escapeHtml(player.name)}</b><small>${escapeHtml(player.position)} · ${escapeHtml(player.status)}</small></button>`).join('')}</div>` : '<p>No injured-list players returned by MLB.</p>';
-    const roster = `<div class="roster">${(team.roster ?? []).map(playerButton).join('')}</div>`;
-    detail.innerHTML = `<div class="detail-head"><div><p class="eyebrow">TEAM REPORT</p><h2>${escapeHtml(team.name)}</h2><p>${escapeHtml(team.league)} · ${escapeHtml(team.division)} · ${escapeHtml(team.venue)}</p></div><strong>${escapeHtml(team.abbreviation)}</strong></div>${section('Major team stats', metricGrid({ ...team.stats?.hitting, ...team.stats?.pitching, ...team.stats?.fielding }, 36))}${section(`${team.lineup?.status === 'confirmed' ? 'Confirmed' : 'Projected'} lineup`, lineup)}${section('Bench and pinch-hitting stats', `<div class="bench-grid">${bench}</div>`)}${section('Active injured list', injured)}${section('Full active roster', roster)}`;
-    activatePlayerLinks();
+    const lineup = team.lineup?.players?.length ? `<ol class="lineup-list">${team.lineup.players.map((player) => `<li>${playerLink(player)}</li>`).join('')}</ol>` : '<p>The next lineup has not been posted by MLB yet.</p>';
+    const bench = (team.bench ?? []).map((player) => `<div class="bench-card">${playerLink(player)}${metricGrid(player.pinchHitting, 6)}</div>`).join('') || '<p>No bench data returned.</p>';
+    const injured = team.injuredList?.length ? `<div class="roster">${team.injuredList.map((player) => `<a class="player-report-link" href="${playerHref(player)}" data-player-id="${escapeHtml(player.id)}" data-name="${escapeHtml(player.name)}"><b>${escapeHtml(player.name)}</b><small>${escapeHtml(player.position)} · ${escapeHtml(player.status)}</small></a>`).join('')}</div>` : '<p>No player with a verified injured-list status is currently returned.</p>';
+    const roster = `<div class="roster">${(team.roster ?? []).map(playerLink).join('')}</div>`;
+    const record = team.record ? `${team.record.wins}-${team.record.losses}` : 'Record unavailable';
+    detail.innerHTML = `<div class="detail-head"><div><p class="eyebrow">${escapeHtml((team.sportName ?? 'PROFESSIONAL BASEBALL').toUpperCase())} TEAM REPORT</p><h2>${escapeHtml(team.name)}</h2><p>${escapeHtml(team.league)} · ${escapeHtml(team.division)} · ${escapeHtml(team.venue)}</p><p><strong>${escapeHtml(record)}</strong>${team.seasonPhase === 'regular-season' && team.standing?.divisionRank ? ` · #${escapeHtml(team.standing.divisionRank)} in division` : ''}</p></div><strong>${escapeHtml(team.abbreviation)}</strong></div>${teamStanding(team)}${section('Team stats', metricGrid({ ...team.stats?.hitting, ...team.stats?.pitching, ...team.stats?.fielding }, 36))}${section(`${team.lineup?.status === 'confirmed' ? 'Confirmed' : 'Most recently available'} lineup`, lineup)}${section('Bench and pinch-hitting stats', `<div class="bench-grid">${bench}</div>`)}${section('Active injured list', `<p class="source-note">Only verified IL/injury statuses are shown.</p>${injured}`)}${section('Full active roster · open any player profile', roster)}`;
     showDetail('Team report ready');
-  } catch (error) {
-    console.error('Team load failed', error);
-    status.textContent = 'Team report unavailable.';
-  }
+  } catch (error) { console.error('Team load failed', error); status.textContent = 'Team report unavailable.'; }
 }
 
 async function loadPlayer(id) {
   status.textContent = 'Loading complete player record…';
   try {
     const { player } = await requestJson(`/api/baseball/players/${id}`);
-    const stats = Object.entries(player.stats ?? {}).map(([name, splits]) => section(name, `<div class="split-stack">${(splits ?? []).map((split) => `<div><h4>${escapeHtml(split.season || split.sport?.name || split.team?.name || 'Summary')}</h4>${metricGrid(split.stat, 24)}</div>`).join('')}</div>`)).join('');
+    const stats = Object.entries(player.stats ?? {}).map(([name, splits]) => section(name, `<div class="split-stack">${(splits ?? []).map((split) => { const year = split.season ?? String(split.date ?? '').slice(0, 4); const context = [year, split.sport?.name, split.team?.name].filter(Boolean).join(' · ') || 'Summary'; return `<div><h4>${escapeHtml(context)}</h4>${metricGrid(split.stat, 24)}</div>`; }).join('')}</div>`)).join('');
     const rows = (player.recentGames ?? []).map((game) => {
       const summary = Object.entries(game.stat ?? {}).filter(([, value]) => ['string', 'number'].includes(typeof value)).slice(0, 10).map(([key, value]) => `${label(key)}: ${value}`).join(' · ');
-      return `<tr><td>${escapeHtml(game.date)}</td><td>${escapeHtml(game.opponent)}</td><td>${game.isHome ? 'Home' : 'Away'}</td><td>${escapeHtml(summary)}</td></tr>`;
+      return `<tr><td>${escapeHtml(game.date)}</td><td>${escapeHtml(game.season ?? String(game.date ?? '').slice(0,4))}</td><td>${escapeHtml(game.opponent)}</td><td>${game.isHome ? 'Home' : 'Away'}</td><td>${escapeHtml(summary)}</td></tr>`;
     }).join('');
-    const transactions = (player.transactions ?? []).map((transaction) => `<article><b>${escapeHtml(transaction.date)} · ${escapeHtml(transaction.type)}</b><p>${escapeHtml(transaction.description)}</p></article>`).join('') || '<p>No recent transactions returned.</p>';
-    detail.innerHTML = `<div class="detail-head"><div><p class="eyebrow">COMPLETE PLAYER REPORT</p><h2>${escapeHtml(player.name)}</h2><p>${escapeHtml(player.team)} · ${escapeHtml(player.position)} · Bats ${escapeHtml(player.bats)} · Throws ${escapeHtml(player.throws)}</p></div><strong>${escapeHtml(player.number)}</strong></div>${section('Bio', metricGrid({ age: player.age, height: player.height, weight: player.weight, birthDate: player.birthDate, birthCity: player.birthCity, birthCountry: player.birthCountry, debut: player.debut, active: player.active }))}${stats}${section('Last 8 games', `<div class="table-wrap"><table><thead><tr><th>Date</th><th>Opponent</th><th>Location</th><th>Game stats</th></tr></thead><tbody>${rows}</tbody></table></div>`)}${section('Recent transactions and availability', `<div class="timeline">${transactions}</div>`)}`;
+    const transactions = (player.transactions ?? []).map((transaction) => `<article><b>${escapeHtml(transaction.date)} · ${escapeHtml(transaction.type)}</b><p>${escapeHtml(transaction.description)}</p></article>`).join('') || '<p>No recent roster/availability transactions returned.</p>';
+    detail.innerHTML = `<div class="detail-head"><div><p class="eyebrow">COMPLETE PLAYER REPORT</p><h2>${escapeHtml(player.name)}</h2><p>${escapeHtml(player.team)} · ${escapeHtml(player.position)}${player.age != null ? ` · Age ${escapeHtml(player.age)}` : ''} · Bats ${escapeHtml(player.bats)} · Throws ${escapeHtml(player.throws)}</p></div><strong>${escapeHtml(player.number)}</strong></div>${metricGrid({ age: player.age, position: player.position, team: player.team, bats: player.bats, throws: player.throws }, 8)}${section('Bio', metricGrid({ age: player.age, height: player.height, weight: player.weight, birthDate: player.birthDate, birthCity: player.birthCity, birthCountry: player.birthCountry, debut: player.debut, active: player.active }))}${stats}${section('Last 8 games', `<div class="table-wrap"><table><thead><tr><th>Date</th><th>Year</th><th>Opponent</th><th>Location</th><th>Game stats</th></tr></thead><tbody>${rows}</tbody></table></div>`)}${section('Recent roster and availability activity', `<p class="source-note">Cosmetic jersey-number changes are omitted.</p><div class="timeline">${transactions}</div>`)}`;
     showDetail('Complete player report ready');
-  } catch (error) {
-    console.error('Player load failed', error);
-    status.textContent = 'Player report unavailable.';
-  }
-}
-
-function activatePlayerLinks() {
-  detail.querySelectorAll('[data-player-id]').forEach((button) => button.addEventListener('click', () => loadPlayer(button.dataset.playerId)));
+  } catch (error) { console.error('Player load failed', error); status.textContent = 'Player report unavailable.'; }
 }
 
 function showDetail(message) {
   detail.hidden = false;
   detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
   status.textContent = message;
+  window.dispatchEvent(new CustomEvent('atlas-baseball-results-rendered'));
 }
 
-document.addEventListener('keydown', (event) => {
-  if ((event.metaKey || event.ctrlKey) && event.key === 'k') { event.preventDefault(); input?.focus(); }
-  if (event.key === 'Escape' && results) results.hidden = true;
-});
+document.addEventListener('keydown', (event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'k') { event.preventDefault(); input?.focus(); } if (event.key === 'Escape' && results) results.hidden = true; });
 document.addEventListener('click', (event) => { if (results && !event.target.closest('.search-shell')) results.hidden = true; });
 loadGames();
