@@ -12,6 +12,7 @@ import {createWorkspaceRouter} from './workspace-api.js';
 import {createPublishedFeedRouter} from './published-feed.js';
 import {createBaseballProspectRouter} from './baseball-prospect-router.js';
 import {createBaseballSearchRouter} from './baseball-search-router.js';
+import {createBaseballTeamLiveRouter} from './baseball-team-live-router.js';
 import {createGameRoutingRouter} from './game-routing.js';
 import {createGameFuelRouter} from './game-fuel.js';
 import {createGameClientRouter} from './game-client.js';
@@ -29,7 +30,7 @@ export function createProblemRouter({service=createProblemSpacesService(),env=pr
  const router=express.Router(),legal=createLegalService({env}),storage=createProblemSpaceStorage({env}),economicsService=createEconomicsService({storage,env});
  economicsService.startScheduler();legal.startScheduler();
  router.get('/runtime-config.js',(_req,res)=>{const configured=Boolean(env.SUPABASE_URL&&env.SUPABASE_PUBLISHABLE_KEY),payload={configured,supabaseUrl:configured?env.SUPABASE_URL:null,supabasePublishableKey:configured?env.SUPABASE_PUBLISHABLE_KEY:null};res.set('Cache-Control','no-store');res.type('application/javascript').send(`window.__ATLAS_CONFIG__=${JSON.stringify(payload)};`)});
- router.use(createGameClientRouter());router.use(createBaseballSearchRouter());router.use(createBaseballProspectRouter({legal}));router.use(createGameRoutingRouter());router.use(createGameFuelRouter({env}));router.use(createLegalRouter({service:legal}));
+ router.use(createGameClientRouter());router.use(createBaseballSearchRouter());router.use(createBaseballProspectRouter({legal}));router.use(createBaseballTeamLiveRouter());router.use(createGameRoutingRouter());router.use(createGameFuelRouter({env}));router.use(createLegalRouter({service:legal}));
  router.get(['/economics','/economics/{*path}'],(_req,res)=>res.sendFile(path.join(directory,'../public/economics.html')));
  router.get(['/prop','/prop/{*path}'],(_req,res)=>res.sendFile(path.join(directory,'../public/prop.html')));
  router.get(['/go-to-market','/go-to-market/{*path}'],(req,res)=>res.redirect(301,req.originalUrl.replace(/^\/go-to-market/,'/prop')));
