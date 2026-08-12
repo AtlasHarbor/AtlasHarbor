@@ -29,19 +29,24 @@
   };
   const MODE_KPH={truck:230,rail:180,air:760,ocean:110};
   const MODE_COST={truck:18000,rail:12000,air:52000,ocean:30000};
-  const DAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   let tickTimer=null,uiTimer=null,applying=false,lastPublishedHour=null;
 
   function clone(value){return structuredClone(value)}
   function readState(){try{return clone(window.__atlasGameState||JSON.parse(localStorage.getItem(GAME_KEY)||'{}'))}catch{return{}}}
   function writeState(state){try{localStorage.setItem(GAME_KEY,JSON.stringify(state))}catch{}window.__atlasGameState=clone(state)}
+  function currentZone(){try{return Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'}catch{return'UTC'}}
   function normalizeClock(state){
     state.clock=state.clock&&typeof state.clock==='object'?state.clock:{};
     const clock=state.clock;
     clock.speed=SPEEDS.includes(Number(clock.speed))?Number(clock.speed):1;
     clock.lastRealAt=Number(clock.lastRealAt||state.updatedAt||Date.now());
     clock.extraCarryMs=Math.max(0,Number(clock.extraCarryMs||0));
-    clock.authority='network-v2';
+    if(!clock.displayTimeZone)clock.displayTimeZone=currentZone();
+    if(!Number.isFinite(Number(clock.displayAnchorMs))){
+      clock.displayAnchorMs=Date.now()-Number(state.totalHours||8)*60*60*1000;
+      clock.displayAnchoredAt=Date.now();
+    }
+    clock.authority='network-v3-wall-anchor';
     return clock;
   }
   function rad(v){return v*Math.PI/180}
@@ -79,17 +84,17 @@
     const clock=normalizeClock(state),pending=state.paused?0:Math.max(0,now-clock.lastRealAt)*clock.speed;
     return Number(state.totalHours||8)+(clock.extraCarryMs+pending)/REAL_MS_PER_GAME_HOUR;
   }
-  function formatHours(value){
-    const safe=Math.max(0,Number(value||0)),whole=Math.floor(safe),day=Math.floor(whole/24),hour=whole%24,minute=Math.floor((safe-whole)*60)%60;
-    return`${DAYS[((day%7)+7)%7]} ${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}`;
+  function formatHours(value,state=readState()){
+    const clock=normalizeClock(state),epoch=Number(clock.displayAnchorMs)+Math.max(0,Number(value||0))*60*60*1000;
+    try{return new Intl.DateTimeFormat(undefined,{timeZone:clock.displayTimeZone,weekday:'short',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(epoch)).replace(',','')}catch{return new Date(epoch).toLocaleString([], {weekday:'short',hour:'2-digit',minute:'2-digit',hour12:false})}
   }
   function publish(state,hoursAdvanced,message=''){
-    const clock=normalizeClock(state),carry=clock.extraCarryMs,last=clock.lastRealAt,speed=clock.speed;
+    const clock=normalizeClock(state),carry=clock.extraCarryMs,last=clock.lastRealAt,speed=clock.speed,zone=clock.displayTimeZone,anchor=clock.displayAnchorMs,anchoredAt=clock.displayAnchoredAt;
     state.updatedAt=Date.now();writeState(state);applying=true;
     window.dispatchEvent(new CustomEvent('atlas-game-loaded',{detail:clone(state)}));
     window.dispatchEvent(new CustomEvent('atlas-game-changed',{detail:state}));
     applying=false;
-    state.clock=state.clock&&typeof state.clock==='object'?state.clock:{};state.clock.speed=speed;state.clock.lastRealAt=last;state.clock.extraCarryMs=carry;state.clock.authority='network-v2';state.updatedAt=Date.now();writeState(state);
+    state.clock=state.clock&&typeof state.clock==='object'?state.clock:{};Object.assign(state.clock,{speed,lastRealAt:last,extraCarryMs:carry,displayTimeZone:zone,displayAnchorMs:anchor,displayAnchoredAt:anchoredAt,authority:'network-v3-wall-anchor'});state.updatedAt=Date.now();writeState(state);
     if(message)window.dispatchEvent(new CustomEvent('atlas-game-save-status',{detail:{message}}));
     window.dispatchEvent(new CustomEvent('atlas-network-time-advanced',{detail:{hours:hoursAdvanced,networkHours:continuousHours(state),speed}}));
   }
@@ -102,10 +107,11 @@
     return hours;
   }
   function renderClock(){
-    const state=readState();if(!state?.orders)return;const clock=normalizeClock(state),nowHours=continuousHours(state),day=document.querySelector('#day');if(day)day.textContent=formatHours(nowHours);
+    const state=readState();if(!state?.orders)return;const clock=normalizeClock(state),nowHours=continuousHours(state),day=document.querySelector('#day');if(day)day.textContent=formatHours(nowHours,state);
     let live=document.querySelector('#game-clock-live');if(!live){const host=document.querySelector('.clock');if(host){live=document.createElement('div');live.id='game-clock-live';live.innerHTML='<i></i><span></span>';host.append(live)}}
     if(live){const fraction=((nowHours-Math.floor(nowHours))%1+1)%1;live.querySelector('i').style.width=`${Math.round(fraction*100)}%`;live.querySelector('span').textContent=state.paused?'Paused':`${clock.speed}× · next hour in ${Math.max(0,Math.ceil((1-fraction)*15/clock.speed))} real min`;}
     document.querySelectorAll('[data-game-speed]').forEach(button=>button.classList.toggle('active',Number(button.dataset.gameSpeed)===clock.speed));
+    const host=document.querySelector('.clock');if(host){host.title=`Career timezone: ${clock.displayTimeZone}. Network Time stays anchored to the timezone where this career began.`}
   }
   function setSpeed(speed){
     if(!SPEEDS.includes(speed))return;const state=readState();accrue(state,Date.now(),false);const clock=normalizeClock(state);clock.speed=speed;clock.lastRealAt=Date.now();state.updatedAt=Date.now();writeState(state);window.dispatchEvent(new CustomEvent('atlas-game-changed',{detail:state}));renderClock();
@@ -114,7 +120,7 @@
   function tick(){const state=readState();if(!state?.orders)return;const hours=accrue(state,Date.now(),true);if(hours)lastPublishedHour=Number(state.totalHours||0);renderClock()}
   function onExternalState(event){if(applying)return;const state=event.detail;if(!state?.orders)return;normalizeClock(state);writeState(state);renderClock()}
   function start(){
-    const state=readState();if(state?.orders){accrue(state,Date.now(),true);renderClock()}
+    const state=readState();if(state?.orders){normalizeClock(state);writeState(state);accrue(state,Date.now(),true);renderClock()}
     installSpeedOverrides();setTimeout(installSpeedOverrides,300);
     window.addEventListener('atlas-game-loaded',onExternalState);window.addEventListener('atlas-game-changed',onExternalState);
     window.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){const s=readState();accrue(s,Date.now(),true);renderClock()}else{const s=readState();if(s?.orders){accrue(s,Date.now(),false);writeState(s)}}});
@@ -126,9 +132,10 @@
   window.atlasGameTime={
     realMsPerGameHour:REAL_MS_PER_GAME_HOUR,
     nowHours:()=>continuousHours(),
-    format:formatHours,
+    format:value=>formatHours(value),
     speed:()=>normalizeClock(readState()).speed,
     paused:()=>Boolean(readState().paused),
+    timezone:()=>normalizeClock(readState()).displayTimeZone,
     accrue:()=>{const s=readState();return accrue(s,Date.now(),true)}
   };
   document.addEventListener('DOMContentLoaded',start,{once:true});
