@@ -1,4 +1,27 @@
 import'./brand-normalizer.js';
+const propPath=location.pathname.replace(/\/$/,'');
+const propManualMode=propPath==='/prop'&&new URLSearchParams(location.search).get('manual')==='1';
+if(propPath==='/prop/new'){
+ location.replace('/prop?manual=1');
+}else if(propManualMode){
+ let attempts=0;
+ const isolateManual=()=>{
+  attempts++;
+  const block=document.querySelector('#manual-space-block'),root=document.querySelector('#prop-root');
+  if(block&&root){
+   const back=document.createElement('p');back.className='gtm-back';back.innerHTML='<a href="/prop">← All propositions</a>';
+   root.replaceChildren(back,block);
+   document.title='Create Space Block · Propositions · Atlas Harbor';
+   history.replaceState(history.state,'','/prop/new');
+   block.scrollIntoView({block:'start'});
+   return;
+  }
+  if(attempts<60)setTimeout(isolateManual,100);
+ };
+ setTimeout(isolateManual,0);
+}else if(propPath==='/prop'){
+ [180,420,850,1500,2400].forEach(delay=>setTimeout(()=>document.querySelector('#manual-space-block')?.remove(),delay));
+}
 const STYLE_ID='atlas-loading-feedback-style',OVERLAY_ID='atlas-loading-feedback';
 if(!document.getElementById(STYLE_ID)){const style=document.createElement('style');style.id=STYLE_ID;style.textContent=`#${OVERLAY_ID}{position:fixed;inset:0;z-index:100000;display:grid;place-items:center;background:#102d2778;backdrop-filter:blur(2px);opacity:0;pointer-events:none;transition:opacity .12s ease}#${OVERLAY_ID}.visible{opacity:1;pointer-events:auto}.atlas-loading-card{display:grid;justify-items:center;gap:12px;min-width:210px;padding:24px 28px;border-radius:18px;background:#fffdf7;color:#173b32;box-shadow:0 22px 70px #102d2755;font:700 13px system-ui}.atlas-loading-spinner{width:34px;height:34px;border:4px solid #d7ddd5;border-top-color:#ef6b3a;border-radius:50%;animation:atlas-spin .75s linear infinite}.atlas-loading-card span{max-width:300px;text-align:center}.atlas-loading-card small{color:#667970;font-weight:600;letter-spacing:.06em;text-transform:uppercase}@keyframes atlas-spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.atlas-loading-spinner{animation-duration:1.8s}}`;document.head.append(style)}
 let overlay=document.getElementById(OVERLAY_ID);if(!overlay){overlay=document.createElement('div');overlay.id=OVERLAY_ID;overlay.setAttribute('role','status');overlay.setAttribute('aria-live','polite');overlay.innerHTML='<div class="atlas-loading-card"><div class="atlas-loading-spinner" aria-hidden="true"></div><span>Loading…</span><small>Atlas Harbor ops</small></div>';document.body.append(overlay)}
