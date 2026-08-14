@@ -80,12 +80,13 @@ There is no device-only Baseball workspace.
 
 Baseball reports are server-rendered and then mount the shared workspace from `account-indicator.js`. A regression exposed a browser-specific failure where `fetch('/api/workspaces/...')` could throw on these report pages even while the report itself rendered correctly.
 
-`workspace-transport-fallback.js` therefore gives the same-origin workspace API a second browser transport:
+`workspace-transport-fallback.js` therefore gives the same-origin workspace API redundant browser transports:
 
 1. use the normal native `fetch` path first,
 2. if that network call throws, retry the **same `/api/workspaces/...` endpoint** through `XMLHttpRequest`,
-3. preserve the same Authorization header, request body, HTTP method, and server-side database persistence,
-4. never create a local workspace record or browser-side alternate database.
+3. if both scripted transports fail for a `PUT`, submit the same authenticated payload through a hidden same-origin form to `/api/workspaces-form/...`,
+4. preserve the same Authorization, request body, and server-side canonical save function,
+5. never create a local workspace record or browser-side alternate database.
 
 This is transport redundancy, not a second source of truth.
 
