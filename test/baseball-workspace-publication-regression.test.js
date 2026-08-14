@@ -26,7 +26,8 @@ test('first Baseball analysis opens empty only after read transports fail and re
  assert.match(transport,/rememberWorkspaceInSession/);
  assert.match(workspaceApi,/router\.post\('\/api\/workspaces-form\/:resourceType\/:resourceId'/);
  assert.match(workspaceApi,/const result=await saveWorkspace\(req,body\)/);
- assert.match(workspaceApi,/const saved=await persistMetadata\(req,note\)/);
+ assert.match(workspaceApi,/const saved=await storage\.writeUser\(req,SPACE,\(workspace,current\)=>/);
+ assert.doesNotMatch(workspaceApi,/mirrorWorkspaceTable/);
 });
 
 test('published list and publication detail are session-independent public reads',()=>{

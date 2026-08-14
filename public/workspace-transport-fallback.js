@@ -29,22 +29,10 @@ function xhrRequest(input,init={}){
  });
 }
 
-function configuredSupabaseOrigin(){
- try{
-  const direct=globalThis.__ATLAS_CONFIG__?.supabaseUrl;
-  if(direct)return new URL(direct,location.href).origin;
-  const stored=JSON.parse(localStorage.getItem('atlas-harbor-public-config')||'null');
-  if(stored?.supabaseUrl)return new URL(stored.supabaseUrl,location.href).origin;
- }catch{}
- return'';
-}
-
 function eligibleForXhrFallback(input){
  const raw=typeof input==='string'?input:input?.url||'';
  const url=new URL(raw||location.href,location.href);
- if(url.origin===location.origin&&url.pathname.startsWith('/api/workspaces/'))return true;
- const supabaseOrigin=configuredSupabaseOrigin();
- return Boolean(supabaseOrigin&&url.origin===supabaseOrigin&&url.pathname==='/auth/v1/user');
+ return url.origin===location.origin&&url.pathname.startsWith('/api/workspaces/');
 }
 
 function firstBaseballWorkspaceCanOpenEmpty(input,init={}){
