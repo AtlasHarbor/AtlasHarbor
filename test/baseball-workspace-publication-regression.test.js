@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const transport=fs.readFileSync(new URL('../public/workspace-transport-fallback.js',import.meta.url),'utf8');
+const workspaceApi=fs.readFileSync(new URL('../src/workspace-api.js',import.meta.url),'utf8');
 const publicFeed=fs.readFileSync(new URL('../public/published-public-feed.js',import.meta.url),'utf8');
+const publishedHtml=fs.readFileSync(new URL('../public/published.html',import.meta.url),'utf8');
 const playerExport=fs.readFileSync(new URL('../public/baseball-player-export.js',import.meta.url),'utf8');
 const accountPosts=fs.readFileSync(new URL('../public/account-posts.js',import.meta.url),'utf8');
 const accountExport=fs.readFileSync(new URL('../public/account-baseball-export.js',import.meta.url),'utf8');
@@ -13,12 +15,18 @@ const searchRouter=fs.readFileSync(new URL('../src/baseball-search-router.js',im
 const bootstrap=fs.readFileSync(new URL('../src/test-account-bootstrap.js',import.meta.url),'utf8');
 const authScript=fs.readFileSync(new URL('../scripts/test-auth-api.js',import.meta.url),'utf8');
 
-test('first Baseball analysis falls back to an empty editor only after fetch and XHR fail',()=>{
+test('first Baseball analysis opens empty only after read transports fail and retains a canonical save path',()=>{
  assert.match(transport,/firstBaseballWorkspaceCanOpenEmpty/);
  assert.match(transport,/await xhrRequest\(input,init\)/);
  assert.match(transport,/authenticated-session-empty/);
  assert.match(transport,/method!==['"]GET['"]/);
  assert.match(transport,/baseball_player/);
+ assert.match(transport,/formWorkspaceRequest/);
+ assert.match(transport,/\/api\/workspaces-form\//);
+ assert.match(transport,/rememberWorkspaceInSession/);
+ assert.match(workspaceApi,/router\.post\('\/api\/workspaces-form\/:resourceType\/:resourceId'/);
+ assert.match(workspaceApi,/const result=await saveWorkspace\(req,body\)/);
+ assert.match(workspaceApi,/const saved=await persistMetadata\(req,note\)/);
 });
 
 test('published list and publication detail are session-independent public reads',()=>{
@@ -26,6 +34,7 @@ test('published list and publication detail are session-independent public reads
  assert.match(publicFeed,/published-feed/);
  assert.match(publicFeed,/headers\.delete\(['"]Authorization['"]\)/);
  assert.match(publicFeed,/credentials:\s*['"]omit['"]/);
+ assert.ok(publishedHtml.indexOf('/published-public-feed.js')<publishedHtml.indexOf('/published.js'),'public-read wrapper must load before published.js');
 });
 
 test('single-player JSON export includes signed-in analysis when available',()=>{
