@@ -23,7 +23,8 @@ test('server workspace recovers database, metadata, virtual, and legacy Legal re
   assert.match(source, /tableRows\('legal_notes'/);
   assert.match(source, /metadataNotes/);
   assert.match(source, /virtualNotes/);
-  assert.match(source, /writeUser\(/);
+  assert.match(source, /patchUser\(/);
+  assert.match(source, /workspaceMetadataKey/);
   assert.match(source, /supabaseServiceHeaders/);
   assert.match(source, /serviceKeyType/);
 });
@@ -42,7 +43,7 @@ test('Published is server-first and the server aggregates every persistent sourc
   assert.match(server, /tableRows\('workspace_notes'/);
   assert.match(server, /tableRows\('legal_notes'/);
   assert.match(server, /accountRecords/);
-  assert.match(server, /publishing_workspace/);
+  assert.match(server, /metadataWorkspaceRecords/);
   assert.match(server, /atlas_virtual_tables/);
   assert.match(server, /supabaseServiceHeaders/);
 });

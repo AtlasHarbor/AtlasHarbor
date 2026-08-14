@@ -16,23 +16,23 @@ const account={
  }
 };
 
-function mockSupabase(){
- const calls=[];
+function mockSupabase(initial=account){
+ const calls=[];let current=structuredClone(initial);
  const fetchImpl=async(url,options={})=>{
-  const parsed=new URL(url),headers=options.headers||{};calls.push({path:parsed.pathname,search:parsed.search,headers,method:options.method||'GET'});
+  const parsed=new URL(url),headers=options.headers||{};calls.push({path:parsed.pathname,search:parsed.search,headers,method:options.method||'GET',body:options.body});
   if(parsed.pathname==='/auth/v1/user'){
-   if((options.method||'GET')==='PUT')return new Response(JSON.stringify({user:account}),{status:200,headers:{'Content-Type':'application/json'}});
-   return new Response(JSON.stringify(account),{status:200,headers:{'Content-Type':'application/json'}});
+   if((options.method||'GET')==='PUT'){current={...current,user_metadata:{...current.user_metadata,...JSON.parse(options.body).data}};return new Response(JSON.stringify({user:current}),{status:200,headers:{'Content-Type':'application/json'}})}
+   return new Response(JSON.stringify(current),{status:200,headers:{'Content-Type':'application/json'}});
   }
-  if(parsed.pathname==='/auth/v1/admin/users')return new Response(JSON.stringify({users:[account]}),{status:200,headers:{'Content-Type':'application/json'}});
+  if(parsed.pathname==='/auth/v1/admin/users')return new Response(JSON.stringify({users:[current]}),{status:200,headers:{'Content-Type':'application/json'}});
   if(parsed.pathname.startsWith('/rest/v1/'))return new Response('[]',{status:200,headers:{'Content-Type':'application/json'}});
   return new Response('{}',{status:404,headers:{'Content-Type':'application/json'}});
  };
- return{fetchImpl,calls};
+ return{fetchImpl,calls,current:()=>current};
 }
 
 async function withServer(router,run){
- const app=express();app.use(express.json());app.use(router);const server=app.listen(0);await new Promise(resolve=>server.once('listening',resolve));
+ const app=express();app.use(express.json({limit:'1mb'}));app.use(router);const server=app.listen(0);await new Promise(resolve=>server.once('listening',resolve));
  try{return await run(`http://127.0.0.1:${server.address().port}`)}finally{await new Promise(resolve=>server.close(resolve))}
 }
 
@@ -67,7 +67,35 @@ test('workspace PUT performs one server auth read and one canonical metadata upd
  });
  const authCalls=mock.calls.filter(call=>call.path==='/auth/v1/user');
  assert.deepEqual(authCalls.map(call=>call.method),['GET','PUT']);
+ const patch=JSON.parse(authCalls[1].body).data;
+ assert.deepEqual(Object.keys(patch).map(key=>key.startsWith('atlas_workspace_record_v2_')), [true]);
+ assert.equal('atlas_problem_spaces'in patch,false);
  assert.equal(mock.calls.some(call=>call.path==='/rest/v1/workspace_notes'),false);
+});
+
+test('workspace PUT does not resend unrelated large account metadata',async()=>{
+ const largeAccount=structuredClone(account);largeAccount.user_metadata.atlas_problem_spaces.logistics_game={progress:{state:'x'.repeat(400000)}};
+ largeAccount.user_metadata.atlas_problem_spaces.publishing_workspace.notes.push({id:'existing-player-note',user_id:'user-1',resource_type:'baseball_player',resource_id:'695491',resource_title:'Joshua Báez',title:'Earlier scouting note',body:'<p>Old</p>',updated_at:'2026-08-01T00:00:00Z'});
+ const mock=mockSupabase(largeAccount),env={SUPABASE_URL:'https://project.supabase.co',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_test',SUPABASE_SECRET_KEY:'sb_secret_test'};
+ await withServer(createWorkspaceRouter({env,fetchImpl:mock.fetchImpl}),async base=>{
+  const response=await fetch(`${base}/api/workspaces/baseball_player/695491`,{method:'PUT',headers:{Authorization:'Bearer user-token','Content-Type':'application/json'},body:JSON.stringify({title:'Updated scouting note',body:'<p>One player only</p>',intent:'save'})}),data=await response.json();
+  assert.equal(response.status,200);
+  assert.equal(data.workspace.id,'existing-player-note');
+  assert.equal(data.workspace.title,'Updated scouting note');
+ });
+ const update=mock.calls.find(call=>call.path==='/auth/v1/user'&&call.method==='PUT');
+ assert.ok(update.body.length<5000,`workspace update unexpectedly sent ${update.body.length} bytes`);
+ assert.doesNotMatch(update.body,/logistics_game/);
+});
+
+test('a newly segmented publication is immediately discoverable',async()=>{
+ const fresh={id:'publisher',user_metadata:{atlas_profile:{username:'Scout',profile_slug:'scout'}}},mock=mockSupabase(fresh),env={SUPABASE_URL:'https://project.supabase.co',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_test',SUPABASE_SECRET_KEY:'sb_secret_test'};
+ const app=express();app.use(express.json({limit:'1mb'}));app.use(createWorkspaceRouter({env,fetchImpl:mock.fetchImpl}));app.use(createPublishedFeedRouter({env,fetchImpl:mock.fetchImpl}));const server=app.listen(0);await new Promise(resolve=>server.once('listening',resolve));
+ try{
+  const base=`http://127.0.0.1:${server.address().port}`,save=await fetch(`${base}/api/workspaces/baseball_player/669461`,{method:'PUT',headers:{Authorization:'Bearer user-token','Content-Type':'application/json'},body:JSON.stringify({resource_title:'Matthew Liberatore',title:'Fresh publication',body:'<p>Published</p>',is_shared:true,intent:'publish'})}),saved=await save.json();
+  assert.equal(save.status,200);assert.match(saved.workspace.share_token,/^[A-Za-z0-9_-]{24}$/);
+  const feed=await fetch(`${base}/api/published-feed`),data=await feed.json();assert.equal(feed.status,200);assert.equal(data.publications.length,1);assert.equal(data.publications[0].title,'Fresh publication');assert.equal(data.publications[0].share_token,saved.workspace.share_token);
+ }finally{await new Promise(resolve=>server.close(resolve))}
 });
 
 test('form-navigation fallback saves and publishes a first workspace to canonical account metadata',async()=>{
@@ -77,14 +105,11 @@ test('form-navigation fallback saves and publishes a first workspace to canonica
    assert.equal(req.get('authorization'),'Bearer form-token');
    return{token:'form-token',current};
   },
-  writeUser:async(req,space,updater)=>{
+  patchUser:async(req,updater)=>{
    assert.equal(req.get('authorization'),'Bearer form-token');
-   assert.equal(space,'publishing_workspace');
-   const spaces={...(current.user_metadata.atlas_problem_spaces||{})};
-   const value=await updater(structuredClone(spaces[space]||{}),current);
-   spaces[space]=value;
-   current={...current,user_metadata:{...current.user_metadata,atlas_problem_spaces:spaces}};
-   return{value,user:current};
+   const patch=await updater(structuredClone(current.user_metadata),current);
+   current={...current,user_metadata:{...current.user_metadata,...patch}};
+   return{patch,user:current};
   }
  };
  await withServer(createWorkspaceRouter({env:{},storage}),async base=>{
@@ -96,7 +121,7 @@ test('form-navigation fallback saves and publishes a first workspace to canonica
   assert.match(html,/atlas-workspace-form-result/);
   assert.match(html,/form-request-1/);
   assert.match(html,/First player note/);
-  const notes=current.user_metadata.atlas_problem_spaces.publishing_workspace.notes;
+  const notes=Object.entries(current.user_metadata).filter(([key])=>key.startsWith('atlas_workspace_record_v2_')).map(([,value])=>value);
   assert.equal(notes.length,1);
   assert.equal(notes[0].resource_type,'baseball_player');
   assert.equal(notes[0].resource_id,'669461');
@@ -108,10 +133,40 @@ test('form-navigation fallback saves and publishes a first workspace to canonica
   const publishResponse=await fetch(`${base}/api/workspaces-form/baseball_player/669461`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:publishForm}),publishHtml=await publishResponse.text();
   assert.equal(publishResponse.status,200);
   assert.match(publishHtml,/form-request-2/);
-  const published=current.user_metadata.atlas_problem_spaces.publishing_workspace.notes;
+  const published=Object.entries(current.user_metadata).filter(([key])=>key.startsWith('atlas_workspace_record_v2_')).map(([,value])=>value);
   assert.equal(published.length,1);
   assert.equal(published[0].is_published,true);
   assert.equal(published[0].is_shared,true);
   assert.match(published[0].share_token,/^[A-Za-z0-9_-]{24}$/);
+ });
+});
+
+test('large Unicode workspace payloads fit both JSON and form save transports',async()=>{
+ let current={id:'large-user',user_metadata:{atlas_profile:{username:'Large Writer'}}};
+ const storage={
+  patchUser:async(req,updater)=>{const patch=await updater(structuredClone(current.user_metadata),current);current={...current,user_metadata:{...current.user_metadata,...patch}};return{patch,user:current}}
+ };
+ const body=`<p>${'数'.repeat(59990)}</p>`,payload={resource_title:'Large player note',title:'Large note',body,ai_prompt:'分'.repeat(11900),intent:'save'};
+ await withServer(createWorkspaceRouter({env:{},storage}),async base=>{
+  const direct=await fetch(`${base}/api/workspaces/baseball_player/695491`,{method:'PUT',headers:{Authorization:'Bearer large-token','Content-Type':'application/json'},body:JSON.stringify(payload)});
+  assert.equal(direct.status,200);
+  const form=new URLSearchParams({request_id:'large-form',access_token:'large-token',payload:JSON.stringify(payload)});
+  assert.ok(form.toString().length>160*1024,'fixture must exceed the former form limit');
+  const fallback=await fetch(`${base}/api/workspaces-form/baseball_player/695492?request_id=large-form`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:form}),html=await fallback.text();
+  assert.equal(fallback.status,200);
+  assert.match(html,/large-form/);
+  assert.match(html,/"ok":true/);
+ });
+});
+
+test('an oversized form returns an immediate structured error envelope',async()=>{
+ const storage={patchUser:async()=>{throw new Error('should not run')}};
+ await withServer(createWorkspaceRouter({env:{},storage}),async base=>{
+  const form=new URLSearchParams({request_id:'too-large',access_token:'token',payload:'x'.repeat(3*1024*1024)});
+  const response=await fetch(`${base}/api/workspaces-form/baseball_player/1?request_id=too-large`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:form}),html=await response.text();
+  assert.equal(response.status,200);
+  assert.match(html,/too-large/);
+  assert.match(html,/Workspace payload is too large/);
+  assert.match(html,/"status":413/);
  });
 });

@@ -42,7 +42,7 @@ function firstBaseballWorkspaceCanOpenEmpty(input,init={}){
   const url=new URL(request?.url||String(input||''),location.href),match=url.origin===location.origin&&url.pathname.match(/^\/api\/workspaces\/baseball_player\/([^/]+)$/);
   if(!match)return false;
   const session=JSON.parse(localStorage.getItem('atlas-harbor-session')||'null'),current=session?.user;if(!session?.access_token||!current?.id)return false;
-  const resourceId=decodeURIComponent(match[1]),metadata=current.user_metadata||{},spaces=metadata.atlas_problem_spaces||{},canonical=spaces.publishing_workspace?.notes,virtual=metadata.atlas_virtual_tables?.workspace_notes,rows=[...(Array.isArray(canonical)?canonical:[]),...(Array.isArray(virtual)?virtual:[])];
+  const resourceId=decodeURIComponent(match[1]),metadata=current.user_metadata||{},spaces=metadata.atlas_problem_spaces||{},canonical=spaces.publishing_workspace?.notes,virtual=metadata.atlas_virtual_tables?.workspace_notes,segmented=Object.entries(metadata).filter(([key,value])=>key.startsWith('atlas_workspace_record_v2_')&&value&&typeof value==='object').map(([,value])=>value),rows=[...(Array.isArray(canonical)?canonical:[]),...segmented,...(Array.isArray(virtual)?virtual:[])];
   return !rows.some(row=>(!row.user_id||String(row.user_id)===String(current.id))&&row.resource_type==='baseball_player'&&String(row.resource_id||'')===String(resourceId));
  }catch{return false}
 }
@@ -74,18 +74,19 @@ function formWorkspaceRequest(input,init={}){
    if(!token||payload==null)throw new Error('Form fallback requires the signed-in workspace payload.');
   }catch(error){reject(error);return}
   const suffix=url.pathname.slice('/api/workspaces/'.length),requestId=`wsf-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,frame=document.createElement('iframe'),form=document.createElement('form');
-  frame.name=`atlas-workspace-form-${requestId}`;frame.hidden=true;form.hidden=true;form.method='POST';form.action=`/api/workspaces-form/${suffix}`;form.target=frame.name;
+  frame.name=`atlas-workspace-form-${requestId}`;frame.hidden=true;form.hidden=true;form.method='POST';form.action=`/api/workspaces-form/${suffix}?request_id=${encodeURIComponent(requestId)}`;form.target=frame.name;
   for(const[name,value]of[['request_id',requestId],['access_token',token],['payload',payload]]){const field=document.createElement('input');field.type='hidden';field.name=name;field.value=value;form.append(field)}
-  let timer;
+  let timer,finished=false;
   const cleanup=()=>{clearTimeout(timer);window.removeEventListener('message',onMessage);form.remove();frame.remove()};
   const onMessage=event=>{
    if(event.origin!==location.origin||event.data?.type!=='atlas-workspace-form-result'||event.data?.requestId!==requestId)return;
-   const data=event.data;cleanup();
+   const data=event.data;finished=true;cleanup();
    if(data.ok&&data.workspace)rememberWorkspaceInSession(data.workspace);
-   resolve(new Response(JSON.stringify(data.ok?{workspace:data.workspace,storage:data.storage||'account-metadata',migratedFrom:data.migratedFrom||null}:{error:data.error||'Workspace form save failed.'}),{status:data.ok?200:500,headers:{'Content-Type':'application/json','Cache-Control':'no-store','X-Atlas-Workspace-Recovery':'form-navigation'}}));
+   resolve(new Response(JSON.stringify(data.ok?{workspace:data.workspace,storage:data.storage||'account-metadata',migratedFrom:data.migratedFrom||null}:{error:data.error||'Workspace form save failed.'}),{status:data.ok?200:(Number(data.status)||500),headers:{'Content-Type':'application/json','Cache-Control':'no-store','X-Atlas-Workspace-Recovery':'form-navigation'}}));
   };
+  frame.onload=()=>setTimeout(()=>{if(finished)return;try{const message=String(frame.contentDocument?.body?.innerText||'').trim();if(!message)return;finished=true;cleanup();reject(new TypeError(`Database form-navigation fallback failed: ${message.slice(0,240)}`))}catch{}},0);
   window.addEventListener('message',onMessage);
-  timer=setTimeout(()=>{cleanup();reject(new TypeError('Database form-navigation fallback timed out.'))},20000);
+  timer=setTimeout(()=>{finished=true;cleanup();reject(new TypeError('Database form-navigation fallback timed out.'))},20000);
   document.body.append(frame,form);form.submit();
  });
 }

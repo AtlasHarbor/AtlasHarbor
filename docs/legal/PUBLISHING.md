@@ -3,15 +3,15 @@
 Legal case analysis uses the shared Atlas Harbor publishing database. The court record and the user's analysis remain separate:
 
 - CourtListener and RECAP provide the canonical case record.
-- `workspace_notes` stores the signed-in user's draft, projections, and AI-assisted text.
+- The same-origin Atlas Harbor workspace API stores the signed-in user's draft, projections, and AI-assisted text in a per-resource account-metadata record.
 - Publishing creates a separate public article and never modifies synchronized court facts.
 
 ## Canonical persistence
 
-The only canonical private workspace store is:
+The canonical private workspace record is:
 
 ```text
-public.workspace_notes
+user_metadata.atlas_workspace_record_v2_<resource-key>
 ```
 
 Each row is identified by:
@@ -27,13 +27,13 @@ resource_type = legal_case
 resource_id   = ny-kalshi-enforcement-2026
 ```
 
-The browser reads and upserts the signed-in user's row using the Supabase publishable key and that user's access-token JWT. Row Level Security permits users to read and modify their own rows.
+The browser reads and saves only through `/api/workspaces/:resourceType/:resourceId`. The Atlas Harbor server authenticates the user's access token and patches only the matching per-resource metadata key. Browser workspace code does not call Supabase persistence endpoints directly.
 
 There is no device-only or `localStorage` persistence path for analysis content. A failed database request is displayed as a database error and does not create a second private copy.
 
 ## Why the August 2026 regression happened
 
-The original workspace used authenticated database requests to `workspace_notes`. A later compatibility change routed it through a new same-origin `/api/workspaces` service and added account-metadata and device fallbacks.
+Older workspace versions wrote an optional `workspace_notes` table or compatibility metadata. The deployed table is not assumed to exist, so those sources are now read-only recovery inputs behind the same-origin `/api/workspaces` service.
 
 The deployed browser could load the new JavaScript while the workspace service returned `Failed to fetch`. The interface therefore showed and edited a fallback copy. At the same time, `/published` and the private workspace were no longer guaranteed to read the same source.
 
@@ -41,11 +41,11 @@ That behavior was misleading: a user could see a draft or copy a share link even
 
 The repaired invariant is:
 
-> A successful save means the `workspace_notes` database row was written.
+> A successful save means the server confirmed the canonical per-resource account record.
 
 ## Database access paths
 
-The browser writes `workspace_notes` directly with the authenticated user's JWT. The same-origin workspace API also uses `workspace_notes`, so it remains available for server-side clients and diagnostics without creating another storage model.
+The browser uses only the same-origin workspace endpoints:
 
 ```text
 GET /api/workspaces/:resourceType/:resourceId
@@ -53,27 +53,30 @@ PUT /api/workspaces/:resourceType/:resourceId
 GET /api/workspaces/status
 ```
 
-Both browser and server paths use the same unique constraint:
+The per-resource metadata key is derived from:
 
 ```text
-on_conflict = user_id, resource_type, resource_id
+resource_type + resource_id
 ```
+
+The normal JSON route accepts 1 MB. Baseball's URL-encoded form-navigation recovery accepts 3 MB and returns structured parser errors immediately. The saved record itself remains bounded to a 60,000-character sanitized body and 12,000-character AI prompt.
 
 ## One-time legacy migration
 
-Older Legal analysis may exist in `legal_notes`, or in temporary account metadata created during the regression. On the first successful database load, Atlas Harbor compares timestamps from:
+Older Legal analysis may exist in `workspace_notes`, `legal_notes`, the aggregate `publishing_workspace.notes` array, or virtual metadata created during earlier regressions. On load, Atlas Harbor compares timestamps from:
 
-1. the current `workspace_notes` row,
-2. the user's older `legal_notes` row,
-3. temporary publishing metadata attached to the account.
+1. the current per-resource account record,
+2. optional `workspace_notes`,
+3. the user's older `legal_notes`,
+4. legacy and virtual publishing metadata attached to the account.
 
-When a newer legacy copy exists, it is upserted into `workspace_notes`. Matching temporary account-metadata copies are then removed. This is a one-time migration into the database, not an ongoing fallback.
+When a newer legacy copy exists, it may be copied into the per-resource account record. Original recovery data is not deleted during that read/migration request.
 
 No browser device copy is read or written.
 
 ## Published feed
 
-`/published` reads shared, published rows directly from `workspace_notes` and merges the server-side publication index when available. Both refer to the same database records.
+`/published` merges the newest shared, published record from the canonical account dataset and read-only legacy/table adapters. A newer per-resource record shadows an older aggregate copy.
 
 A row appears in discovery when:
 
@@ -88,12 +91,7 @@ Direct publication pages resolve the database row by `share_token`.
 
 ## Supabase key handling
 
-Browser database calls use:
-
-- `apikey: SUPABASE_PUBLISHABLE_KEY`
-- `Authorization: Bearer <signed-in user JWT>`
-
-Server adapters support both legacy JWT service-role keys and newer opaque `sb_secret_...` keys. Opaque secret keys are API keys and are not sent as bearer JWTs.
+Authentication may use the public publishable key in the browser. Workspace persistence remains server mediated. Server adapters support both legacy JWT service-role keys and newer opaque `sb_secret_...` keys. Opaque secret keys are API keys and are not sent as bearer JWTs.
 
 Accepted server environment names are:
 
@@ -126,4 +124,4 @@ After deployment:
 9. Confirm the Legal index does not display internal storage or CourtListener-token diagnostics.
 10. Run `npm run check` and `npm test` before deployment.
 
-When the table, network, or RLS policy is unavailable, the workspace reports a database error. It does not claim that a local or account-metadata fallback was saved.
+When the server or upstream account database is unavailable, the workspace reports a database error. It does not claim that a local or device-only copy was saved.

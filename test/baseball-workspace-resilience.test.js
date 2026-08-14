@@ -16,6 +16,7 @@ test('Baseball player pages mount the shared publishable database workspace',()=
 test('Baseball workspace transport can open a first note and save it without a device-only draft',()=>{
  const js=read('../public/workspace-transport-fallback.js');
  const server=read('../src/workspace-api.js');
+ const app=read('../src/app.js');
  assert.match(js,/pathname\.startsWith\('\/api\/workspaces\/'\)/);
  assert.match(js,/XMLHttpRequest/);
  assert.match(js,/return await xhrRequest/);
@@ -33,7 +34,9 @@ test('Baseball workspace transport can open a first note and save it without a d
  assert.match(server,/express\.urlencoded/);
  assert.match(server,/router\.post\('\/api\/workspaces-form\/:resourceType\/:resourceId'/);
  assert.match(server,/const result=await saveWorkspace\(req,body\)/);
- assert.match(server,/publishing_workspace/);
+ assert.match(server,/workspaceMetadataKey/);
+ assert.match(server,/limit:'3mb'/);
+ assert.match(app,/express\.json\(\{limit:["']1mb["']\}\)/);
 });
 
 test('Baseball stat grids expose hover and tap definitions for common abbreviations',()=>{

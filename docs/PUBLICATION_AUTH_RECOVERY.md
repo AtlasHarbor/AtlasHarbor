@@ -20,8 +20,10 @@ When a server secret is available, the admin account list is canonical for accou
 Baseball player/team/game analysis uses the same canonical workspace as Legal and other Problem Spaces:
 
 ```text
-user_metadata.atlas_problem_spaces.publishing_workspace.notes
+user_metadata.atlas_workspace_record_v2_<resource-key>
 ```
+
+Legacy aggregate `publishing_workspace.notes` entries remain readable, but a new save sends only the matching per-resource metadata patch.
 
 There is no device-only analysis store.
 
