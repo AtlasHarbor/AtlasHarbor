@@ -22,9 +22,17 @@ The JSON includes, when available:
 
 This is shared public-source Baseball data. It is not duplicated once per Atlas Harbor user account.
 
+Private notes remain separate in the canonical account workspace:
+
+```text
+user_metadata.atlas_problem_spaces.publishing_workspace.notes
+```
+
+A note with `resource_type: baseball_player` and the matching MLB person ID can be joined onto an export for that signed-in user. The private analysis is **not copied into the shared player snapshot table**.
+
 `public.baseball_refresh_jobs` stores progress for administrator-triggered refreshes.
 
-Both tables are server-only. RLS is enabled with no anon/authenticated policies. Atlas Harbor accesses them through the configured server secret/service key.
+Both Baseball snapshot/job tables are server-only. RLS is enabled with no anon/authenticated policies. Atlas Harbor accesses them through the configured server secret/service key.
 
 Apply `supabase/baseball-player-database.sql` once to the production Supabase project before using bulk refresh. Ordinary player pages continue to work if the table is unavailable; bulk refresh refuses to start rather than burning MLB API traffic without a persistence target.
 
@@ -65,9 +73,29 @@ A process restart interrupts an in-process job. The persisted job row remains an
 
 ## Export
 
-Each player profile has **Export player JSON**. The button refreshes the normalized player endpoint first and downloads the complete current player object.
+Each player profile has **Export player JSON**. The button refreshes the normalized player endpoint first. When the viewer is signed in, it also resolves that account's matching `baseball_player` workspace and includes it as `analysis` in the downloaded JSON.
 
-Admin has **Export stored player JSON**, which exports all stored snapshots (or the API may be filtered by `sportId` / `teamId`). This is intended for analysis, model development and fantasy experimentation.
+Account Settings has **Baseball player data exports**. A signed-in user can download:
+
+- MLB,
+- Triple-A,
+- Double-A,
+- High-A,
+- Low-A,
+- or all professional levels.
+
+`GET /api/baseball/account-export?sportId=...` reads the shared snapshot database and joins only the requesting user's matching Baseball analysis records. The response reports both the player count and `analysisCount` and returns records shaped as:
+
+```json
+{
+  "player": { "id": 695491, "...": "normalized player snapshot" },
+  "analysis": { "resource_type": "baseball_player", "...": "signed-in user's workspace" }
+}
+```
+
+`analysis` is `null` when that user has not written about the player.
+
+Admin has **Export stored player JSON**, which exports the shared stored snapshots without attaching a specific user's private notes. This is intended for database inspection, model development and fantasy experimentation.
 
 ## Fantasy recent-form model v1
 
