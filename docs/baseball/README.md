@@ -25,6 +25,33 @@ Professional statistics must make the competition level and season year visible.
 
 Recent activity is intended to describe roster/availability events that matter to understanding the player. Cosmetic jersey/uniform-number changes are filtered out both in the core MLB client and again in the page renderer so items such as “changed number to 42” do not crowd the timeline.
 
+Each dedicated player profile also exposes **Export player JSON**. The export refreshes the same normalized player endpoint used by the page and downloads the complete current normalized player record.
+
+## Shared player snapshot database
+
+Atlas Harbor can persist the normalized player objects used by the player reports into a dedicated server-side database table for downstream Baseball products such as fantasy tools.
+
+The schema is in:
+
+```text
+supabase/baseball-player-database.sql
+```
+
+The canonical tables are:
+
+```text
+public.baseball_player_snapshots
+public.baseball_refresh_jobs
+```
+
+A successful `/api/baseball/prospect-players/:id` response is captured and upserted by MLB person ID. The stored JSON is the same normalized object returned by the player endpoint; the cache does not maintain a second interpretation of the player's statistics.
+
+Admin can refresh MLB, Triple-A, Double-A, High-A, Low-A or all professional levels from `/admin`. Bulk runs are incremental and asynchronous: discover rosters, deduplicate player IDs, refresh one player, save it, update progress, pause briefly, then continue. The admin request itself does not remain open for the entire crawl.
+
+Player pages remain usable if snapshot persistence is unavailable. Bulk refresh, however, refuses to start until the dedicated schema exists so Atlas Harbor does not spend a large amount of upstream API traffic without a persistence destination.
+
+See [`PLAYER_DATABASE_AND_FANTASY.md`](PLAYER_DATABASE_AND_FANTASY.md) for storage, export, refresh-job and fantasy-scoring details.
+
 ## Baseball navigation
 
 `public/baseball-navigation.js` may show a route loader while moving from the Baseball dashboard into a dedicated team/player/game page, but it must clear that loader on `pageshow` so browser Back/Forward Cache restores never leave the Baseball page covered by a spinner.
@@ -87,3 +114,6 @@ The glossary explains the meaning of the statistic; it does not change or reinte
 9. Player age remains near the top identity block, and minor-league history remains year-labeled.
 10. Cosmetic jersey-number activity stays out of recent player activity.
 11. Baseball route loaders are cleared on `pageshow` and Baseball navigation does not install document-wide mutation observers.
+12. Player snapshot persistence stores the same normalized object as the player endpoint and never becomes a second source of statistical truth.
+13. Bulk refreshes remain incremental; do not replace the queue with a giant all-player `Promise.all()` fan-out.
+14. Fantasy lineup scores remain transparent, versioned and configurable rather than being presented as a guaranteed projection.
