@@ -138,7 +138,6 @@ export function createBaseballAdminRouter({env=process.env,fetchImpl=globalThis.
   const sportIds=scopeSportIds(scope);if(!sportIds.length)throw Object.assign(new Error('Choose MLB, Triple-A, Double-A, High-A, Low-A, or all.'),{status:400});
   const job={id:`bb-${Date.now().toString(36)}-${crypto.randomBytes(4).toString('hex')}`,scope,sportIds,status:'queued',totalPlayers:0,completedPlayers:0,failedPlayers:0,currentPlayerId:null,currentPlayerName:null,errors:[],cancelRequested:false,createdAt:new Date().toISOString(),startedAt:null,completedAt:null,origin};
   jobs.set(job.id,job);activeJobId=job.id;
-  setTimeout(()=>runJob(job),0);
   return job;
  }
 
@@ -153,7 +152,10 @@ export function createBaseballAdminRouter({env=process.env,fetchImpl=globalThis.
   const schema=await playerStore.schemaStatus();
   if(!schema.ready)throw Object.assign(new Error(`Baseball database is not ready. Apply supabase/baseball-player-database.sql first. ${schema.error||''}`.trim()),{status:503});
   const scope=String(req.body?.scope||'').toLowerCase(),origin=(env.PUBLIC_APP_URL||`${req.protocol}://${req.get('host')}`).replace(/\/$/,'');
-  const job=startJob(scope,origin);await persistJob(job);res.status(202).json({job:publicJob(job)});
+  const job=startJob(scope,origin);
+  await persistJob(job);
+  setTimeout(()=>runJob(job),0);
+  res.status(202).json({job:publicJob(job)});
  }));
  router.get('/api/admin/baseball/jobs/:id',route(async(req,res)=>{
   let job=jobs.get(req.params.id);if(!job)job=await playerStore.getJob(req.params.id);
