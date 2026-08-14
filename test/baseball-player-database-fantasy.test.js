@@ -9,9 +9,12 @@ function hitter(id,name,position,points){
 }
 
 test('recent baseball form weights newer games more heavily',()=>{
- const hot=hitter(1,'Hot Catcher','Catcher',[4,3,2,1,1,1,1,1]);
- const cold=hitter(2,'Cold Catcher','Catcher',[0,0,1,1,2,3,4,4]);
- assert.ok(scorePlayerForm(hot).hitterScore>scorePlayerForm(cold).hitterScore);
+ const recentBurst=hitter(1,'Recent Burst','Catcher',[5,0,0,0,0,0,0,0]);
+ const oldBurst=hitter(2,'Old Burst','Catcher',[0,0,0,0,0,0,0,5]);
+ const recent=scorePlayerForm(recentBurst),old=scorePlayerForm(oldBurst);
+ assert.equal(recent.recentHittingGames,8);
+ assert.equal(old.recentHittingGames,8);
+ assert.ok(recent.hitterScore>old.hitterScore,`${recent.hitterScore} should be greater than ${old.hitterScore} because the identical five-hit game is newer`);
 });
 
 test('ideal fantasy lineup fills baseball positions without duplicating players',()=>{
