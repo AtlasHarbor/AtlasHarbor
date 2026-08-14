@@ -26,7 +26,7 @@ function seasonHitterBaseline(player){const stat=player?.professionalSeason||{};
 function seasonPitcherBaseline(player){const stat=player?.professionalSeason||{};const games=Math.max(1,number(stat.gamesPlayed));return pitcherGamePoints(stat)/games}
 export function scorePlayerForm(player,{games=8}={}){
  const hitRows=gameRows(player,'hitting').slice(0,games),pitchRows=gameRows(player,'pitching').slice(0,games);
- const recentHitting=weightedAverage(hitRows.map(row=>hitterGamePoints(row.stat))),recentPitching=weightedAverage(pitchRows.map(row=>pitcherGamePoints(row.stat));
+ const recentHitting=weightedAverage(hitRows.map(row=>hitterGamePoints(row.stat))),recentPitching=weightedAverage(pitchRows.map(row=>pitcherGamePoints(row.stat)));
  const hitterScore=hitRows.length?recentHitting*.8+seasonHitterBaseline(player)*.2:0;
  const pitcherScore=pitchRows.length?recentPitching*.8+seasonPitcherBaseline(player)*.2:0;
  return{playerId:player?.id,name:player?.name||'Player',team:player?.team||null,teamId:player?.teamId||null,position:player?.position||null,level:player?.level||null,hitterScore:Number(hitterScore.toFixed(2)),pitcherScore:Number(pitcherScore.toFixed(2)),recentHittingGames:hitRows.length,recentPitchingGames:pitchRows.length,recentHitting:hitRows,recentPitching:pitchRows};
