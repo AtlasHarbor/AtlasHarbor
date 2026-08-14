@@ -18,8 +18,8 @@ export function createPublishedFeedRouter({env=process.env,fetchImpl=globalThis.
 
  // Public publication discovery and viewer identity are deliberately separate.
  // A signed-in /auth/v1/user payload can contain an older user_metadata snapshot than
- // the admin account record. It may identify the viewer, but it must never replace
- // the dataset used to decide whether a public publication exists.
+ // the canonical server/public sources. It identifies the viewer for owner controls only;
+ // it must never participate in deciding whether a public publication exists.
  async function accounts(req){
   const publicAccounts=[];
   let current=null;
@@ -31,17 +31,12 @@ export function createPublishedFeedRouter({env=process.env,fetchImpl=globalThis.
     if(response.ok)current=await readJson(response);
    }catch(error){console.warn('Current account lookup unavailable:',error.message)}
   }
-  let adminLoaded=false;
   if(secret){
    try{
     const response=await fetchImpl(`${base}/auth/v1/admin/users?per_page=1000`,{headers:supabaseServiceHeaders(secret,{json:false})}),data=await readJson(response);
     for(const account of data?.users||[])publicAccounts.push(account);
-    adminLoaded=true;
    }catch(error){console.warn('Global account lookup unavailable:',error.message)}
   }
-  // In installations without the server secret, a signed-in viewer may still recover
-  // their own metadata. This may enrich discovery, but it cannot hide anonymous rows.
-  if(!adminLoaded&&current)publicAccounts.push(current);
   return{accounts:publicAccounts,current,bearer};
  }
 
