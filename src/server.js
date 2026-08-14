@@ -15,6 +15,14 @@ if (fs.existsSync(envPath)) {
   }
 }
 
+const { ensureE2ETestAccount } = await import("./test-account-bootstrap.js");
+try {
+  const result = await ensureE2ETestAccount();
+  if (result.enabled) console.log(`E2E test account: ${result.created ? "created" : "ready"} (${result.email})`);
+} catch (error) {
+  console.warn(`E2E test account bootstrap unavailable: ${error.message}`);
+}
+
 const { createApp } = await import("./app.js");
 const port = Number(process.env.PORT) || 3000;
 createApp().listen(port, () => {
