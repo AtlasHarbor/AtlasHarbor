@@ -24,6 +24,10 @@ function publicJob(job){
  const {origin,...safe}=job;
  return safe;
 }
+function playerAnalyses(current,playerIds=null){
+ const notes=current?.user_metadata?.atlas_problem_spaces?.publishing_workspace?.notes||[],allowed=playerIds?new Set([...playerIds].map(String)):null;
+ return notes.filter(item=>item?.resource_type==='baseball_player'&&String(item?.user_id||current?.id)===String(current?.id)&&(!allowed||allowed.has(String(item?.resource_id||''))));
+}
 async function responseJson(response){
  const data=await response.json().catch(()=>({}));
  if(!response.ok)throw new Error(data.error||data.message||`Request failed (${response.status}).`);
@@ -52,7 +56,7 @@ export function createBaseballAdminRouter({env=process.env,fetchImpl=globalThis.
   if(hash!==config.passwordHash)throw Object.assign(new Error('Invalid admin password.'),{status:401});
   return{current,role};
  }
- const route=handler=>async(req,res)=>{try{await verifyAdmin(req);await handler(req,res)}catch(error){console.error(error);res.status(error.status||500).json({error:error.message||'Baseball admin request failed.'})}};
+ const route=handler=>async(req,res)=>{try{const auth=await verifyAdmin(req);await handler(req,res,auth)}catch(error){console.error(error);res.status(error.status||500).json({error:error.message||'Baseball admin request failed.'})}};
 
  async function mlb(path,timeout=30000){
   const response=await fetchImpl(`${MLB_BASE}${path}`,{headers:{Accept:'application/json','User-Agent':'AtlasHarbor/1.0'},signal:AbortSignal.timeout(timeout)});
@@ -166,11 +170,12 @@ export function createBaseballAdminRouter({env=process.env,fetchImpl=globalThis.
   const job=jobs.get(req.params.id);if(!job)return res.status(404).json({error:'Only an in-process Baseball refresh job can be canceled.'});
   job.cancelRequested=true;await persistJob(job);res.json({job:publicJob(job)});
  }));
- router.get('/api/admin/baseball/export',route(async(req,res)=>{
+ router.get('/api/admin/baseball/export',route(async(req,res,{current})=>{
   const sportId=req.query.sportId?Number(req.query.sportId):null,teamId=req.query.teamId?Number(req.query.teamId):null;
-  const rows=await playerStore.listPlayers({sportId,teamId,limit:10000}),players=rows.map(row=>row.snapshot).filter(Boolean);
+  const rows=await playerStore.listPlayers({sportId,teamId,limit:10000}),players=rows.map(row=>row.snapshot).filter(Boolean),playerIds=new Set(players.map(player=>String(player.id)));
+  const myPlayerAnalyses=playerAnalyses(current,playerIds),analysisByPlayerId=Object.fromEntries(myPlayerAnalyses.map(note=>[String(note.resource_id),note]));
   res.set('Cache-Control','no-store');res.set('Content-Disposition',`attachment; filename="atlas-baseball-player-database-${new Date().toISOString().slice(0,10)}.json"`);
-  res.json({exportedAt:new Date().toISOString(),count:players.length,filters:{sportId,teamId},players});
+  res.json({schemaVersion:2,exportedAt:new Date().toISOString(),count:players.length,filters:{sportId,teamId},players,myPlayerAnalyses,analysisByPlayerId});
  }));
  router.get('/api/admin/baseball/fantasy/lineup',route(async(req,res)=>{
   const sportId=req.query.sportId?Number(req.query.sportId):1,teamId=req.query.teamId?Number(req.query.teamId):null,games=Math.max(3,Math.min(12,Number(req.query.games)||8));
