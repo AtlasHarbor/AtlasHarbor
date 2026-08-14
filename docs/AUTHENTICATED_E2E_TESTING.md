@@ -11,7 +11,8 @@ The critical contract is:
 3. publishing creates a stable public share token;
 4. a public publication exists identically whether the viewer is signed out or signed in;
 5. no local/device-only analytical workspace is created;
-6. Baseball player JSON export may include the signed-in user's matching analysis, but the analysis remains stored in the canonical account workspace rather than duplicated into the public player snapshot.
+6. Baseball player JSON export may include the signed-in user's matching analysis, but the analysis remains stored in the canonical account workspace rather than duplicated into the public player snapshot;
+7. Account can still display drafts/publications and Space Block indexes from the authenticated session metadata if the same-origin account API is temporarily unreachable.
 
 ## Test-account provisioning
 
@@ -26,7 +27,7 @@ ATLAS_E2E_BASEBALL_PLAYER_ID=695491
 
 At startup, `src/test-account-bootstrap.js` uses the server-side Supabase Admin API to create the account if it is missing or refresh its password to the configured secret. The account is marked with `user_metadata.atlas_e2e_test=true` and otherwise behaves like an ordinary signed-in user. The bootstrap is completely disabled unless `ATLAS_E2E_TEST_BOOTSTRAP` is explicitly enabled.
 
-The password must live only in `.env` / Render secrets / another secret manager. Do not commit it.
+The password must live only in `.env` / Render secrets / another secret manager. Do not commit it. The test account is intentionally not granted administrator privileges by default; ordinary-user auth is what these workspace/publication regressions need to exercise.
 
 ## Run the REST smoke test
 
@@ -54,7 +55,19 @@ A successful run prints a JSON result containing the workspace ID, storage path,
 
 A player with an existing note can be rendered from authenticated session metadata during a temporary read-transport outage. Historically, a player with **no prior note** instead showed `Analysis could not load`, which made it impossible to start the first analysis.
 
-`public/workspace-first-note-recovery.js` fixes that narrow case. For an authenticated Baseball player with no matching workspace in session metadata, a failed **GET** may be treated as an empty workspace so the editor can mount. The module never fabricates a `PUT`, save, publication, or local draft. Saving still has to reach the canonical account database.
+The recovery now lives inside `public/workspace-transport-fallback.js`. The order is:
+
+1. normal authenticated `fetch()` to `/api/workspaces/baseball_player/:id`;
+2. the same authenticated endpoint over XHR;
+3. only if both transports fail, the user is signed in, and the signed-in session contains no existing record for that player, return an **empty first-analysis UI state**.
+
+That third step does not create or save anything. `PUT`, Save, Publish, and direct metadata writes are never synthesized. Saving still has to reach the canonical account database and therefore rechecks current database state before a record can be persisted.
+
+## Account-page recovery
+
+`public/account-posts.js` loads drafts/publications and Space Blocks independently. If `/api/workspaces/account` or `/api/prop/manual/mine` cannot be reached, it can render the same canonical records already present in the authenticated session metadata. This is read recovery only; it is not a device-only analytical store.
+
+A failure in Messages or Space Blocks must not blank the publication list. Missing optional messaging tables also must not instruct an ordinary user to run SQL.
 
 ## Public-publication browser rule
 
