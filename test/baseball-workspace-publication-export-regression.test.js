@@ -5,12 +5,16 @@ import {ensureE2ETestUser} from '../src/e2e-test-user.js';
 
 const read=path=>fs.readFileSync(new URL(path,import.meta.url),'utf8');
 
-test('published list and detail reads strip viewer authorization before public lookup',()=>{
+test('published list is anonymous while publication detail keeps viewer identity only for owner controls',()=>{
  const guard=read('../public/published-public-feed.js');
+ const server=read('../src/published-feed.js');
  assert.match(guard,/url\.pathname === '\/api\/published-feed'/);
- assert.match(guard,/\^\\\/api\\\/published-feed\\\/\[\^\/\]\+\$/);
  assert.match(guard,/headers\.delete\('Authorization'\)/);
  assert.match(guard,/credentials: 'omit'/);
+ assert.doesNotMatch(guard,/published-feed\\\/\[\^\/\]\+/);
+ assert.doesNotMatch(server,/publicAccounts\.push\(current\)/);
+ assert.match(server,/isOwner=Boolean\(row&&current&&row\.user_id===current\.id\)/);
+ assert.match(server,/safeDetail\(row,isOwner\)/);
 });
 
 test('Baseball workspace read recovery uses authenticated session metadata without creating a local editable store',()=>{
