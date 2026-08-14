@@ -4,15 +4,17 @@ import fs from 'node:fs';
 
 const read = (path) => fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 
-test('publishing workspace uses the same-origin API with persistent fallbacks', () => {
+test('publishing workspace uses only the same-origin API for persistence', () => {
   const source = read('public/workspace.js');
+  const transport = read('public/workspace-transport-fallback.js');
   assert.match(source, /\/api\/workspaces\//);
-  assert.match(source, /metadataRecord/);
+  assert.match(source, /accountRecord/);
   assert.match(source, /atlas_problem_spaces/);
   assert.match(source, /atlas_virtual_tables/);
-  assert.match(source, /localStorage/);
-  assert.match(source, /Using your saved account copy|device copy|workspace service reconnects/i);
-  assert.doesNotMatch(source, /settings\.supabaseUrl.*rest\/v1\/workspace_notes/s);
+  assert.match(source, /last confirmed account record|workspace API reconnects/i);
+  assert.match(transport, /\/api\/workspaces-form\//);
+  assert.doesNotMatch(source, /auth\/v1\/user|persistDirectMetadata|updateUserMetadata/);
+  assert.doesNotMatch(transport, /auth\/v1\/user|configuredSupabaseOrigin/);
 });
 
 test('server workspace recovers database, metadata, virtual, and legacy Legal records', () => {

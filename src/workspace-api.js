@@ -14,20 +14,16 @@ const safeScriptJson=value=>JSON.stringify(value).replace(/</g,'\\u003c');
 export function createWorkspaceRouter({env=process.env,fetchImpl=globalThis.fetch,storage=createProblemSpaceStorage({env,fetchImpl})}={}){
  const router=express.Router(),base=env.SUPABASE_URL,publishable=env.SUPABASE_PUBLISHABLE_KEY,secret=supabaseSecretKey(env);
  router.use('/api/workspaces-form',express.urlencoded({extended:false,limit:'160kb'}));
+ const timedFetch=async(url,options={})=>{const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),6000);try{return await fetchImpl(url,{...options,signal:controller.signal})}finally{clearTimeout(timer)}};
 
  async function tableRows(table,query,token){
   if(!base||!publishable||!token)return[];
   try{
    const headers=secret?{...supabaseServiceHeaders(secret,{json:false}),Accept:'application/json'}:{apikey:publishable,Authorization:`Bearer ${token}`,Accept:'application/json'};
-   const response=await fetchImpl(`${base}/rest/v1/${table}${query}`,{headers}),body=await response.text();
+   const response=await timedFetch(`${base}/rest/v1/${table}${query}`,{headers}),body=await response.text();
    if(!response.ok){if(!missingTable(response.status,body))console.warn(`Optional ${table} workspace adapter returned ${response.status}: ${body.slice(0,240)}`);return[]}
    try{return body?JSON.parse(body):[]}catch{return[]}
   }catch(error){console.warn(`Optional ${table} workspace adapter is unavailable:`,error.message);return[]}
- }
- async function mirrorWorkspaceTable(note,token,existingId=null){
-  if(!base||!publishable||!token)return;
-  const query=existingId?`?id=eq.${encodeURIComponent(existingId)}`:'',method=existingId?'PATCH':'POST';
-  try{await fetchImpl(`${base}/rest/v1/workspace_notes${query}`,{method,headers:{apikey:publishable,Authorization:`Bearer ${token}`,'Content-Type':'application/json',Prefer:'return=minimal'},body:JSON.stringify(note)})}catch{}
  }
  function metadataNotes(current){return current?.user_metadata?.atlas_problem_spaces?.[SPACE]?.notes||[]}
  function virtualNotes(current){return current?.user_metadata?.atlas_virtual_tables?.workspace_notes||[]}
@@ -60,16 +56,23 @@ export function createWorkspaceRouter({env=process.env,fetchImpl=globalThis.fetc
   return{token,current,note:normalized,source:normalized._store||'account-metadata'};
  }
  async function saveWorkspace(req,body={}){
-  const loaded=await load(req),current=loaded.current,existing=loaded.note,profile=current.user_metadata?.atlas_profile||{},intent=body.intent==='publish'?'publish':'save',now=new Date().toISOString(),shared=body.is_shared===true,published=intent==='publish'||existing?.is_published===true||body.is_published===true,shareToken=existing?.share_token||(shared&&published?crypto.randomBytes(18).toString('base64url'):null);
-  const note=normalizeWorkspaceRecord({...existing,...body,
-   id:existing?.id||crypto.randomUUID(),user_id:current.id,
-   author_username:text(profile.username||body.author_username||'Atlas Author',120),author_avatar_seed:text(profile.avatar_seed||body.author_avatar_seed,240),author_profile_slug:text(profile.profile_slug||body.author_profile_slug,160),
-   resource_type:text(req.params.resourceType,80),resource_id:text(req.params.resourceId,300),resource_title:text(body.resource_title||existing?.resource_title||'Analysis',300),title:text(body.title||existing?.title||'Untitled analysis',300),body:String(body.body||existing?.body||'').slice(0,60000),ai_prompt:String(body.ai_prompt||'').slice(0,12000),
-   is_shared:shared,is_published:published,share_token:shareToken,published_at:published?(existing?.published_at||body.published_at||now):null,created_at:existing?.created_at||now,updated_at:now,featured:body.featured??existing?.featured??true,_store:'account-metadata'
+  const resourceType=text(req.params.resourceType,80),resourceId=text(req.params.resourceId,300);
+  if(!resourceType||!resourceId)throw Object.assign(new Error('Resource type and ID are required.'),{status:400});
+  let note=null,source='empty';
+  const saved=await storage.writeUser(req,SPACE,(workspace,current)=>{
+   const existing=newestRecord((workspace.notes||[]).filter(item=>sameResource(item,resourceType,resourceId,current.id)));
+   if(existing)source='account-metadata';
+   const profile=current.user_metadata?.atlas_profile||{},intent=body.intent==='publish'?'publish':'save',now=new Date().toISOString(),shared=body.is_shared===true,published=intent==='publish'||existing?.is_published===true||body.is_published===true,shareToken=existing?.share_token||(shared&&published?crypto.randomBytes(18).toString('base64url'):null);
+   note=normalizeWorkspaceRecord({...existing,...body,
+    id:existing?.id||crypto.randomUUID(),user_id:current.id,
+    author_username:text(profile.username||body.author_username||'Atlas Author',120),author_avatar_seed:text(profile.avatar_seed||body.author_avatar_seed,240),author_profile_slug:text(profile.profile_slug||body.author_profile_slug,160),
+    resource_type:resourceType,resource_id:resourceId,resource_title:text(body.resource_title||existing?.resource_title||'Analysis',300),title:text(body.title||existing?.title||'Untitled analysis',300),body:String(body.body||existing?.body||'').slice(0,60000),ai_prompt:String(body.ai_prompt||'').slice(0,12000),
+    is_shared:shared,is_published:published,share_token:shareToken,published_at:published?(existing?.published_at||body.published_at||now):null,created_at:existing?.created_at||now,updated_at:now,featured:body.featured??existing?.featured??true,_store:'account-metadata'
+   });
+   return{...workspace,notes:upsertWorkspaceRecord(workspace.notes||[],note,MAX_NOTES)};
   });
-  const saved=await persistMetadata(req,note);
-  mirrorWorkspaceTable(saved,loaded.token,existing?._store==='workspace_notes'?existing.id:null);
-  return{workspace:saved,storage:'account-metadata',migratedFrom:loaded.source};
+  const workspace=saved.value.notes.find(item=>item.id===note.id)||note;
+  return{workspace,storage:'account-metadata',migratedFrom:source};
  }
  function formReply(res,payload,status=200){
   res.status(status).set('Cache-Control','no-store').type('html').send(`<!doctype html><meta charset="utf-8"><script>parent.postMessage(${safeScriptJson(payload)},location.origin)<\/script>`);

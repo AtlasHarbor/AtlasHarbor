@@ -15,24 +15,25 @@ test('public publication discovery does not use the signed-in session snapshot a
  assert.match(source,/isOwner=Boolean\(row&&current&&row\.user_id===current\.id\)/);
 });
 
-test('Baseball workspace fallback retries both the canonical workspace API and canonical Supabase account metadata over XHR',()=>{
+test('Baseball workspace transport retries only the same-origin workspace API',()=>{
  const source=read('../public/workspace-transport-fallback.js');
  assert.doesNotThrow(()=>new Function(source.replace(/export\s+/g,'')));
  assert.match(source,/url\.pathname\.startsWith\('\/api\/workspaces\/'\)/);
- assert.match(source,/url\.pathname==='\/auth\/v1\/user'/);
- assert.match(source,/configuredSupabaseOrigin/);
- assert.match(source,/atlas-harbor-public-config/);
+ assert.match(source,/url\.origin===location\.origin/);
  assert.match(source,/xhrRequest/);
+ assert.doesNotMatch(source,/auth\/v1\/user/);
+ assert.doesNotMatch(source,/configuredSupabaseOrigin/);
  assert.doesNotMatch(source,/rest\/v1\/workspace_notes/);
  assert.doesNotMatch(source,/localStorage\.setItem\([^)]*workspace/i);
 });
 
-test('shared workspace still uses the account metadata record and never a device analysis store',()=>{
+test('shared workspace saves only through the same-origin API and never calls Supabase directly',()=>{
  const source=read('../public/workspace.js');
  assert.match(source,/atlas_problem_spaces/);
  assert.match(source,/publishing_workspace/);
  assert.match(source,/accountRecord/);
- assert.match(source,/freshAccount/);
- assert.match(source,/persistDirectMetadata/);
+ assert.match(source,/\/api\/workspaces\//);
+ assert.doesNotMatch(source,/auth\/v1\/user/);
+ assert.doesNotMatch(source,/freshAccount|persistDirectMetadata|updateUserMetadata/);
  assert.doesNotMatch(source,/localStorage\.setItem/);
 });

@@ -4,7 +4,7 @@ Atlas Harbor uses one workspace and publishing system for every Problem Space. L
 
 ## Core rule
 
-**One writable database source of truth. Multiple database transports are allowed. No local workspace copies.**
+**One writable database source of truth. One same-origin API boundary. No browser-direct database writes and no local workspace copies.**
 
 The canonical workspace record lives in Supabase account metadata at:
 
@@ -14,25 +14,22 @@ user_metadata.atlas_problem_spaces.publishing_workspace.notes
 
 The browser must never create a second device-only copy of the workspace body, projections, publication state, or share token in `localStorage`.
 
-## Allowed transport order
+## Allowed browser transport order
 
-Atlas Harbor may use these views/transports to reach the same canonical account-database record:
+Atlas Harbor uses these browser paths:
 
 1. Same-origin Atlas Harbor workspace API: `/api/workspaces/:resourceType/:resourceId`.
-2. The already-authenticated Supabase user metadata carried in the signed-in session, for immediate read recovery when the API route itself is unreachable.
-3. Direct authenticated Supabase Auth user-metadata access using the browser session and public/publishable Supabase key, for a fresh database read/write when the same-origin API is unavailable.
+2. The already-authenticated user metadata carried in the signed-in session, only to display the last server-confirmed record while a read request is unavailable.
 
 On Baseball report pages, browser transport recovery for the same-origin API is `fetch` → XHR → form navigation. The final transport applies only to authenticated workspace `PUT` requests and posts to `/api/workspaces-form/:resourceType/:resourceId`; the server delegates both routes to the same canonical save function. It is not another persistence layer.
 
-The second item is not a separately writable workspace and the third item is not a second persistence layer. They represent the same Supabase account record and exist so a temporary Atlas Harbor API routing/deployment problem does not make a user's existing analysis disappear.
+The session snapshot is not writable workspace storage. A successful API save refreshes it only as a last-confirmed read cache. Workspace browser code must never call Supabase `/auth/v1/user` to load or save workspace metadata. Authentication flows may still use Supabase Auth, but persistence stays behind the Atlas Harbor API.
 
-If both network database transports fail and the signed-in session contains no matching account record, the UI shows a retryable database error and does not open a device draft.
+If the API transports fail and the signed-in session contains no matching account record, the UI shows a retryable database error and does not open a device draft.
 
 ## Public runtime configuration
 
-Direct Supabase recovery must not secretly depend on the same `fetch('/api/config')` transport that may already be failing.
-
-Atlas Harbor therefore preserves the public Supabase URL and publishable key as public runtime configuration and exposes `/runtime-config.js` as a script-tag fallback. Loading a script element does not depend on the application's patched `window.fetch` stack. The public config may be cached in the browser because both values are public client configuration; workspace content, publication bodies, projections, and share tokens are never stored in that config cache.
+Atlas Harbor exposes the Supabase URL and publishable key as public runtime configuration for authentication and other explicitly client-side services. Workspace persistence does not consume those values and does not use `/runtime-config.js` to bypass the workspace API.
 
 Critical account/workspace requests use the preserved native fetch transport when available rather than relying on UI loading wrappers.
 
@@ -63,19 +60,19 @@ New workspace writes must not create new virtual or device-local records.
 
 Several regressions caused the repeated Legal/Published failures.
 
-### Regression 1: removing the database transport fallback
+### Regression 1: bypassing the workspace API
 
-The workspace initially used `/api/workspaces` and could still reach the same Supabase account metadata directly if that route was temporarily unreachable. A later cleanup treated that direct account-database path as if it were a conflicting persistence layer and removed it.
+The workspace initially used `/api/workspaces`, then added browser-direct Supabase account-metadata access when that route was temporarily unreachable.
 
-When the same-origin workspace route then returned `Failed to fetch`, the UI could no longer reach the existing database record even though the record still existed in Supabase.
+That bypass exposed internal Auth metadata requests in DevTools, duplicated persistence logic, and turned a server failure into a longer client retry chain.
 
-The fix is **not** to create a local draft. The fix is to retain multiple transports to the same canonical database record.
+The fix is **not** to create a local draft or a direct database fallback. The browser retries the same-origin API using alternate transports; the server alone owns canonical persistence.
 
-### Regression 2: direct recovery still depended on `/api/config`
+### Regression 2: read recovery depended on another network request
 
-A later recovery restored direct Supabase access but began that path by fetching `/api/config`. If the page's fetch transport was the thing failing, both `/api/workspaces` and the supposed fallback immediately failed with `Failed to fetch`.
+A former recovery path began by fetching `/api/config`. If the page's fetch transport was failing, both `/api/workspaces` and the supposed fallback immediately failed with `Failed to fetch`.
 
-The repair is to check the authenticated account metadata already present in the signed-in session first, preserve a native fetch function before UI wrappers are installed, and provide `/runtime-config.js` as a non-fetch fallback for the public Supabase connection values.
+The repair is to use the last server-confirmed record already present in the signed-in session for read-only display recovery. Writes never use that snapshot and never bypass the API.
 
 ### Regression 3: signed-in public feed changed request identity
 
@@ -90,6 +87,12 @@ An older browser `rest('workspace_notes')` fallback could create a virtual recor
 New publishing code must never call browser `workspace_notes` REST as its write path and must never encode publication content into `share_token`.
 
 Canonical new share tokens are compact random server/database tokens. The public feed may expose short deterministic `pub-...` aliases for malformed legacy tokens so old publications remain readable without rewriting or deleting their stored records.
+
+### Regression 5: redundant writes exhausted the form fallback window
+
+Save/Publish previously loaded the record, queried optional tables, repeated authenticated-user reads, waited behind a process-wide write queue, updated metadata, and attempted a legacy table mirror. The fallback form could exceed its 20-second response window.
+
+The server write path now performs one authenticated-user read and one metadata update, skips optional table reads and mirrors, isolates write queues per user, and bounds upstream requests with timeouts.
 
 ## Attachment scope
 
@@ -128,7 +131,7 @@ Every Problem Space follows the same lifecycle:
 2. Generate or collect domain research.
 3. Render domain-specific visualizations.
 4. Mount the shared private database workspace.
-5. Load/save the canonical account record through the allowed database recovery chain.
+5. Load/save the canonical account record through the same-origin workspace API.
 6. Publish a separate article with a compact share token.
 7. Optionally attach the full underlying research using `share_scope: "everything"` in the same workspace save.
 8. Recover old legacy/virtual records into the canonical account-metadata workspace when needed.
@@ -138,7 +141,7 @@ Every Problem Space follows the same lifecycle:
 A new space must reuse:
 
 - `createProblemSpaceStorage()` for metadata-backed project records
-- `/api/workspaces`, authenticated account metadata, and the direct account-database transport for private analysis and publishing recovery
+- `/api/workspaces` and read-only signed-in session recovery for private analysis and publishing
 - `workspace.js` for the editor, AI draft, projections, and sharing
 - `workspace-scope-toggle.js` for optional full-research attachment state
 - `/api/published-feed` and the shared public publication renderer
@@ -153,9 +156,9 @@ Do not:
 
 - create a local/device workspace copy
 - use localStorage as workspace-body or projection persistence
-- remove the direct account-database transport merely because `/api/workspaces` is preferred
-- implement a transport fallback that writes anywhere other than the canonical account-metadata save function
-- make direct database recovery depend exclusively on `fetch('/api/config')`
+- call Supabase `/auth/v1/user` from workspace browser code to load or save account metadata
+- implement a transport fallback that leaves the same-origin workspace API boundary
+- use authenticated session metadata as an editable or writable workspace copy
 - send a viewer bearer token on the public publication-list request
 - forward a viewer bearer token into public publication table reads
 - create a custom workspace or publication table for one Problem Space
@@ -178,9 +181,11 @@ The regression test `test/package-lock-sync.test.js` verifies that root dependen
 
 Regression tests must verify:
 
-- the session metadata read path, workspace API, and direct database transport remain represented
+- the session metadata read path and same-origin workspace API remain represented
 - no localStorage workspace persistence exists
-- direct-account fallback writes the same `atlas_problem_spaces.publishing_workspace.notes` record
+- workspace browser code contains no direct `/auth/v1/user` metadata read or write
+- fetch, XHR, and form-navigation fallbacks target only the same-origin workspace API
+- one server workspace write performs one authenticated-user read and one canonical metadata update
 - public runtime config has a script-based fallback independent of patched `window.fetch`
 - signed-in and signed-out public feeds return the same public rows
 - `GET /api/published-feed` is stripped of viewer Authorization in both browser and server layers

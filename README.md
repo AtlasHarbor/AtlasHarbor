@@ -97,7 +97,7 @@ user_metadata.atlas_problem_spaces.logistics_game.progress
 
 Several failures looked like “lost analysis” even though the underlying data had not necessarily been deleted. These are now architectural regression cases.
 
-### 1. `/api/workspaces` failed and direct database recovery had been removed
+### 1. `/api/workspaces` failed and the browser tried to bypass it
 
 Symptom:
 
@@ -107,9 +107,9 @@ Analysis could not load
 Database workspace unavailable: Failed to fetch
 ```
 
-A cleanup correctly removed device-only workspace persistence but incorrectly removed the direct account-database transport too. A temporary API transport failure therefore made valid account analysis appear unavailable.
+A temporary API transport failure made valid account analysis appear unavailable. A later recovery attempt added browser-direct Supabase Auth metadata reads and writes. That bypass made the failure harder to diagnose and exposed an internal persistence transport in the browser.
 
-**Fix:** keep one database source of truth but allow multiple database transports to that same record.
+**Fix:** keep one database source of truth and one same-origin workspace API boundary. Browser transport recovery may retry that API with fetch, XHR, or same-origin form navigation, but workspace code never reads or writes Supabase Auth metadata directly.
 
 ### 2. The recovery path depended on `/api/config` through the same failing fetch stack
 
@@ -119,9 +119,9 @@ Symptom included two network failures, such as:
 Database workspace unavailable: Failed to fetch. Workspace service: Failed to fetch
 ```
 
-The supposed direct-database fallback first tried to fetch configuration from the same origin using the same failing browser fetch mechanism.
+The former direct-database fallback first tried to fetch configuration from the same origin using the same failing browser fetch mechanism.
 
-**Fix:** read matching authenticated session metadata immediately; preserve native fetch; provide `/runtime-config.js` as a script fallback for public connection configuration.
+**Fix:** use matching authenticated session metadata only as read-only display recovery while the API reconnects. Save and Publish still go through the same-origin workspace API.
 
 ### 3. Signed-out `/published` worked while signed-in `/published` showed zero stories
 
@@ -148,6 +148,12 @@ Legal often had an existing account-metadata analysis that could be recovered im
 **Fix:** a missing existing row is a valid empty workspace state for an authenticated user, and Baseball has a same-endpoint XHR transport fallback for `/api/workspaces/...`. Baseball uses the same `baseball_player` workspace and publishing architecture as Legal.
 
 The empty first-analysis response is read-only bootstrap behavior. Save and Publish must reach the server. If fetch and XHR both raise browser network errors, the form-navigation transport posts to `/api/workspaces-form/:resourceType/:resourceId`, which delegates to the exact canonical save routine used by `PUT /api/workspaces/...`.
+
+### 7. Save Draft timed out after redundant server and browser fallbacks
+
+A workspace write used to load the record first, query optional legacy tables, read the authenticated Supabase user multiple times, serialize every user's write behind one global queue, update account metadata, and fire a second optional table mirror. When that chain stalled, the browser retried it through multiple transports and finally attempted a direct `/auth/v1/user` write. The form-navigation fallback then timed out.
+
+**Fix:** one Save/Publish now performs one server-side authenticated user read and one canonical metadata update. Optional tables are read-only migration inputs, writes are queued per user, upstream calls have bounded timeouts, and the browser never calls Supabase Auth metadata as a workspace persistence fallback.
 
 ## Public-feed invariant
 
@@ -236,9 +242,9 @@ New Problem Spaces must work after deployment without requiring an ordinary user
 
 1. Analytical workspace content has one writable canonical database record in account metadata.
 2. `/api/workspaces` is the preferred analytical-workspace transport.
-3. Authenticated session metadata is allowed for immediate read recovery of that same account record.
-4. Direct authenticated Supabase Auth metadata access is the fresh recovery transport if `/api/workspaces` is temporarily unreachable.
-5. Browser transport fallbacks may reach the same API/database record but may not create another store.
+3. Authenticated session metadata is allowed only for immediate read recovery of the last server-confirmed account record.
+4. Workspace Save and Publish always cross the same-origin Atlas Harbor API boundary; workspace browser code never reads or writes `/auth/v1/user` metadata directly.
+5. Browser transport fallbacks may retry that same API with fetch, XHR, or form navigation, but may not reach a database endpoint or create another store.
 6. Public publication-list requests remain anonymous/session-independent regardless of viewer login state.
 7. Shared bootstrap-scale data uses host-account metadata.
 8. User projects, preferences, drafts and saved decisions use database-backed account metadata unless the product explicitly requires offline behavior.
