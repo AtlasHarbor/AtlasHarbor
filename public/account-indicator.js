@@ -1,3 +1,4 @@
+import'./workspace-first-note-recovery.js';
 import'./problem-nav.js';
 import'./workspace-enhancements.js';
 import'./publishing-links.js';
