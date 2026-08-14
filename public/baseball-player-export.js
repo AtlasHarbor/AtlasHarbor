@@ -1,4 +1,3 @@
-import'./workspace-first-note-recovery.js';
 import{accessToken,user}from'./supabase-client.js';
 
 const match=location.pathname.match(/^\/baseball\/players\/(\d+)/);
@@ -37,7 +36,7 @@ if(match){
      loadAnalysis()
     ]);
     const data=await playerResponse.json().catch(()=>({}));if(!playerResponse.ok||!data.player)throw new Error(data.error||`Request failed (${playerResponse.status}).`);
-    const payload={exportedAt:new Date().toISOString(),source:'Atlas Harbor normalized Baseball player record',player:data.player,analysis:analysis?{...analysis,_store:undefined}:null};
+    const payload={exportedAt:new Date().toISOString(),source:'Atlas Harbor normalized Baseball player record plus signed-in account analysis',player:data.player,analysis:analysis?{...analysis,_store:undefined}:null};
     const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),link=document.createElement('a');
     const slug=String(data.player.name||id).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
     link.href=url;link.download=`atlas-baseball-${slug||id}-${id}.json`;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
