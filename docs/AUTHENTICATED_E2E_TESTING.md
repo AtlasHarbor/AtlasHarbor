@@ -55,13 +55,21 @@ A successful run prints a JSON result containing the workspace ID, storage path,
 
 A player with an existing note can be rendered from authenticated session metadata during a temporary read-transport outage. Historically, a player with **no prior note** instead showed `Analysis could not load`, which made it impossible to start the first analysis.
 
-The recovery now lives inside `public/workspace-transport-fallback.js`. The order is:
+The recovery lives inside `public/workspace-transport-fallback.js`. For the first **read**, the order is:
 
 1. normal authenticated `fetch()` to `/api/workspaces/baseball_player/:id`;
 2. the same authenticated endpoint over XHR;
 3. only if both transports fail, the user is signed in, and the signed-in session contains no existing record for that player, return an **empty first-analysis UI state**.
 
-That third step does not create or save anything. `PUT`, Save, Publish, and direct metadata writes are never synthesized. Saving still has to reach the canonical account database and therefore rechecks current database state before a record can be persisted.
+That empty state is not a saved draft. A first **write** must still reach the canonical account record. Workspace writes therefore use this transport order:
+
+1. normal authenticated `PUT /api/workspaces/:resourceType/:resourceId` over fetch;
+2. the exact same request over XHR;
+3. if both JavaScript request transports fail, a same-origin hidden form/iframe POST to `/api/workspaces-form/:resourceType/:resourceId`.
+
+The form-navigation route authenticates the same Supabase access token and calls the same server `saveWorkspace()` function used by the normal PUT route. It writes only `user_metadata.atlas_problem_spaces.publishing_workspace.notes`; it does not create a local draft, browser table, or alternate database record. After the server confirms the write, the returned canonical workspace is copied into the signed-in session metadata cache so the just-created note remains readable during the same transport outage.
+
+This fallback exists because some browser/network environments can fail both fetch and XHR while ordinary HTML navigation still reaches the application server. It is a third transport to the same database record, not a third storage system.
 
 ## Account-page recovery
 
