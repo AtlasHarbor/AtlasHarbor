@@ -13,14 +13,27 @@ test('Baseball player pages mount the shared publishable database workspace',()=
  assert.match(js,/prospect-players/);
 });
 
-test('Baseball workspace transport falls back to same-origin XHR without creating local drafts',()=>{
+test('Baseball workspace transport can open a first note and save it without a device-only draft',()=>{
  const js=read('../public/workspace-transport-fallback.js');
+ const server=read('../src/workspace-api.js');
  assert.match(js,/pathname\.startsWith\('\/api\/workspaces\/'\)/);
  assert.match(js,/XMLHttpRequest/);
- assert.match(js,/new Headers\(init\.headers/);
  assert.match(js,/return await xhrRequest/);
- assert.doesNotMatch(js,/localStorage/);
- assert.doesNotMatch(js,/workspace_notes/);
+ assert.match(js,/firstBaseballWorkspaceCanOpenEmpty/);
+ assert.match(js,/authenticated-session-empty/);
+ assert.match(js,/formWorkspaceRequest/);
+ assert.match(js,/method!==['"]PUT['"]/);
+ assert.match(js,/\/api\/workspaces-form\//);
+ assert.match(js,/form\.submit\(\)/);
+ assert.match(js,/atlas-workspace-form-result/);
+ assert.match(js,/event\.origin!==location\.origin/);
+ assert.match(js,/rememberWorkspaceInSession/);
+ assert.match(js,/atlas-harbor-session/);
+ assert.doesNotMatch(js,/localStorage\.(?:setItem|getItem)\(['"]workspace_notes/);
+ assert.match(server,/express\.urlencoded/);
+ assert.match(server,/router\.post\('\/api\/workspaces-form\/:resourceType\/:resourceId'/);
+ assert.match(server,/const result=await saveWorkspace\(req,body\)/);
+ assert.match(server,/publishing_workspace/);
 });
 
 test('Baseball stat grids expose hover and tap definitions for common abbreviations',()=>{
