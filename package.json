@@ -10,6 +10,7 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "test": "node --test",
+    "test:auth": "node scripts/test-auth-api.js",
     "seed:legal": "node scripts/seed-legal.js"
   },
   "engines": {
