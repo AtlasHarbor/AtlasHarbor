@@ -39,6 +39,51 @@ function configuredSupabaseOrigin(){
  return'';
 }
 
+function sessionSnapshot(){
+ try{return JSON.parse(localStorage.getItem('atlas-harbor-session')||'null')}catch{return null}
+}
+
+function newest(rows=[]){
+ return [...rows].sort((a,b)=>Date.parse(b?.updated_at||b?.published_at||b?.created_at||0)-Date.parse(a?.updated_at||a?.published_at||a?.created_at||0))[0]||null;
+}
+
+function sessionWorkspace(url){
+ const session=sessionSnapshot(),current=session?.user;
+ if(!session?.access_token||!current?.id)return null;
+ const match=url.pathname.match(/^\/api\/workspaces\/([^/]+)\/([^/]+)$/);
+ if(!match)return null;
+ const resourceType=decodeURIComponent(match[1]),resourceId=decodeURIComponent(match[2]),rows=[];
+ const canonical=current.user_metadata?.atlas_problem_spaces?.publishing_workspace?.notes||[];
+ const virtual=current.user_metadata?.atlas_virtual_tables?.workspace_notes||[];
+ for(const item of [...canonical,...virtual]){
+  if(String(item?.user_id||current.id)!==String(current.id))continue;
+  if(String(item?.resource_type||'')!==resourceType||String(item?.resource_id||'')!==resourceId)continue;
+  rows.push({...item,_store:item?._store||'authenticated-session-metadata'});
+ }
+ return{workspace:newest(rows),storage:rows.length?'authenticated-session-metadata':'authenticated-session-empty',readRecovery:true};
+}
+
+function sessionAccount(){
+ const session=sessionSnapshot();
+ return session?.access_token&&session?.user?session.user:null;
+}
+
+function syntheticReadFallback(input,init={}){
+ const raw=typeof input==='string'?input:input?.url||'';
+ const url=new URL(raw||location.href,location.href),method=String(init.method||'GET').toUpperCase();
+ if(method!=='GET')return null;
+ if(url.origin===location.origin&&url.pathname.startsWith('/api/workspaces/')&&url.pathname!=='/api/workspaces/status'){
+  const data=sessionWorkspace(url);
+  if(data)return new Response(JSON.stringify(data),{status:200,headers:{'Content-Type':'application/json','Cache-Control':'no-store','X-Atlas-Workspace-Recovery':'session'}});
+ }
+ const supabaseOrigin=configuredSupabaseOrigin();
+ if(supabaseOrigin&&url.origin===supabaseOrigin&&url.pathname==='/auth/v1/user'){
+  const account=sessionAccount();
+  if(account)return new Response(JSON.stringify(account),{status:200,headers:{'Content-Type':'application/json','Cache-Control':'no-store','X-Atlas-Workspace-Recovery':'session'}});
+ }
+ return null;
+}
+
 function eligibleForXhrFallback(input){
  const raw=typeof input==='string'?input:input?.url||'';
  const url=new URL(raw||location.href,location.href);
@@ -55,6 +100,8 @@ export function installWorkspaceTransportFallback(){
   if(!eligibleForXhrFallback(input))return prior(input,init);
   try{return await prior(input,init)}catch(fetchError){
    try{return await xhrRequest(input,init)}catch(xhrError){
+    const recovered=syntheticReadFallback(input,init);
+    if(recovered)return recovered;
     const error=new TypeError(`Database service unavailable through fetch and XHR: ${xhrError.message}`);
     error.cause=fetchError;
     throw error;

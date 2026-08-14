@@ -20,9 +20,9 @@
     headers.delete('authorization');
 
     if (request) {
-      const clean = new Request(request, { ...init, headers, credentials: 'omit', cache: 'no-store' });
+      const clean = new Request(request, { ...init, headers, credentials: 'omit' });
       return previousFetch(clean);
     }
-    return previousFetch(input, { ...init, headers, credentials: 'omit', cache: 'no-store' });
+    return previousFetch(input, { ...init, headers, credentials: 'omit' });
   };
 })();
