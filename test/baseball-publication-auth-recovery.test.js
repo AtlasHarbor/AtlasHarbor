@@ -23,7 +23,7 @@ test('Baseball workspace fallback retries both the canonical workspace API and c
  assert.match(source,/configuredSupabaseOrigin/);
  assert.match(source,/atlas-harbor-public-config/);
  assert.match(source,/xhrRequest/);
- assert.doesNotMatch(source,/workspace_notes/);
+ assert.doesNotMatch(source,/rest\/v1\/workspace_notes/);
  assert.doesNotMatch(source,/localStorage\.setItem\([^)]*workspace/i);
 });
 

@@ -71,7 +71,7 @@ These are transports, not separate stores.
 
 Direct recovery must not depend exclusively on `fetch('/api/config')`. Atlas Harbor preserves native browser fetch before loading-feedback wrappers and exposes `/runtime-config.js` as a script-resource fallback for the **public** Supabase URL and publishable key. Those public connection values may be cached; analysis bodies, projections, publication state and share tokens may not.
 
-Baseball additionally installs `workspace-transport-fallback.js`: if normal browser `fetch()` throws while reaching `/api/workspaces/...`, it retries the **same authenticated Atlas Harbor workspace endpoint** using `XMLHttpRequest`. That does not create a Baseball-specific store; it is another transport to the same API/database record. This matters for a player's **first** analysis, because there may be no matching session-metadata row to recover yet.
+Baseball additionally installs `workspace-transport-fallback.js`. It first retries a failed browser `fetch()` to `/api/workspaces/...` using `XMLHttpRequest`. If both scripted transports fail during an authenticated `PUT`, it submits the same payload and access token through a hidden same-origin form to `/api/workspaces-form/...`. Every path invokes the same server save function and writes the same canonical account record; none creates a Baseball-specific or device-only store. This matters for a player's **first** analysis, because there may be no matching session-metadata row to recover yet.
 
 If every database transport fails and no matching authenticated account record is already available, show a retryable database error. Do not fabricate an editable local copy.
 
@@ -131,7 +131,7 @@ Cause: a logged-in bearer token changed the Supabase RLS role for what should ha
 
 ### 4. Legacy browser publishing created giant share URLs or `/published/undefined`
 
-An old browser-side virtual `workspace_notes` fallback could encode an entire publication object into `share_token` when an optional table was unavailable.
+An old browser-side virtual `workspace_notes` fallback could encode an entire publication into a share token when an optional table was unavailable.
 
 **Fix:** new share tokens are compact random database/server tokens. Public-feed recovery can expose stable short `pub-...` aliases for malformed historical tokens. The publication-link UI consumes the canonical workspace returned by Save/Publish instead of performing another independent storage lookup.
 
@@ -146,6 +146,8 @@ The “attach full underlying research” switch used to perform another workspa
 Legal often had an existing account-metadata analysis that could be recovered immediately. A Baseball player with no prior analysis did not. The bootstrap treated “no saved row yet” plus a failed fetch as if the workspace itself could not exist.
 
 **Fix:** a missing existing row is a valid empty workspace state for an authenticated user, and Baseball has a same-endpoint XHR transport fallback for `/api/workspaces/...`. Baseball uses the same `baseball_player` workspace and publishing architecture as Legal.
+
+The empty first-analysis response is read-only bootstrap behavior. Save and Publish must reach the server. If fetch and XHR both raise browser network errors, the form-navigation transport posts to `/api/workspaces-form/:resourceType/:resourceId`, which delegates to the exact canonical save routine used by `PUT /api/workspaces/...`.
 
 ## Public-feed invariant
 

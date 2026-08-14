@@ -80,9 +80,11 @@ export function newestRecord(records=[]){
 }
 
 export function upsertWorkspaceRecord(records=[],record,max=250){
- const normalized=normalizeWorkspaceRecord(record),key=recordKey(normalized),next=(Array.isArray(records)?records:[]).map(item=>normalizeWorkspaceRecord(item)).filter(item=>{
-  const itemKey=recordKey(item);
-  return key?itemKey!==key:!(sameResource(item,normalized.resource_type,normalized.resource_id,normalized.user_id));
+ const normalized=normalizeWorkspaceRecord(record),next=(Array.isArray(records)?records:[]).map(item=>normalizeWorkspaceRecord(item)).filter(item=>{
+  const sameId=Boolean(normalized.id&&item.id&&normalized.id===item.id);
+  const sameToken=Boolean(normalized.share_token&&item.share_token&&normalized.share_token===item.share_token);
+  const sameScopedResource=Boolean(normalized.resource_type&&normalized.resource_id&&item.user_id===normalized.user_id&&sameResource(item,normalized.resource_type,normalized.resource_id));
+  return!sameId&&!sameToken&&!sameScopedResource;
  });
  next.push(normalized);
  return next.sort((a,b)=>dateValue(a.updated_at)-dateValue(b.updated_at)).slice(-Math.max(1,max));

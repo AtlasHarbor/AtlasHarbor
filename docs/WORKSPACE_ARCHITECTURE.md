@@ -22,6 +22,8 @@ Atlas Harbor may use these views/transports to reach the same canonical account-
 2. The already-authenticated Supabase user metadata carried in the signed-in session, for immediate read recovery when the API route itself is unreachable.
 3. Direct authenticated Supabase Auth user-metadata access using the browser session and public/publishable Supabase key, for a fresh database read/write when the same-origin API is unavailable.
 
+On Baseball report pages, browser transport recovery for the same-origin API is `fetch` → XHR → form navigation. The final transport applies only to authenticated workspace `PUT` requests and posts to `/api/workspaces-form/:resourceType/:resourceId`; the server delegates both routes to the same canonical save function. It is not another persistence layer.
+
 The second item is not a separately writable workspace and the third item is not a second persistence layer. They represent the same Supabase account record and exist so a temporary Atlas Harbor API routing/deployment problem does not make a user's existing analysis disappear.
 
 If both network database transports fail and the signed-in session contains no matching account record, the UI shows a retryable database error and does not open a device draft.
@@ -152,6 +154,7 @@ Do not:
 - create a local/device workspace copy
 - use localStorage as workspace-body or projection persistence
 - remove the direct account-database transport merely because `/api/workspaces` is preferred
+- implement a transport fallback that writes anywhere other than the canonical account-metadata save function
 - make direct database recovery depend exclusively on `fetch('/api/config')`
 - send a viewer bearer token on the public publication-list request
 - forward a viewer bearer token into public publication table reads

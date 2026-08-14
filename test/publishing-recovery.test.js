@@ -55,3 +55,48 @@ test('signed-in workspace loads the persistent account copy when SQL adapters ar
  const tableCall=mock.calls.find(call=>call.path==='/rest/v1/workspace_notes');
  assert.equal(tableCall.headers.apikey,'sb_secret_test');assert.equal(tableCall.headers.Authorization,undefined);
 });
+
+test('form-navigation fallback saves and publishes a first workspace to canonical account metadata',async()=>{
+ let current={id:'user-form',user_metadata:{atlas_profile:{username:'Form Tester'},atlas_problem_spaces:{}}};
+ const storage={
+  requestUser:async req=>{
+   assert.equal(req.get('authorization'),'Bearer form-token');
+   return{token:'form-token',current};
+  },
+  writeUser:async(req,space,updater)=>{
+   assert.equal(space,'publishing_workspace');
+   const spaces={...(current.user_metadata.atlas_problem_spaces||{})};
+   const value=await updater(structuredClone(spaces[space]||{}));
+   spaces[space]=value;
+   current={...current,user_metadata:{...current.user_metadata,atlas_problem_spaces:spaces}};
+   return{value,user:current};
+  }
+ };
+ await withServer(createWorkspaceRouter({env:{},storage}),async base=>{
+  const payload={resource_title:'Matthew Liberatore',title:'First player note',body:'<p>Draft analysis</p>',is_shared:false,intent:'save'};
+  const form=new URLSearchParams({request_id:'form-request-1',access_token:'form-token',payload:JSON.stringify(payload)});
+  const response=await fetch(`${base}/api/workspaces-form/baseball_player/669461`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:form}),html=await response.text();
+  assert.equal(response.status,200);
+  assert.match(response.headers.get('content-type'),/^text\/html/);
+  assert.match(html,/atlas-workspace-form-result/);
+  assert.match(html,/form-request-1/);
+  assert.match(html,/First player note/);
+  const notes=current.user_metadata.atlas_problem_spaces.publishing_workspace.notes;
+  assert.equal(notes.length,1);
+  assert.equal(notes[0].resource_type,'baseball_player');
+  assert.equal(notes[0].resource_id,'669461');
+  assert.equal(notes[0].title,'First player note');
+  assert.equal(notes[0].is_published,false);
+
+  const publishPayload={...payload,is_shared:true,intent:'publish'};
+  const publishForm=new URLSearchParams({request_id:'form-request-2',access_token:'form-token',payload:JSON.stringify(publishPayload)});
+  const publishResponse=await fetch(`${base}/api/workspaces-form/baseball_player/669461`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:publishForm}),publishHtml=await publishResponse.text();
+  assert.equal(publishResponse.status,200);
+  assert.match(publishHtml,/form-request-2/);
+  const published=current.user_metadata.atlas_problem_spaces.publishing_workspace.notes;
+  assert.equal(published.length,1);
+  assert.equal(published[0].is_published,true);
+  assert.equal(published[0].is_shared,true);
+  assert.match(published[0].share_token,/^[A-Za-z0-9_-]{24}$/);
+ });
+});
