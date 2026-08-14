@@ -61,6 +61,47 @@ function firstBaseballWorkspaceCanOpenEmpty(input,init={}){
 
 function emptyFirstWorkspaceResponse(){return new Response(JSON.stringify({workspace:null,storage:'authenticated-session-empty'}),{status:200,headers:{'Content-Type':'application/json','Cache-Control':'no-store','X-Atlas-Workspace-Recovery':'first-baseball-analysis'}})}
 
+function rememberWorkspaceInSession(workspace){
+ try{
+  if(!workspace?.id)return;
+  const key='atlas-harbor-session',session=JSON.parse(localStorage.getItem(key)||'null'),current=session?.user;if(!current?.id)return;
+  const metadata={...(current.user_metadata||{})},spaces={...(metadata.atlas_problem_spaces||{})},publishing={...(spaces.publishing_workspace||{})},rows=Array.isArray(publishing.notes)?publishing.notes:[];
+  const filtered=rows.filter(row=>!(String(row?.id||'')===String(workspace.id)||(String(row?.resource_type||'')===String(workspace.resource_type||'')&&String(row?.resource_id||'')===String(workspace.resource_id||''))));
+  publishing.notes=[...filtered,workspace].sort((a,b)=>Date.parse(a?.updated_at||0)-Date.parse(b?.updated_at||0)).slice(-250);
+  spaces.publishing_workspace=publishing;metadata.atlas_problem_spaces=spaces;current.user_metadata=metadata;session.user=current;localStorage.setItem(key,JSON.stringify(session));
+ }catch{}
+}
+
+function formWorkspaceRequest(input,init={}){
+ return new Promise((resolve,reject)=>{
+  let request,url,method,headers,payload,token;
+  try{
+   request=input instanceof Request?input:null;
+   url=new URL(request?.url||String(input||''),location.href);
+   method=String(init.method||request?.method||'GET').toUpperCase();
+   if(url.origin!==location.origin||method!=='PUT'||!url.pathname.startsWith('/api/workspaces/'))throw new Error('Form fallback is not eligible for this request.');
+   headers=new Headers(init.headers||request?.headers||{});
+   token=String(headers.get('Authorization')||'').replace(/^Bearer\s+/i,'');
+   payload=typeof init.body==='string'?init.body:null;
+   if(!token||payload==null)throw new Error('Form fallback requires the signed-in workspace payload.');
+  }catch(error){reject(error);return}
+  const suffix=url.pathname.slice('/api/workspaces/'.length),requestId=`wsf-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,frame=document.createElement('iframe'),form=document.createElement('form');
+  frame.name=`atlas-workspace-form-${requestId}`;frame.hidden=true;form.hidden=true;form.method='POST';form.action=`/api/workspaces-form/${suffix}`;form.target=frame.name;
+  for(const[name,value]of[['request_id',requestId],['access_token',token],['payload',payload]]){const field=document.createElement('input');field.type='hidden';field.name=name;field.value=value;form.append(field)}
+  let timer;
+  const cleanup=()=>{clearTimeout(timer);window.removeEventListener('message',onMessage);form.remove();frame.remove()};
+  const onMessage=event=>{
+   if(event.origin!==location.origin||event.data?.type!=='atlas-workspace-form-result'||event.data?.requestId!==requestId)return;
+   const data=event.data;cleanup();
+   if(data.ok&&data.workspace)rememberWorkspaceInSession(data.workspace);
+   resolve(new Response(JSON.stringify(data.ok?{workspace:data.workspace,storage:data.storage||'account-metadata',migratedFrom:data.migratedFrom||null}:{error:data.error||'Workspace form save failed.'}),{status:data.ok?200:500,headers:{'Content-Type':'application/json','Cache-Control':'no-store','X-Atlas-Workspace-Recovery':'form-navigation'}}));
+  };
+  window.addEventListener('message',onMessage);
+  timer=setTimeout(()=>{cleanup();reject(new TypeError('Database form-navigation fallback timed out.'))},20000);
+  document.body.append(frame,form);form.submit();
+ });
+}
+
 export function installWorkspaceTransportFallback(){
  if(installed)return;
  installed=true;
@@ -69,10 +110,12 @@ export function installWorkspaceTransportFallback(){
   if(!eligibleForXhrFallback(input))return prior(input,init);
   try{return await prior(input,init)}catch(fetchError){
    try{return await xhrRequest(input,init)}catch(xhrError){
-    if(firstBaseballWorkspaceCanOpenEmpty(input,init))return emptyFirstWorkspaceResponse();
-    const error=new TypeError(`Database service unavailable through fetch and XHR: ${xhrError.message}`);
-    error.cause=fetchError;
-    throw error;
+    try{return await formWorkspaceRequest(input,init)}catch(formError){
+     if(firstBaseballWorkspaceCanOpenEmpty(input,init))return emptyFirstWorkspaceResponse();
+     const error=new TypeError(`Database service unavailable through fetch, XHR, and form navigation: ${formError.message}`);
+     error.cause=fetchError;error.xhrCause=xhrError;
+     throw error;
+    }
    }
   }
  };
