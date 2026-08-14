@@ -6,11 +6,13 @@ Atlas Harbor uses one workspace and publishing system for every Problem Space. L
 
 **One writable database source of truth. One same-origin API boundary. No browser-direct database writes and no local workspace copies.**
 
-The canonical workspace record lives in Supabase account metadata at:
+The canonical workspace record lives in Supabase account metadata as one top-level record per resource:
 
 ```text
-user_metadata.atlas_problem_spaces.publishing_workspace.notes
+user_metadata.atlas_workspace_record_v2_<resource-key>
 ```
+
+`<resource-key>` is a deterministic hash of `resource_type + resource_id`. A save patches only that key. The legacy `user_metadata.atlas_problem_spaces.publishing_workspace.notes` array is still read so existing work remains available, but new writes do not resend or grow that aggregate array.
 
 The browser must never create a second device-only copy of the workspace body, projections, publication state, or share token in `localStorage`.
 
@@ -49,6 +51,7 @@ Older Atlas Harbor versions may have records in:
 
 - `workspace_notes`
 - `legal_notes`
+- `user_metadata.atlas_problem_spaces.publishing_workspace.notes`
 - `user_metadata.atlas_virtual_tables.workspace_notes`
 - `user_metadata.atlas_virtual_tables.legal_notes`
 
@@ -94,6 +97,14 @@ Save/Publish previously loaded the record, queried optional tables, repeated aut
 
 The server write path now performs one authenticated-user read and one metadata update, skips optional table reads and mirrors, isolates write queues per user, and bounds upstream requests with timeouts.
 
+### Regression 6: valid editor content exceeded transport and metadata-update limits
+
+The shared editor permits 60,000 characters of sanitized HTML and a 12,000-character AI prompt. The API previously parsed only 64 KB of JSON, and the form fallback parsed only 160 KB even though URL encoding can expand Unicode and HTML substantially. A parser-generated 413 response also bypassed the iframe result message, so the browser waited and reported a form timeout.
+
+In addition, changing one workspace rebuilt and uploaded the user's entire metadata document. Unrelated Problem Spaces and every prior post therefore participated in the size of a Baseball save.
+
+The JSON parser now accepts 1 MB and the form parser accepts 3 MB. Form parser failures return a structured same-origin result immediately. The server sends only the single bounded workspace record being changed; legacy aggregate records remain read inputs and are shadowed by the newer per-resource record.
+
 ## Attachment scope
 
 `share_scope` is part of the workspace record itself.
@@ -134,7 +145,7 @@ Every Problem Space follows the same lifecycle:
 5. Load/save the canonical account record through the same-origin workspace API.
 6. Publish a separate article with a compact share token.
 7. Optionally attach the full underlying research using `share_scope: "everything"` in the same workspace save.
-8. Recover old legacy/virtual records into the canonical account-metadata workspace when needed.
+8. Recover old legacy/virtual records into the canonical per-resource account-metadata workspace when needed.
 
 ## Requirements for a new Problem Space
 
@@ -186,6 +197,8 @@ Regression tests must verify:
 - workspace browser code contains no direct `/auth/v1/user` metadata read or write
 - fetch, XHR, and form-navigation fallbacks target only the same-origin workspace API
 - one server workspace write performs one authenticated-user read and one canonical metadata update
+- payloads that exceed the former 64 KB JSON and 160 KB form limits save successfully
+- unrelated large account metadata is not resent with a single workspace update
 - public runtime config has a script-based fallback independent of patched `window.fetch`
 - signed-in and signed-out public feeds return the same public rows
 - `GET /api/published-feed` is stripped of viewer Authorization in both browser and server layers

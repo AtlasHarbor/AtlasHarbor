@@ -25,7 +25,7 @@ This is shared public-source Baseball data. It is not duplicated once per Atlas 
 Private notes remain separate in the canonical account workspace:
 
 ```text
-user_metadata.atlas_problem_spaces.publishing_workspace.notes
+user_metadata.atlas_workspace_record_v2_<resource-key>
 ```
 
 A note with `resource_type: baseball_player` and the matching MLB person ID can be joined onto an export for that signed-in user. The private analysis is **not copied into the shared player snapshot table**.

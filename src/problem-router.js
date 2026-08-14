@@ -25,11 +25,22 @@ import {createPublicPropositionRouter} from './proposition-public.js';
 import {createResearchProjectsRouter} from './research-projects.js';
 import {createResearchCredentialRouter} from './research-credentials.js';
 import {createLifeSciencesRouter} from './life-sciences.js';
+import {metadataWorkspaceRecords,newestRecord,normalizeWorkspaceRecord,workspaceMetadataKey} from './workspace-records.js';
 
 const directory=path.dirname(fileURLToPath(import.meta.url));
 const propText=(value,max=4000)=>String(value??'').trim().slice(0,max);
 const propSlug=value=>propText(value,120).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,72)||'space-block';
 const plainHtml=value=>String(value||'').replace(/<[^>]*>/g,' ').replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&').replace(/&lt;/gi,'<').replace(/&gt;/gi,'>').replace(/\s+/g,' ').trim();
+function accountWorkspaceRows(metadata,userId){
+ const grouped=new Map();
+ for(const original of metadataWorkspaceRecords(metadata)){
+  if(original?.user_id&&String(original.user_id)!==String(userId))continue;
+  const row=normalizeWorkspaceRecord({...original,user_id:original.user_id||userId}),key=`${row.resource_type}:${row.resource_id}`;
+  if(!grouped.has(key))grouped.set(key,[]);
+  grouped.get(key).push(row);
+ }
+ return[...grouped.values()].map(newestRecord).filter(row=>row&&!row._deleted).sort((a,b)=>String(b.published_at||b.updated_at||'').localeCompare(String(a.published_at||a.updated_at||'')));
+}
 function safeRichHtml(value){
  let html=String(value||'').slice(0,60000).replace(/<!--[\s\S]*?-->/g,'').replace(/<(script|style|iframe|object|embed|form|input|button|textarea|select)[^>]*>[\s\S]*?<\/\1>/gi,'').replace(/<(script|style|iframe|object|embed|form|input|button|textarea|select)[^>]*\/?\s*>/gi,'');
  const allowed=new Set(['p','br','strong','b','em','i','u','h2','h3','ul','ol','li','blockquote','a']);
@@ -48,9 +59,9 @@ export function createProblemRouter({service=createProblemSpacesService(),env=pr
  router.get(['/logistics','/logistics/{*path}'],(_req,res)=>res.sendFile(path.join(directory,'../public/logistics-planner.html')));
  router.get(['/life-sciences','/life-sciences/{*path}'],(_req,res)=>res.sendFile(path.join(directory,'../public/life-sciences.html')));
  router.get(['/users/:slug','/users/:slug/{*path}'],(_req,res)=>res.sendFile(path.join(directory,'../public/profile.html')));
- router.get('/api/workspaces/account',async(req,res)=>{try{const{user,value}=await storage.readUser(req,'publishing_workspace',{defaults:{notes:[]}}),workspaces=(value.notes||[]).filter(item=>!item.user_id||item.user_id===user.id).sort((a,b)=>String(b.published_at||b.updated_at||'').localeCompare(String(a.published_at||a.updated_at||'')));res.set('Cache-Control','no-store');return res.json({workspaces,storage:'account-metadata'})}catch(error){return res.status(error.status||500).json({error:error.message||'Could not load account work.'})}});
- router.patch('/api/workspaces/account/:id',async(req,res)=>{try{const id=propText(req.params.id,160),saved=await storage.writeUser(req,'publishing_workspace',current=>{const notes=current.notes||[];if(!notes.some(item=>item.id===id))throw Object.assign(new Error('Workspace not found.'),{status:404});return{...current,notes:notes.map(item=>item.id===id?{...item,featured:req.body?.featured!==false,updated_at:new Date().toISOString()}:item)}});return res.json({workspace:saved.value.notes.find(item=>item.id===id),storage:'account-metadata'})}catch(error){return res.status(error.status||500).json({error:error.message||'Could not update account work.'})}});
- router.delete('/api/workspaces/account/:id',async(req,res)=>{try{const id=propText(req.params.id,160),saved=await storage.writeUser(req,'publishing_workspace',current=>{const notes=current.notes||[],next=notes.filter(item=>item.id!==id);if(next.length===notes.length)throw Object.assign(new Error('Workspace not found.'),{status:404});return{...current,notes:next}});return res.json({ok:true,count:saved.value.notes.length,storage:'account-metadata'})}catch(error){return res.status(error.status||500).json({error:error.message||'Could not delete account work.'})}});
+ router.get('/api/workspaces/account',async(req,res)=>{try{const{current}=await storage.requestUser(req),workspaces=accountWorkspaceRows(current.user_metadata,current.id);res.set('Cache-Control','no-store');return res.json({workspaces,storage:'segmented-account-metadata'})}catch(error){return res.status(error.status||500).json({error:error.message||'Could not load account work.'})}});
+ router.patch('/api/workspaces/account/:id',async(req,res)=>{try{const id=propText(req.params.id,160);let workspace=null;await storage.patchUser(req,(metadata,current)=>{const existing=accountWorkspaceRows(metadata,current.id).find(item=>item.id===id);if(!existing)throw Object.assign(new Error('Workspace not found.'),{status:404});workspace={...existing,featured:req.body?.featured!==false,updated_at:new Date().toISOString(),_store:'segmented-account-metadata'};return{[workspaceMetadataKey(existing.resource_type,existing.resource_id)]:workspace}});return res.json({workspace,storage:'segmented-account-metadata'})}catch(error){return res.status(error.status||500).json({error:error.message||'Could not update account work.'})}});
+ router.delete('/api/workspaces/account/:id',async(req,res)=>{try{const id=propText(req.params.id,160);let count=0;await storage.patchUser(req,(metadata,current)=>{const workspaces=accountWorkspaceRows(metadata,current.id),existing=workspaces.find(item=>item.id===id);if(!existing)throw Object.assign(new Error('Workspace not found.'),{status:404});count=workspaces.length-1;const tombstone={...existing,is_shared:false,is_published:false,share_token:null,published_at:null,_deleted:true,updated_at:new Date().toISOString(),_store:'segmented-account-metadata'};return{[workspaceMetadataKey(existing.resource_type,existing.resource_id)]:tombstone}});return res.json({ok:true,count,storage:'segmented-account-metadata'})}catch(error){return res.status(error.status||500).json({error:error.message||'Could not delete account work.'})}});
  const propState=async current=>storage.readGlobal('go_to_market',{fallbackCurrent:current,defaults:{version:2,reports:[]}});
  const propSave=(report,current)=>storage.writeGlobal('go_to_market',value=>({...value,version:Math.max(2,Number(value.version||2)),reports:[report,...(value.reports||[]).filter(item=>item.id!==report.id)].slice(0,160),updatedAt:new Date().toISOString()}),{fallbackCurrent:current});
  router.get('/api/prop/manual/mine',async(req,res)=>{try{const{current}=await storage.requestUser(req),state=await propState(current),blocks=(state.reports||[]).filter(item=>item.creation_mode==='manual'&&item.user_id===current.id).sort((a,b)=>String(b.updated_at||'').localeCompare(String(a.updated_at||''))).map(item=>({id:item.id,slug:item.slug,title:item.title,proposition_type:item.proposition_type,updated_at:item.updated_at}));res.set('Cache-Control','no-store');return res.json({blocks})}catch(error){return res.status(error.status||500).json({error:error.message||'Could not load Space Blocks.'})}});

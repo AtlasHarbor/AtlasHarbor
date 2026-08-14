@@ -42,11 +42,13 @@ Read this section **before changing storage, authentication, workspace bootstrap
 
 Legal analysis, Baseball analysis, Economics analysis and other publishable Problem Space workspaces use **one writable database source of truth**.
 
-Canonical private workspace record:
+Canonical private workspace record (one top-level key per resource):
 
 ```text
-user_metadata.atlas_problem_spaces.publishing_workspace.notes
+user_metadata.atlas_workspace_record_v2_<resource-key>
 ```
+
+Older `user_metadata.atlas_problem_spaces.publishing_workspace.notes` arrays remain readable migration inputs. New saves update only the one resource record being edited, so a Baseball note never resends unrelated account projects, game progress, or every prior publication.
 
 Rules:
 
@@ -64,12 +66,12 @@ The complete contract is in [`docs/WORKSPACE_ARCHITECTURE.md`](docs/WORKSPACE_AR
 A signed-in analytical workspace may reach the same canonical account record through these recovery layers:
 
 1. preferred: `GET/PUT /api/workspaces/:resourceType/:resourceId`,
-2. immediate read recovery: the authenticated Supabase `user_metadata` already present in the signed-in session,
-3. fresh read/write recovery: direct authenticated Supabase Auth metadata access using the existing user session plus the public/publishable Supabase key.
+2. read-only recovery: the last server-confirmed account metadata already present in the signed-in session,
+3. write transport recovery: XHR and then same-origin form navigation to the Atlas Harbor workspace API.
 
 These are transports, not separate stores.
 
-Direct recovery must not depend exclusively on `fetch('/api/config')`. Atlas Harbor preserves native browser fetch before loading-feedback wrappers and exposes `/runtime-config.js` as a script-resource fallback for the **public** Supabase URL and publishable key. Those public connection values may be cached; analysis bodies, projections, publication state and share tokens may not.
+Workspace recovery does not depend on `fetch('/api/config')` and does not call Supabase persistence endpoints from the browser. Authentication may still use the public Supabase URL and publishable key; analysis persistence remains behind Atlas Harbor's same-origin API.
 
 Baseball additionally installs `workspace-transport-fallback.js`. It first retries a failed browser `fetch()` to `/api/workspaces/...` using `XMLHttpRequest`. If both scripted transports fail during an authenticated `PUT`, it submits the same payload and access token through a hidden same-origin form to `/api/workspaces-form/...`. Every path invokes the same server save function and writes the same canonical account record; none creates a Baseball-specific or device-only store. This matters for a player's **first** analysis, because there may be no matching session-metadata row to recover yet.
 
@@ -154,6 +156,14 @@ The empty first-analysis response is read-only bootstrap behavior. Save and Publ
 A workspace write used to load the record first, query optional legacy tables, read the authenticated Supabase user multiple times, serialize every user's write behind one global queue, update account metadata, and fire a second optional table mirror. When that chain stalled, the browser retried it through multiple transports and finally attempted a direct `/auth/v1/user` write. The form-navigation fallback then timed out.
 
 **Fix:** one Save/Publish now performs one server-side authenticated user read and one canonical metadata update. Optional tables are read-only migration inputs, writes are queued per user, upstream calls have bounded timeouts, and the browser never calls Supabase Auth metadata as a workspace persistence fallback.
+
+### 8. Baseball Save/Publish returned 413 and the form fallback reported a timeout
+
+The JSON workspace route accepted only 64 KB, while the form-navigation route accepted 160 KB. URL encoding expands rich HTML and Unicode, so an otherwise valid analysis could fit the editor's 60,000-character body limit but exceed either transport limit. The form parser's default 413 HTML response could not post a result back to its parent iframe, which turned a concrete size rejection into a misleading 20-second database timeout.
+
+The server also sent the user's entire `user_metadata` document to Supabase for every note change. Unrelated logistics state, research projects, and prior posts could therefore make even a tiny player edit exceed an upstream request limit.
+
+**Fix:** JSON accepts 1 MB, form navigation accepts 3 MB, and a parser rejection returns an immediate structured result instead of timing out. Workspace updates send one bounded `atlas_workspace_record_v2_<resource-key>` patch only. The saved record contains the headline, sanitized editor HTML (up to 60,000 characters), AI prompt (up to 12,000 characters), projections, and sharing/publication fields—not the Baseball page payload or unrelated account data.
 
 ## Public-feed invariant
 

@@ -7,7 +7,7 @@ Atlas Harbor has a repeatable REST smoke test for the account-backed workspace a
 The critical contract is:
 
 1. a signed-in user can open a Baseball player they have never analyzed and create the first database-backed workspace;
-2. saving writes the canonical account record in `user_metadata.atlas_problem_spaces.publishing_workspace.notes`;
+2. saving writes one canonical `user_metadata.atlas_workspace_record_v2_<resource-key>` account record;
 3. publishing creates a stable public share token;
 4. a public publication exists identically whether the viewer is signed out or signed in;
 5. no local/device-only analytical workspace is created;
@@ -67,7 +67,9 @@ That empty state is not a saved draft. A first **write** must still reach the ca
 2. the exact same request over XHR;
 3. if both JavaScript request transports fail, a same-origin hidden form/iframe POST to `/api/workspaces-form/:resourceType/:resourceId`.
 
-The form-navigation route authenticates the same Supabase access token and calls the same server `saveWorkspace()` function used by the normal PUT route. It writes only `user_metadata.atlas_problem_spaces.publishing_workspace.notes`; it does not create a local draft, browser table, or alternate database record. After the server confirms the write, the returned canonical workspace is copied into the signed-in session metadata cache so the just-created note remains readable during the same transport outage.
+The form-navigation route authenticates the same Supabase access token and calls the same server `saveWorkspace()` function used by the normal PUT route. It patches only the matching `user_metadata.atlas_workspace_record_v2_<resource-key>` record; it does not create a local draft, browser table, or alternate database record. After the server confirms the write, the returned canonical workspace is copied into the signed-in session metadata cache so the just-created note remains readable during the same transport outage.
+
+The JSON route accepts 1 MB and the URL-encoded form route accepts 3 MB. This accommodates the editor's bounded 60,000-character HTML body and 12,000-character AI prompt even when Unicode expands during form encoding. Parser rejections post an immediate structured error envelope rather than leaving the iframe to time out.
 
 This fallback exists because some browser/network environments can fail both fetch and XHR while ordinary HTML navigation still reaches the application server. It is a third transport to the same database record, not a third storage system.
 

@@ -26,7 +26,8 @@ test('first Baseball analysis opens empty only after read transports fail and re
  assert.match(transport,/rememberWorkspaceInSession/);
  assert.match(workspaceApi,/router\.post\('\/api\/workspaces-form\/:resourceType\/:resourceId'/);
  assert.match(workspaceApi,/const result=await saveWorkspace\(req,body\)/);
- assert.match(workspaceApi,/const saved=await storage\.writeUser\(req,SPACE,\(workspace,current\)=>/);
+ assert.match(workspaceApi,/await storage\.patchUser\(req,\(metadata,current\)=>/);
+ assert.match(workspaceApi,/workspaceMetadataKey\(resourceType,resourceId\)/);
  assert.doesNotMatch(workspaceApi,/mirrorWorkspaceTable/);
 });
 
@@ -60,7 +61,7 @@ test('Account exposes signed-in league exports with player analyses',()=>{
  assert.match(accountHtml,/account-baseball-export\.js/);
  assert.match(accountExport,/api\/baseball\/account-export/);
  assert.match(searchRouter,/router\.get\('\/api\/baseball\/account-export'/);
- assert.match(searchRouter,/publishing_workspace/);
+ assert.match(searchRouter,/metadataWorkspaceRecords/);
  assert.match(searchRouter,/analysisCount/);
 });
 

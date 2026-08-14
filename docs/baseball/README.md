@@ -71,8 +71,10 @@ baseball_team
 A Baseball analysis can be saved, AI-assisted, published, and shared through the same canonical account workspace used elsewhere:
 
 ```text
-user_metadata.atlas_problem_spaces.publishing_workspace.notes
+user_metadata.atlas_workspace_record_v2_<resource-key>
 ```
+
+Older aggregate `publishing_workspace.notes` records remain readable. Each new Baseball save patches only the matching player/game/team record and does not resend unrelated account metadata.
 
 There is no device-only Baseball workspace.
 

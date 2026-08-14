@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 const text=value=>String(value??'').trim();
 const bool=value=>value===true||value==='true';
 const dateValue=value=>{const time=Date.parse(value||'');return Number.isFinite(time)?time:0};
+export const WORKSPACE_METADATA_PREFIX='atlas_workspace_record_v2_';
 const cleanScenarios=value=>{
  let rows=value;
  if(typeof rows==='string')try{rows=JSON.parse(rows)}catch{rows=[]}
@@ -39,6 +40,7 @@ export function normalizeWorkspaceRecord(input={},fallback={}){
   created_at:row.created_at||row.updated_at||new Date().toISOString(),
   updated_at:row.updated_at||row.created_at||new Date().toISOString(),
   published_at:row.published_at||null,
+  _deleted:bool(row._deleted),
   _store:text(row._store)||text(fallback._store)||null
  };
 }
@@ -69,6 +71,17 @@ export function normalizeLegacyLegalRecord(row={}){
 
 export function recordKey(row={}){
  return text(row.share_token)||text(row.id)||`${text(row.user_id)}:${text(row.resource_type)}:${text(row.resource_id)}`;
+}
+
+export function workspaceMetadataKey(resourceType,resourceId){
+ const identity=`${text(resourceType)}:${text(resourceId)}`;
+ return`${WORKSPACE_METADATA_PREFIX}${crypto.createHash('sha256').update(identity).digest('hex').slice(0,32)}`;
+}
+
+export function metadataWorkspaceRecords(metadata={}){
+ const primary=metadata?.atlas_problem_spaces?.publishing_workspace?.notes,rows=Array.isArray(primary)?[...primary]:[];
+ for(const[key,value]of Object.entries(metadata||{}))if(key.startsWith(WORKSPACE_METADATA_PREFIX)&&value&&typeof value==='object')rows.push({...value,_store:value._store||'segmented-account-metadata'});
+ return rows;
 }
 
 export function sameResource(row={},resourceType,resourceId,userId=null){
