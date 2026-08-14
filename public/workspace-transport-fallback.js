@@ -47,6 +47,20 @@ function eligibleForXhrFallback(input){
  return Boolean(supabaseOrigin&&url.origin===supabaseOrigin&&url.pathname==='/auth/v1/user');
 }
 
+function firstBaseballWorkspaceCanOpenEmpty(input,init={}){
+ try{
+  const request=input instanceof Request?input:null,method=String(init.method||request?.method||'GET').toUpperCase();
+  if(method!=='GET')return false;
+  const url=new URL(request?.url||String(input||''),location.href),match=url.origin===location.origin&&url.pathname.match(/^\/api\/workspaces\/baseball_player\/([^/]+)$/);
+  if(!match)return false;
+  const session=JSON.parse(localStorage.getItem('atlas-harbor-session')||'null'),current=session?.user;if(!session?.access_token||!current?.id)return false;
+  const resourceId=decodeURIComponent(match[1]),metadata=current.user_metadata||{},spaces=metadata.atlas_problem_spaces||{},canonical=spaces.publishing_workspace?.notes,virtual=metadata.atlas_virtual_tables?.workspace_notes,rows=[...(Array.isArray(canonical)?canonical:[]),...(Array.isArray(virtual)?virtual:[])];
+  return !rows.some(row=>(!row.user_id||String(row.user_id)===String(current.id))&&row.resource_type==='baseball_player'&&String(row.resource_id||'')===String(resourceId));
+ }catch{return false}
+}
+
+function emptyFirstWorkspaceResponse(){return new Response(JSON.stringify({workspace:null,storage:'authenticated-session-empty'}),{status:200,headers:{'Content-Type':'application/json','Cache-Control':'no-store','X-Atlas-Workspace-Recovery':'first-baseball-analysis'}})}
+
 export function installWorkspaceTransportFallback(){
  if(installed)return;
  installed=true;
@@ -55,6 +69,7 @@ export function installWorkspaceTransportFallback(){
   if(!eligibleForXhrFallback(input))return prior(input,init);
   try{return await prior(input,init)}catch(fetchError){
    try{return await xhrRequest(input,init)}catch(xhrError){
+    if(firstBaseballWorkspaceCanOpenEmpty(input,init))return emptyFirstWorkspaceResponse();
     const error=new TypeError(`Database service unavailable through fetch and XHR: ${xhrError.message}`);
     error.cause=fetchError;
     throw error;
