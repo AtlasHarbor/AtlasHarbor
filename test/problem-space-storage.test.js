@@ -49,3 +49,21 @@ test('writes for one account remain serial and preserve both updates',async()=>{
  assert.deepEqual(calls,['GET','PUT','GET','PUT']);
  assert.equal(account.user_metadata.atlas_problem_spaces.space.count,2);
 });
+
+test('an invalid bearer is reported as an expired account session instead of a missing sign-in',async()=>{
+ const storage=createProblemSpaceStorage({env,fetchImpl:async()=>json({message:'invalid JWT'},401)});
+ await assert.rejects(storage.requestUser(request('expired-token')),error=>{
+  assert.equal(error.status,401);
+  assert.match(error.message,/session expired or is invalid/i);
+  return true;
+ });
+});
+
+test('an upstream authentication outage is not collapsed into a sign-in error',async()=>{
+ const storage=createProblemSpaceStorage({env,fetchImpl:async()=>json({message:'Authentication service unavailable'},503)});
+ await assert.rejects(storage.requestUser(request('otherwise-valid-token')),error=>{
+  assert.equal(error.status,503);
+  assert.equal(error.message,'Authentication service unavailable');
+  return true;
+ });
+});

@@ -27,6 +27,8 @@ On Baseball report pages, browser transport recovery for the same-origin API is 
 
 The session snapshot is not writable workspace storage. A successful API save refreshes it only as a last-confirmed read cache. Workspace browser code must never call Supabase `/auth/v1/user` to load or save workspace metadata. Authentication flows may still use Supabase Auth, but persistence stays behind the Atlas Harbor API.
 
+Authenticated API calls share one refresh operation per page and refresh access tokens before they expire. A request that receives `401` retries once with the newest session token. A stale or failed concurrent refresh must never clear a newer session written by another caller. The account indicator verifies its cached session through the same-origin `/api/workspaces/status` endpoint before claiming that the user is logged in.
+
 If the API transports fail and the signed-in session contains no matching account record, the UI shows a retryable database error and does not open a device draft.
 
 ## Public runtime configuration
@@ -197,6 +199,8 @@ Regression tests must verify:
 - workspace browser code contains no direct `/auth/v1/user` metadata read or write
 - fetch, XHR, and form-navigation fallbacks target only the same-origin workspace API
 - one server workspace write performs one authenticated-user read and one canonical metadata update
+- concurrent access-token refreshes collapse into one request and cannot erase a newer session
+- the account indicator verifies cached authentication with the same-origin server before showing Logged in
 - payloads that exceed the former 64 KB JSON and 160 KB form limits save successfully
 - unrelated large account metadata is not resent with a single workspace update
 - public runtime config has a script-based fallback independent of patched `window.fetch`
