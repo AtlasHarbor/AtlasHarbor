@@ -24,6 +24,10 @@ function mockSupabase(initial=account){
    if((options.method||'GET')==='PUT'){current={...current,user_metadata:{...current.user_metadata,...JSON.parse(options.body).data}};return new Response(JSON.stringify({user:current}),{status:200,headers:{'Content-Type':'application/json'}})}
    return new Response(JSON.stringify(current),{status:200,headers:{'Content-Type':'application/json'}});
   }
+  if(parsed.pathname.startsWith('/auth/v1/admin/users/')){
+   if((options.method||'GET')==='PUT')current={...current,user_metadata:{...current.user_metadata,...JSON.parse(options.body).user_metadata}};
+   return new Response(JSON.stringify(current),{status:200,headers:{'Content-Type':'application/json'}});
+  }
   if(parsed.pathname==='/auth/v1/admin/users')return new Response(JSON.stringify({users:[current]}),{status:200,headers:{'Content-Type':'application/json'}});
   if(parsed.pathname.startsWith('/rest/v1/'))return new Response('[]',{status:200,headers:{'Content-Type':'application/json'}});
   return new Response('{}',{status:404,headers:{'Content-Type':'application/json'}});
@@ -56,7 +60,17 @@ test('signed-in workspace loads the persistent account copy when SQL adapters ar
  assert.equal(tableCall.headers.apikey,'sb_secret_test');assert.equal(tableCall.headers.Authorization,undefined);
 });
 
-test('workspace PUT performs one server auth read and one canonical metadata update',async()=>{
+test('workspace status reports the server-side JWKS verification strategy',async()=>{
+ const mock=mockSupabase(),env={SUPABASE_URL:'https://project.supabase.co',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_test',SUPABASE_SECRET_KEY:'sb_secret_test'};
+ await withServer(createWorkspaceRouter({env,fetchImpl:mock.fetchImpl}),async base=>{
+  const response=await fetch(`${base}/api/workspaces/status`),data=await response.json();
+  assert.equal(response.status,200);
+  assert.equal(data.signedIn,false);
+  assert.equal(data.userSessionVerification,'jwks-admin-with-auth-fallback');
+ });
+});
+
+test('workspace PUT performs one compatibility auth read and one bounded server metadata update',async()=>{
  const mock=mockSupabase(),env={SUPABASE_URL:'https://project.supabase.co',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_test',SUPABASE_SECRET_KEY:'sb_secret_test'};
  await withServer(createWorkspaceRouter({env,fetchImpl:mock.fetchImpl}),async base=>{
   const response=await fetch(`${base}/api/workspaces/baseball_player/669461`,{method:'PUT',headers:{Authorization:'Bearer user-token','Content-Type':'application/json'},body:JSON.stringify({resource_title:'Matthew Liberatore',title:'API-only draft',body:'<p>Saved</p>',intent:'save'})}),data=await response.json();
@@ -65,11 +79,13 @@ test('workspace PUT performs one server auth read and one canonical metadata upd
   assert.equal(data.workspace.resource_id,'669461');
   assert.equal(data.workspace.title,'API-only draft');
  });
- const authCalls=mock.calls.filter(call=>call.path==='/auth/v1/user');
- assert.deepEqual(authCalls.map(call=>call.method),['GET','PUT']);
- assert.ok(authCalls.every(call=>call.headers.apikey==='sb_secret_test'));
- assert.ok(authCalls.every(call=>call.headers.Authorization==='Bearer user-token'));
- const patch=JSON.parse(authCalls[1].body).data;
+ const authRead=mock.calls.find(call=>call.path==='/auth/v1/user'),update=mock.calls.find(call=>call.path==='/auth/v1/admin/users/user-1'&&call.method==='PUT');
+ assert.equal(authRead.method,'GET');
+ assert.equal(authRead.headers.apikey,'sb_secret_test');
+ assert.equal(authRead.headers.Authorization,'Bearer user-token');
+ assert.equal(update.headers.apikey,'sb_secret_test');
+ assert.equal(update.headers.Authorization,undefined);
+ const patch=JSON.parse(update.body).user_metadata;
  assert.deepEqual(Object.keys(patch).map(key=>key.startsWith('atlas_workspace_record_v2_')), [true]);
  assert.equal('atlas_problem_spaces'in patch,false);
  assert.equal(mock.calls.some(call=>call.path==='/rest/v1/workspace_notes'),false);
@@ -85,7 +101,7 @@ test('workspace PUT does not resend unrelated large account metadata',async()=>{
   assert.equal(data.workspace.id,'existing-player-note');
   assert.equal(data.workspace.title,'Updated scouting note');
  });
- const update=mock.calls.find(call=>call.path==='/auth/v1/user'&&call.method==='PUT');
+ const update=mock.calls.find(call=>call.path==='/auth/v1/admin/users/user-1'&&call.method==='PUT');
  assert.ok(update.body.length<5000,`workspace update unexpectedly sent ${update.body.length} bytes`);
  assert.doesNotMatch(update.body,/logistics_game/);
 });

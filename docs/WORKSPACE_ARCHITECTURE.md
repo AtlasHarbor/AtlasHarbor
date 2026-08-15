@@ -29,7 +29,7 @@ The session snapshot is not writable workspace storage. A successful API save re
 
 Authenticated API calls share one refresh operation per page and refresh access tokens before they expire. A request that receives `401` retries once with the newest session token. A stale or failed concurrent refresh must never clear a newer session written by another caller. The account indicator is informational and must not add a second blocking session preflight; the same-origin workspace request is authoritative for workspace access.
 
-The server authenticates its Supabase application access with the backend secret API key while preserving the browser session JWT in `Authorization` as the user identity. It may retry with the publishable API key for compatibility. Opaque `sb_secret_...` values never appear in the bearer header.
+For current asymmetric Supabase sessions, the server validates the browser JWT against `SUPABASE_JWKS_URL` (falling back to the canonical discovery URL under `SUPABASE_URL`). It checks the signature, issuer, `authenticated` audience and role, expiry, and UUID subject before using the backend secret to load that exact account. Account updates use the verified subject and a partial `user_metadata` merge, so a workspace save sends only its segmented record. The remote `/auth/v1/user` endpoint remains a compatibility path for legacy token formats or JWKS discovery outages, not a mandatory hop. Opaque `sb_secret_...` values never appear in the bearer header.
 
 If the API transports fail and the signed-in session contains no matching account record, the UI shows a retryable database error and does not open a device draft.
 
@@ -203,7 +203,9 @@ Regression tests must verify:
 - one server workspace write performs one authenticated-user read and one canonical metadata update
 - concurrent access-token refreshes collapse into one request and cannot erase a newer session
 - the account indicator remains informational and does not add a second blocking workspace-status request
-- server-side user reads and metadata patches use the backend API key without replacing the user's bearer JWT
+- asymmetric user JWTs are verified against cached project JWKS before server-only account access
+- forged, expired, wrong-project, and wrong-role JWTs cannot reach account storage
+- metadata updates use a partial server-side merge and do not resend unrelated account state
 - payloads that exceed the former 64 KB JSON and 160 KB form limits save successfully
 - unrelated large account metadata is not resent with a single workspace update
 - public runtime config has a script-based fallback independent of patched `window.fetch`
