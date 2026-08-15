@@ -5,7 +5,7 @@ import{supabaseSecretKey,supabaseServiceHeaders}from'./supabase-server-key.js';
 import {metadataWorkspaceRecords,normalizeWorkspaceRecord,normalizeLegacyLegalRecord,newestRecord,sameResource,workspaceMetadataKey} from './workspace-records.js';
 
 const text=(value,max=1000)=>String(value??'').trim().slice(0,max);
-const route=handler=>async(req,res)=>{try{await handler(req,res)}catch(error){console.error('Workspace API:',error);res.status(error.status||500).json({error:error.message||'Workspace request failed.'})}};
+const route=handler=>async(req,res)=>{try{await handler(req,res)}catch(error){console.error('Workspace API:',error);res.status(error.status||500).json({error:error.message||'Workspace request failed.',...(error.code?{code:error.code}:{})})}};
 const missingTable=(status,body)=>status===404||/Could not find the table|schema cache|PGRST205|relation .* does not exist/i.test(body||'');
 const safeScriptJson=value=>JSON.stringify(value).replace(/</g,'\\u003c');
 
@@ -81,9 +81,9 @@ export function createWorkspaceRouter({env=process.env,fetchImpl=globalThis.fetc
  }
 
  router.get('/api/workspaces/status',route(async(req,res)=>{
-  const{current}=await storage.requestUser(req,{required:false});
+  const{current,verification}=await storage.requestUser(req,{required:false});
   res.set('Cache-Control','no-store');
-  res.json({ok:true,signedIn:Boolean(current),supabaseConfigured:Boolean(base&&publishable),serviceKeyConfigured:Boolean(secret),serviceKeyType:secret?(secret.startsWith('sb_secret_')?'opaque-secret':'legacy-service-role'):'none',userSessionVerification:storage.userSessionVerification||'custom'});
+  res.json({ok:true,signedIn:Boolean(current),supabaseConfigured:Boolean(base&&publishable),serviceKeyConfigured:Boolean(secret),serviceKeyType:secret?(secret.startsWith('sb_secret_')?'opaque-secret':'legacy-service-role'):'none',userSessionVerification:storage.userSessionVerification||'custom',sessionVerification:verification||'unknown'});
  }));
  router.get('/api/workspaces/:resourceType/:resourceId',route(async(req,res)=>{
   const result=await load(req);
@@ -107,7 +107,7 @@ export function createWorkspaceRouter({env=process.env,fetchImpl=globalThis.fetc
    formReply(res,{type:'atlas-workspace-form-result',requestId,ok:true,status:200,...result});
   }catch(error){
    console.error('Workspace form fallback:',error);
-   formReply(res,{type:'atlas-workspace-form-result',requestId,ok:false,status:error.status||500,error:error.message||'Workspace form save failed.'});
+   formReply(res,{type:'atlas-workspace-form-result',requestId,ok:false,status:error.status||500,error:error.message||'Workspace form save failed.',...(error.code?{code:error.code}:{})});
   }
  });
  return router;

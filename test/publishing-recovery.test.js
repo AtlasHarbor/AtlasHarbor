@@ -40,6 +40,8 @@ async function withServer(router,run){
  try{return await run(`http://127.0.0.1:${server.address().port}`)}finally{await new Promise(resolve=>server.close(resolve))}
 }
 
+function gatewaySession(subject){const now=Math.floor(Date.now()/1000),header=Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url'),payload=Buffer.from(JSON.stringify({iss:'https://project.supabase.co/auth/v1',aud:'authenticated',role:'authenticated',sub:subject,iat:now,exp:now+3600})).toString('base64url');return`${header}.${payload}.gateway-signature`}
+
 test('published feed reads account metadata with an opaque Supabase secret key',async()=>{
  const mock=mockSupabase(),env={SUPABASE_URL:'https://project.supabase.co',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_test',SUPABASE_SECRET_KEY:'sb_secret_test'};
  await withServer(createPublishedFeedRouter({env,fetchImpl:mock.fetchImpl}),async base=>{
@@ -66,7 +68,8 @@ test('workspace status reports the server-side JWKS verification strategy',async
   const response=await fetch(`${base}/api/workspaces/status`),data=await response.json();
   assert.equal(response.status,200);
   assert.equal(data.signedIn,false);
-  assert.equal(data.userSessionVerification,'jwks-admin-with-auth-fallback');
+  assert.equal(data.userSessionVerification,'jwks-or-postgrest-admin-with-auth-fallback');
+  assert.equal(data.sessionVerification,'missing');
  });
 });
 
@@ -89,6 +92,27 @@ test('workspace PUT performs one compatibility auth read and one bounded server 
  assert.deepEqual(Object.keys(patch).map(key=>key.startsWith('atlas_workspace_record_v2_')), [true]);
  assert.equal('atlas_problem_spaces'in patch,false);
  assert.equal(mock.calls.some(call=>call.path==='/rest/v1/workspace_notes'),false);
+});
+
+test('a gateway-verified session can open and save a first player workspace without the user endpoint',async()=>{
+ const subject='33333333-3333-4333-8333-333333333333',token=gatewaySession(subject),initial={id:subject,user_metadata:{atlas_profile:{username:'New Player Tester'}}},mock=mockSupabase(initial),calls=[];
+ const fetchImpl=async(url,options={})=>{
+  const parsed=new URL(url);calls.push({path:parsed.pathname,method:options.method||'GET',headers:options.headers,body:options.body});
+  if(parsed.pathname==='/rest/v1/__atlas_session_verification_never_create__')return options.headers.Authorization===`Bearer ${token}`?new Response(JSON.stringify({code:'PGRST205',message:"Could not find the table 'public.__atlas_session_verification_never_create__' in the schema cache"}),{status:404,headers:{'Content-Type':'application/json'}}):new Response(JSON.stringify({code:'PGRST301',message:'No suitable key or wrong key type'}),{status:401,headers:{'Content-Type':'application/json'}});
+  if(parsed.pathname==='/auth/v1/user')throw new Error('the failing user endpoint must not be used');
+  return mock.fetchImpl(url,options);
+ };
+ const env={SUPABASE_URL:'https://project.supabase.co',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_test',SUPABASE_SECRET_KEY:'sb_secret_test'};
+ await withServer(createWorkspaceRouter({env,fetchImpl}),async base=>{
+  const load=await fetch(`${base}/api/workspaces/baseball_player/777777`,{headers:{Authorization:`Bearer ${token}`}}),loaded=await load.json();
+  assert.equal(load.status,200);assert.equal(loaded.workspace,null);
+  const save=await fetch(`${base}/api/workspaces/baseball_player/777777`,{method:'PUT',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({resource_title:'New player',title:'First scouting list',body:'<ul><li>First note</li></ul>',intent:'save'})}),saved=await save.json();
+  assert.equal(save.status,200);assert.equal(saved.workspace.resource_id,'777777');assert.equal(saved.workspace.title,'First scouting list');
+ });
+ assert.equal(calls.filter(call=>call.path==='/rest/v1/__atlas_session_verification_never_create__').length,2,'one positive and one tampered-signature probe are cached across load and save');
+ assert.equal(calls.some(call=>call.path==='/auth/v1/user'),false);
+ const update=mock.calls.find(call=>call.path===`/auth/v1/admin/users/${subject}`&&call.method==='PUT'),patch=JSON.parse(update.body).user_metadata;
+ assert.deepEqual(Object.keys(patch).map(key=>key.startsWith('atlas_workspace_record_v2_')),[true]);
 });
 
 test('workspace PUT does not resend unrelated large account metadata',async()=>{
