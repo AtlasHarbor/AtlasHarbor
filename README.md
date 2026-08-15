@@ -165,6 +165,12 @@ The server also sent the user's entire `user_metadata` document to Supabase for 
 
 **Fix:** JSON accepts 1 MB, form navigation accepts 3 MB, and a parser rejection returns an immediate structured result instead of timing out. Workspace updates send one bounded `atlas_workspace_record_v2_<resource-key>` patch only. The saved record contains the headline, sanitized editor HTML (up to 60,000 characters), AI prompt (up to 12,000 characters), projections, and sharing/publication fields—not the Baseball page payload or unrelated account data.
 
+### 9. The account badge said Logged in while Save Draft returned Sign in required
+
+The badge previously trusted any cached `user` object, even when its bearer token had expired. At the same time, multiple authenticated requests could independently refresh Supabase's rotating refresh token. A late failed refresh could erase the newer session created by a successful request, leaving the workspace retry without a valid bearer token.
+
+**Fix:** access tokens are refreshed before expiry, refresh work is shared by all callers in a page, and a stale refresh may not overwrite or clear a newer session. Workspace requests use that centralized authenticated transport. The account badge confirms the session through `/api/workspaces/status` before showing Logged in, and the server distinguishes an expired bearer from an unavailable authentication service.
+
 ## Public-feed invariant
 
 **Logging in must never make `/published` show fewer public stories.**
