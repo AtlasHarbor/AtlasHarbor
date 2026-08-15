@@ -177,6 +177,18 @@ The first workspace implementation wrote through the authenticated browser clien
 
 **Fix:** the Atlas Harbor server first validates asymmetric Supabase access tokens against the project's cached JWKS. A live session that uses a signing format or key not accepted by that local path is validated server-side by the project's PostgREST JWT gateway; only the exact `PGRST205` response from a deliberately nonexistent relation counts as success, and a second tampered-signature control must return `PGRST301`. This proves that the gateway actually enforced the bearer signature instead of treating the request as anonymous. Both paths separately check the issuer, audience, authenticated role, expiry, and UUID subject before loading that exact account with the server-only credential. Saves use Supabase Auth's partial user-metadata merge to write only `atlas_workspace_record_v2_<resource-key>`. The remote user endpoint remains only a last compatibility fallback when neither verifier is available. A forged, expired, wrong-project, or wrong-role token is rejected before account storage is accessed.
 
+### 11. The browser looked logged in while the workspace API received no token
+
+Symptom:
+
+```text
+Workspace API unavailable: Atlas Harbor could not verify your account session (AUTH_TOKEN_MISSING).
+```
+
+The account object and access token were present in browser storage, so refreshing or broadening JWT verification could not solve this code: `AUTH_TOKEN_MISSING` means the credential did not survive the same-origin request boundary. Missing-token error responses also needed the same cache protection as successful workspace responses.
+
+**Fix:** Atlas Harbor mirrors the same JWT in `X-Atlas-Session` for same-origin authenticated API calls only. The server feeds either accepted header into the exact same cryptographic/session verifier; this is not a database bypass or a second auth model. Fetch, XHR, and form navigation preserve the header, and every workspace response—including `401`—is private, non-cacheable, and varies on both credential headers. An explicit `AUTH_TOKEN_MISSING` from fetch or XHR now advances to the next canonical API transport, allowing a save to use the token-bearing form body instead of stopping at the broken header boundary. Account settings now put a workspace session check and **Log out and sign in again** control near the top instead of burying sign-out below all AI settings.
+
 ## Public-feed invariant
 
 **Logging in must never make `/published` show fewer public stories.**

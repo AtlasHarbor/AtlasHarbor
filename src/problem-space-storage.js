@@ -18,7 +18,7 @@ export function createProblemSpaceStorage({env=process.env,fetchImpl=globalThis.
  const configured=Boolean(base&&key&&secret);
  const authHeaders=(token,apiKey)=>({apikey:apiKey,Authorization:`Bearer ${token}`,...JSON_HEADERS});
  const serviceHeaders=()=>supabaseServiceHeaders(secret);
- const bearer=req=>String(req?.get?.('authorization')||'').replace(/^Bearer\s+/i,'');
+ const bearer=req=>String(req?.get?.('authorization')||'').replace(/^Bearer\s+/i,'').trim()||String(req?.get?.('x-atlas-session')||'').replace(/^Bearer\s+/i,'').trim();
  const signInError=(token,code)=>Object.assign(new Error(token?'Your account session expired or is invalid. Sign in again.':'Sign in required.'),{status:401,code:code||(token?'AUTH_SESSION_UNVERIFIED':'AUTH_TOKEN_MISSING')});
  const serial=(key,operation)=>{const prior=writeQueues.get(key)||Promise.resolve(),next=prior.then(operation,operation),settled=next.catch(()=>{});writeQueues.set(key,settled);settled.finally(()=>{if(writeQueues.get(key)===settled)writeQueues.delete(key)});return next};
  async function timedFetch(url,options={}){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8000);try{return await fetchImpl(url,{...options,signal:controller.signal})}catch(error){if(error?.name==='AbortError')throw Object.assign(new Error('Database request timed out.'),{status:504});throw error}finally{clearTimeout(timer)}}

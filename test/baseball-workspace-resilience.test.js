@@ -19,10 +19,14 @@ test('Baseball workspace transport can open a first note and save it without a d
  const app=read('../src/app.js');
  assert.match(js,/pathname\.startsWith\('\/api\/workspaces\/'\)/);
  assert.match(js,/XMLHttpRequest/);
- assert.match(js,/return await xhrRequest/);
+ assert.match(js,/await xhrRequest/);
  assert.match(js,/firstBaseballWorkspaceCanOpenEmpty/);
  assert.match(js,/authenticated-session-empty/);
  assert.match(js,/formWorkspaceRequest/);
+ assert.match(js,/X-Atlas-Session/);
+ assert.match(js,/requestHeaders/);
+ assert.match(js,/missingTokenResponse/);
+ assert.match(js,/AUTH_TOKEN_MISSING/);
  assert.match(js,/method!==['"]PUT['"]/);
  assert.match(js,/\/api\/workspaces-form\//);
  assert.match(js,/form\.submit\(\)/);
@@ -64,4 +68,5 @@ test('Baseball workspace refreshes authentication centrally without a second blo
  assert.match(client,/let cachedConfig,refreshPromise/);
  assert.match(client,/export async function freshAccessToken/);
  assert.match(client,/if\(refreshPromise\)return refreshPromise/);
+ assert.match(client,/X-Atlas-Session/);
 });

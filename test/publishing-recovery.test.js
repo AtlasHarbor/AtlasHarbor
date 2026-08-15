@@ -62,6 +62,16 @@ test('signed-in workspace loads the persistent account copy when SQL adapters ar
  assert.equal(tableCall.headers.apikey,'sb_secret_test');assert.equal(tableCall.headers.Authorization,undefined);
 });
 
+test('workspace accepts the same-origin session mirror and never caches missing-token errors',async()=>{
+ const mock=mockSupabase(),env={SUPABASE_URL:'https://project.supabase.co',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_test',SUPABASE_SECRET_KEY:'sb_secret_test'};
+ await withServer(createWorkspaceRouter({env,fetchImpl:mock.fetchImpl}),async base=>{
+  const verified=await fetch(`${base}/api/workspaces/legal_case/ny-kalshi-enforcement-2026`,{headers:{'X-Atlas-Session':'user-token'}}),data=await verified.json();
+  assert.equal(verified.status,200);assert.equal(data.workspace.title,'Kalshi analysis');
+  const missing=await fetch(`${base}/api/workspaces/baseball_player/777777`),error=await missing.json(),cache=missing.headers.get('cache-control')||'',vary=(missing.headers.get('vary')||'').toLowerCase();
+  assert.equal(missing.status,401);assert.equal(error.code,'AUTH_TOKEN_MISSING');assert.match(cache,/private/);assert.match(cache,/no-store/);assert.match(vary,/authorization/);assert.match(vary,/x-atlas-session/);
+ });
+});
+
 test('workspace status reports the server-side JWKS verification strategy',async()=>{
  const mock=mockSupabase(),env={SUPABASE_URL:'https://project.supabase.co',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_test',SUPABASE_SECRET_KEY:'sb_secret_test'};
  await withServer(createWorkspaceRouter({env,fetchImpl:mock.fetchImpl}),async base=>{

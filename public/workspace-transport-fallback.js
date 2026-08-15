@@ -10,12 +10,18 @@ function responseHeaders(raw=''){
  return headers;
 }
 
+function requestHeaders(input,init={}){
+ const request=input instanceof Request?input:null,headers=new Headers(request?.headers||{});
+ new Headers(init.headers||{}).forEach((value,key)=>headers.set(key,value));
+ return headers;
+}
+
 function xhrRequest(input,init={}){
  return new Promise((resolve,reject)=>{
   const url=typeof input==='string'?input:input?.url||String(input||'');
   const xhr=new XMLHttpRequest();
-  xhr.open(init.method||'GET',url,true);
-  const headers=new Headers(init.headers||{});
+  xhr.open(init.method||(input instanceof Request?input.method:'GET'),url,true);
+  const headers=requestHeaders(input,init);
   headers.forEach((value,key)=>xhr.setRequestHeader(key,value));
   xhr.onload=()=>resolve(new Response(xhr.responseText||'',{status:xhr.status,statusText:xhr.statusText,headers:responseHeaders(xhr.getAllResponseHeaders())}));
   xhr.onerror=()=>reject(new TypeError('Database transport network request failed.'));
@@ -49,6 +55,11 @@ function firstBaseballWorkspaceCanOpenEmpty(input,init={}){
 
 function emptyFirstWorkspaceResponse(){return new Response(JSON.stringify({workspace:null,storage:'authenticated-session-empty'}),{status:200,headers:{'Content-Type':'application/json','Cache-Control':'no-store','X-Atlas-Workspace-Recovery':'first-baseball-analysis'}})}
 
+async function missingTokenResponse(response){
+ if(response?.status!==401)return false;
+ try{return(await response.clone().json())?.code==='AUTH_TOKEN_MISSING'}catch{return false}
+}
+
 function rememberWorkspaceInSession(workspace){
  try{
   if(!workspace?.id)return;
@@ -68,8 +79,8 @@ function formWorkspaceRequest(input,init={}){
    url=new URL(request?.url||String(input||''),location.href);
    method=String(init.method||request?.method||'GET').toUpperCase();
    if(url.origin!==location.origin||method!=='PUT'||!url.pathname.startsWith('/api/workspaces/'))throw new Error('Form fallback is not eligible for this request.');
-   headers=new Headers(init.headers||request?.headers||{});
-   token=String(headers.get('Authorization')||'').replace(/^Bearer\s+/i,'');
+   headers=requestHeaders(input,init);
+   token=String(headers.get('Authorization')||headers.get('X-Atlas-Session')||'').replace(/^Bearer\s+/i,'');
    payload=typeof init.body==='string'?init.body:null;
    if(!token||payload==null)throw new Error('Form fallback requires the signed-in workspace payload.');
   }catch(error){reject(error);return}
@@ -97,15 +108,14 @@ export function installWorkspaceTransportFallback(){
  const prior=(globalThis.__atlasNativeFetch||globalThis.fetch).bind(globalThis);
  globalThis.__atlasNativeFetch=async(input,init={})=>{
   if(!eligibleForXhrFallback(input))return prior(input,init);
-  try{return await prior(input,init)}catch(fetchError){
-   try{return await xhrRequest(input,init)}catch(xhrError){
-    try{return await formWorkspaceRequest(input,init)}catch(formError){
-     if(firstBaseballWorkspaceCanOpenEmpty(input,init))return emptyFirstWorkspaceResponse();
-     const error=new TypeError(`Database service unavailable through fetch, XHR, and form navigation: ${formError.message}`);
-     error.cause=fetchError;error.xhrCause=xhrError;
-     throw error;
-    }
-   }
+  let fetchError,xhrError;
+  try{const response=await prior(input,init);if(!await missingTokenResponse(response))return response;fetchError=new TypeError('Fetch reached the workspace API without the account token.')}catch(error){fetchError=error}
+  try{const response=await xhrRequest(input,init);if(!await missingTokenResponse(response))return response;xhrError=new TypeError('XHR reached the workspace API without the account token.')}catch(error){xhrError=error}
+  try{return await formWorkspaceRequest(input,init)}catch(formError){
+   if(firstBaseballWorkspaceCanOpenEmpty(input,init))return emptyFirstWorkspaceResponse();
+   const error=new TypeError(`Database service unavailable through fetch, XHR, and form navigation: ${formError.message}`);
+   error.cause=fetchError;error.xhrCause=xhrError;
+   throw error;
   }
  };
 }

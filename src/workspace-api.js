@@ -5,7 +5,8 @@ import{supabaseSecretKey,supabaseServiceHeaders}from'./supabase-server-key.js';
 import {metadataWorkspaceRecords,normalizeWorkspaceRecord,normalizeLegacyLegalRecord,newestRecord,sameResource,workspaceMetadataKey} from './workspace-records.js';
 
 const text=(value,max=1000)=>String(value??'').trim().slice(0,max);
-const route=handler=>async(req,res)=>{try{await handler(req,res)}catch(error){console.error('Workspace API:',error);res.status(error.status||500).json({error:error.message||'Workspace request failed.',...(error.code?{code:error.code}:{})})}};
+const protectResponse=res=>{res.set('Cache-Control','private, no-store, max-age=0');res.vary('Authorization');res.vary('X-Atlas-Session')};
+const route=handler=>async(req,res)=>{protectResponse(res);try{await handler(req,res)}catch(error){console.error('Workspace API:',error);res.status(error.status||500).json({error:error.message||'Workspace request failed.',...(error.code?{code:error.code}:{})})}};
 const missingTable=(status,body)=>status===404||/Could not find the table|schema cache|PGRST205|relation .* does not exist/i.test(body||'');
 const safeScriptJson=value=>JSON.stringify(value).replace(/</g,'\\u003c');
 
@@ -77,7 +78,7 @@ export function createWorkspaceRouter({env=process.env,fetchImpl=globalThis.fetc
   return{workspace:note,storage:'segmented-account-metadata',migratedFrom:source};
  }
  function formReply(res,payload){
-  res.status(200).set('Cache-Control','no-store').type('html').send(`<!doctype html><meta charset="utf-8"><script>parent.postMessage(${safeScriptJson(payload)},location.origin)<\/script>`);
+  protectResponse(res);res.status(200).type('html').send(`<!doctype html><meta charset="utf-8"><script>parent.postMessage(${safeScriptJson(payload)},location.origin)<\/script>`);
  }
 
  router.get('/api/workspaces/status',route(async(req,res)=>{

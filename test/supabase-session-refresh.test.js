@@ -64,12 +64,23 @@ test('authenticatedFetch retries a rejected request with the refreshed bearer',a
  const client=await loadClient(savedSession(),async(url,options={})=>{
   if(url==='/api/config')return json(runtime);
   if(String(url).includes('/auth/v1/token?grant_type=refresh_token'))return json(savedSession({access_token:'retry-access',refresh_token:'retry-refresh'}));
-  if(url==='/api/workspaces/status'){seen.push(options.headers.Authorization);return seen.length===1?json({error:'expired'},401):json({ok:true,signedIn:true})}
+  if(url==='/api/workspaces/status'){const headers=new Headers(options.headers);seen.push({authorization:headers.get('Authorization'),session:headers.get('X-Atlas-Session')});return seen.length===1?json({error:'expired'},401):json({ok:true,signedIn:true})}
   throw new Error(`Unexpected request: ${url}`);
  });
  try{
   const response=await client.authenticatedFetch('/api/workspaces/status',{headers:{Accept:'application/json'}});
   assert.equal(response.status,200);
-  assert.deepEqual(seen,['Bearer old-access','Bearer retry-access']);
+  assert.deepEqual(seen,[{authorization:'Bearer old-access',session:'old-access'},{authorization:'Bearer retry-access',session:'retry-access'}]);
+ }finally{cleanup()}
+});
+
+test('authenticatedFetch never mirrors the Atlas session header to another origin',async()=>{
+ let seen;
+ const client=await loadClient(savedSession(),async(url,options={})=>{seen=new Headers(options.headers);return json({ok:true})});
+ try{
+  const response=await client.authenticatedFetch('https://project.supabase.co/rest/v1/example');
+  assert.equal(response.status,200);
+  assert.equal(seen.get('Authorization'),'Bearer old-access');
+  assert.equal(seen.get('X-Atlas-Session'),null);
  }finally{cleanup()}
 });

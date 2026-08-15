@@ -29,6 +29,10 @@ The session snapshot is not writable workspace storage. A successful API save re
 
 Authenticated API calls share one refresh operation per page and refresh access tokens before they expire. A request that receives `401` retries once with the newest session token. A stale or failed concurrent refresh must never clear a newer session written by another caller. The account indicator is informational and must not add a second blocking session preflight; the same-origin workspace request is authoritative for workspace access.
 
+Same-origin authenticated requests carry the user JWT in standard `Authorization: Bearer ...` and in `X-Atlas-Session`. The second header is a transport mirror, not another credential or persistence path: the server extracts one token and performs the exact same signature, claims, subject, and account verification. It is sent only to Atlas Harbor's own origin, never to Supabase or an external provider. Fetch, XHR, and form-navigation recovery preserve it, and protected workspace responses—including authentication errors—are `private, no-store` and vary on both credential headers. If fetch or XHR explicitly returns `AUTH_TOKEN_MISSING`, Baseball treats that as a credential-transport failure and continues through the existing recovery order; a save can therefore reach the canonical API through the token-bearing form body. This prevents an intermediary that omits `Authorization`, or reuses an anonymous error, from trapping a valid browser session.
+
+Account settings expose a prominent session card. It verifies the same workspace status endpoint and always offers **Log out and sign in again**, so a stale browser session can be deliberately replaced instead of leaving the user trapped behind a locally cached “logged in” indicator.
+
 For current asymmetric Supabase sessions, the server validates the browser JWT against `SUPABASE_JWKS_URL` (falling back to the canonical discovery URL under `SUPABASE_URL`). If a session uses another Supabase-supported signing format or a key outside the discoverable set, the server asks the project's PostgREST gateway to validate the bearer against a deliberately nonexistent relation. Its authenticated missing-relation result (`404` / `PGRST205`) is accepted only when the same request with a tampered signature is rejected (`PGRST301`), proving that the bearer was enforced instead of discarded. The server then independently checks the issuer, `authenticated` audience and role, expiry, and UUID subject before using the backend secret to load that exact account. Account updates use the verified subject and a partial `user_metadata` merge, so a workspace save sends only its segmented record. The remote `/auth/v1/user` endpoint is a last compatibility path when both verification mechanisms are unavailable, not a mandatory hop. Opaque `sb_secret_...` values never appear in the bearer header.
 
 If the API transports fail and the signed-in session contains no matching account record, the UI shows a retryable database error and does not open a device draft.
@@ -108,6 +112,12 @@ The shared editor permits 60,000 characters of sanitized HTML and a 12,000-chara
 In addition, changing one workspace rebuilt and uploaded the user's entire metadata document. Unrelated Problem Spaces and every prior post therefore participated in the size of a Baseball save.
 
 The JSON parser now accepts 1 MB and the form parser accepts 3 MB. Form parser failures return a structured same-origin result immediately. The server sends only the single bounded workspace record being changed; legacy aggregate records remain read inputs and are shadowed by the newer per-resource record.
+
+### Regression 7: a locally signed-in player page reached the API without a bearer
+
+The browser still had a user and access token, but the workspace server returned `AUTH_TOKEN_MISSING`. Refreshing the JWT could not help because the failing boundary was browser-to-Atlas-Harbor transport, not Supabase token validity. Error responses also acquired `no-store` only after successful authentication, leaving missing-token responses without the protected cache policy.
+
+Same-origin authenticated requests now mirror the JWT in `X-Atlas-Session`; the server accepts that header only as input to the existing verifier. All workspace responses receive the private no-store and credential-vary policy before authentication begins. Request headers are merged consistently when fetch falls back to XHR or form navigation, and an explicit `AUTH_TOKEN_MISSING` response advances to the next transport just like a network failure.
 
 ## Attachment scope
 
@@ -202,6 +212,9 @@ Regression tests must verify:
 - fetch, XHR, and form-navigation fallbacks target only the same-origin workspace API
 - one server workspace write performs one authenticated-user read and one canonical metadata update
 - concurrent access-token refreshes collapse into one request and cannot erase a newer session
+- same-origin authenticated requests send both credential transports while cross-origin Supabase/provider requests never receive `X-Atlas-Session`
+- workspace authentication errors are private, non-cacheable, and vary on both accepted credential headers
+- the Account page exposes session verification and a prominent logout/re-authentication control
 - the account indicator remains informational and does not add a second blocking workspace-status request
 - asymmetric user JWTs are verified against cached project JWKS before server-only account access
 - other valid Supabase session formats are verified by the PostgREST JWT gateway without reading or writing a table
