@@ -83,7 +83,7 @@ export function createWorkspaceRouter({env=process.env,fetchImpl=globalThis.fetc
  router.get('/api/workspaces/status',route(async(req,res)=>{
   const{current}=await storage.requestUser(req,{required:false});
   res.set('Cache-Control','no-store');
-  res.json({ok:true,signedIn:Boolean(current),supabaseConfigured:Boolean(base&&publishable),serviceKeyConfigured:Boolean(secret),serviceKeyType:secret?(secret.startsWith('sb_secret_')?'opaque-secret':'legacy-service-role'):'none'});
+  res.json({ok:true,signedIn:Boolean(current),supabaseConfigured:Boolean(base&&publishable),serviceKeyConfigured:Boolean(secret),serviceKeyType:secret?(secret.startsWith('sb_secret_')?'opaque-secret':'legacy-service-role'):'none',userSessionVerification:storage.userSessionVerification||'custom'});
  }));
  router.get('/api/workspaces/:resourceType/:resourceId',route(async(req,res)=>{
   const result=await load(req);

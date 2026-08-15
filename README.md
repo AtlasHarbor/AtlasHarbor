@@ -169,7 +169,13 @@ The server also sent the user's entire `user_metadata` document to Supabase for 
 
 The badge previously trusted any cached `user` object, even when its bearer token had expired. At the same time, multiple authenticated requests could independently refresh Supabase's rotating refresh token. A late failed refresh could erase the newer session created by a successful request, leaving the workspace retry without a valid bearer token.
 
-**Fix:** access tokens are refreshed before expiry, refresh work is shared by all callers in a page, and a stale refresh may not overwrite or clear a newer session. Workspace requests use that centralized authenticated transport. The account badge is informational and does not run a second blocking API preflight; the workspace request itself verifies authorization. On the server, Supabase receives the backend secret as the application API key while the signed-in user's JWT remains the bearer identity, with the publishable key retained as a compatibility fallback. An opaque secret is never sent as a bearer token.
+**Fix:** access tokens are refreshed before expiry, refresh work is shared by all callers in a page, and a stale refresh may not overwrite or clear a newer session. Workspace requests use that centralized authenticated transport. The account badge is informational and does not run a second blocking API preflight; the workspace request itself verifies authorization.
+
+### 10. Valid signed-in sessions were rejected by the workspace API
+
+The first workspace implementation wrote through the authenticated browser client. The August 6 server-API migration correctly moved persistence behind Atlas Harbor, but it made Supabase's remote `/auth/v1/user` endpoint the mandatory first step for every workspace load and save. Subsequent fetch, XHR, form, refresh, payload-size, and API-key fixes all still depended on that same call, so a valid browser session could continue receiving `401` before any player record was read.
+
+**Fix:** the Atlas Harbor server now validates asymmetric Supabase access tokens against the project's cached JWKS, checks the issuer, audience, authenticated role, expiry, and subject, then loads that exact account with the server-only credential. Saves use Supabase Auth's partial user-metadata merge to write only `atlas_workspace_record_v2_<resource-key>`. The remote user endpoint remains only a compatibility fallback for legacy token formats or temporary JWKS discovery failures. A forged, expired, wrong-project, or wrong-role token is rejected before account storage is accessed.
 
 ## Public-feed invariant
 
