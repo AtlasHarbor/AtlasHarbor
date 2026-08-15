@@ -5,6 +5,7 @@ import {createProblemSpaceStorage} from '../src/problem-space-storage.js';
 
 const env={SUPABASE_URL:'https://project.supabase.co',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_test'};
 const request=token=>({get:name=>String(name).toLowerCase()==='authorization'?`Bearer ${token}`:''});
+const fallbackRequest=token=>({get:name=>String(name).toLowerCase()==='x-atlas-session'?token:''});
 const json=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json'}});
 function signedToken({base=env.SUPABASE_URL,subject='11111111-1111-4111-8111-111111111111',expiresAt=Math.floor(Date.now()/1000)+3600,keyPair=crypto.generateKeyPairSync('ec',{namedCurve:'P-256'}),kid='test-signing-key',claims={}}={}){
  const header=Buffer.from(JSON.stringify({alg:'ES256',kid,typ:'JWT'})).toString('base64url'),payload=Buffer.from(JSON.stringify({iss:`${base}/auth/v1`,aud:'authenticated',role:'authenticated',sub:subject,iat:Math.floor(Date.now()/1000),exp:expiresAt,...claims})).toString('base64url'),input=`${header}.${payload}`,signature=crypto.sign('sha256',Buffer.from(input),{key:keyPair.privateKey,dsaEncoding:'ieee-p1363'}).toString('base64url'),jwk={...keyPair.publicKey.export({format:'jwk'}),kid,alg:'ES256',use:'sig'};
@@ -63,6 +64,13 @@ test('an invalid bearer is reported as an expired account session instead of a m
   assert.match(error.message,/session expired or is invalid/i);
   return true;
  });
+});
+
+test('the same-origin session mirror uses the existing token verifier',async()=>{
+ const storage=createProblemSpaceStorage({env,fetchImpl:async(_url,options={})=>{assert.equal(options.headers.Authorization,'Bearer mirrored-token');return json({id:'mirrored-user',user_metadata:{}})}});
+ assert.equal(storage.bearer(fallbackRequest('mirrored-token')),'mirrored-token');
+ const result=await storage.requestUser(fallbackRequest('mirrored-token'));
+ assert.equal(result.current.id,'mirrored-user');
 });
 
 test('an upstream authentication outage is not collapsed into a sign-in error',async()=>{

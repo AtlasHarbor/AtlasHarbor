@@ -10,6 +10,7 @@ const playerExport=fs.readFileSync(new URL('../public/baseball-player-export.js'
 const accountPosts=fs.readFileSync(new URL('../public/account-posts.js',import.meta.url),'utf8');
 const accountExport=fs.readFileSync(new URL('../public/account-baseball-export.js',import.meta.url),'utf8');
 const accountHtml=fs.readFileSync(new URL('../public/account.html',import.meta.url),'utf8');
+const accountJs=fs.readFileSync(new URL('../public/account.js',import.meta.url),'utf8');
 const messages=fs.readFileSync(new URL('../public/messages.js',import.meta.url),'utf8');
 const searchRouter=fs.readFileSync(new URL('../src/baseball-search-router.js',import.meta.url),'utf8');
 const bootstrap=fs.readFileSync(new URL('../src/test-account-bootstrap.js',import.meta.url),'utf8');
@@ -63,6 +64,16 @@ test('Account exposes signed-in league exports with player analyses',()=>{
  assert.match(searchRouter,/router\.get\('\/api\/baseball\/account-export'/);
  assert.match(searchRouter,/metadataWorkspaceRecords/);
  assert.match(searchRouter,/analysisCount/);
+});
+
+test('Account puts verified session recovery and logout before long-form settings',()=>{
+ assert.ok(accountHtml.indexOf('id="session-card"')<accountHtml.indexOf('id="settings-card"'));
+ assert.match(accountHtml,/Log out and sign in again/);
+ assert.equal((accountHtml.match(/id="sign-out"/g)||[]).length,1);
+ assert.match(accountJs,/authenticatedFetch\('\/api\/workspaces\/status'/);
+ assert.match(accountJs,/sessionCard\.hidden=!current/);
+ assert.match(accountJs,/verify-session/);
+ assert.match(accountJs,/addEventListener\('click',signOut\)/);
 });
 
 test('messaging failure never tells ordinary users to run SQL',()=>{
