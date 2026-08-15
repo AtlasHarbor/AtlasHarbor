@@ -53,13 +53,14 @@ test('Baseball workspace starts before the optional account configuration status
  assert.ok(js.indexOf("mountBaseballWorkspace();")<js.indexOf('await configurationStatus()'));
 });
 
-test('Baseball workspace refreshes authentication centrally and the account badge verifies it with the server',()=>{
+test('Baseball workspace refreshes authentication centrally without a second blocking account-badge preflight',()=>{
  const workspace=read('../public/workspace.js'),indicator=read('../public/account-indicator.js'),client=read('../public/supabase-client.js');
  assert.match(workspace,/import\{user,ai,authenticatedFetch\}/);
  assert.match(workspace,/authenticatedFetch\(`\/api\/workspaces\//);
  assert.doesNotMatch(workspace,/Authorization:`Bearer/);
- assert.match(indicator,/authenticatedFetch\('\/api\/workspaces\/status'/);
- assert.match(indicator,/data\.signedIn/);
+ assert.doesNotMatch(indicator,/authenticatedFetch/);
+ assert.doesNotMatch(indicator,/\/api\/workspaces\/status/);
+ assert.match(indicator,/const status=await configurationStatus\(\),current=user\(\)/);
  assert.match(client,/let cachedConfig,refreshPromise/);
  assert.match(client,/export async function freshAccessToken/);
  assert.match(client,/if\(refreshPromise\)return refreshPromise/);

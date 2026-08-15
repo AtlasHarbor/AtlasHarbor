@@ -169,7 +169,7 @@ The server also sent the user's entire `user_metadata` document to Supabase for 
 
 The badge previously trusted any cached `user` object, even when its bearer token had expired. At the same time, multiple authenticated requests could independently refresh Supabase's rotating refresh token. A late failed refresh could erase the newer session created by a successful request, leaving the workspace retry without a valid bearer token.
 
-**Fix:** access tokens are refreshed before expiry, refresh work is shared by all callers in a page, and a stale refresh may not overwrite or clear a newer session. Workspace requests use that centralized authenticated transport. The account badge confirms the session through `/api/workspaces/status` before showing Logged in, and the server distinguishes an expired bearer from an unavailable authentication service.
+**Fix:** access tokens are refreshed before expiry, refresh work is shared by all callers in a page, and a stale refresh may not overwrite or clear a newer session. Workspace requests use that centralized authenticated transport. The account badge is informational and does not run a second blocking API preflight; the workspace request itself verifies authorization. On the server, Supabase receives the backend secret as the application API key while the signed-in user's JWT remains the bearer identity, with the publishable key retained as a compatibility fallback. An opaque secret is never sent as a bearer token.
 
 ## Public-feed invariant
 

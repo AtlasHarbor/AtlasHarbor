@@ -12,21 +12,23 @@ async function readJson(response){
 
 export function createProblemSpaceStorage({env=process.env,fetchImpl=globalThis.fetch}={}){
  const base=env.SUPABASE_URL,key=env.SUPABASE_PUBLISHABLE_KEY,secret=supabaseSecretKey(env);
+ const authApiKeys=[secret,key].map(value=>String(value||'').trim()).filter((value,index,values)=>value&&values.indexOf(value)===index);
  const writeQueues=new Map();let cachedHostId=null;
  const configured=Boolean(base&&key&&secret);
- const authHeaders=token=>({apikey:key,Authorization:`Bearer ${token}`,...JSON_HEADERS});
+ const authHeaders=(token,apiKey)=>({apikey:apiKey,Authorization:`Bearer ${token}`,...JSON_HEADERS});
  const serviceHeaders=()=>supabaseServiceHeaders(secret);
  const bearer=req=>String(req?.get?.('authorization')||'').replace(/^Bearer\s+/i,'');
  const signInError=token=>Object.assign(new Error(token?'Your account session expired or is invalid. Sign in again.':'Sign in required.'),{status:401});
  const serial=(key,operation)=>{const prior=writeQueues.get(key)||Promise.resolve(),next=prior.then(operation,operation),settled=next.catch(()=>{});writeQueues.set(key,settled);settled.finally(()=>{if(writeQueues.get(key)===settled)writeQueues.delete(key)});return next};
  async function timedFetch(url,options={}){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8000);try{return await fetchImpl(url,{...options,signal:controller.signal})}catch(error){if(error?.name==='AbortError')throw Object.assign(new Error('Database request timed out.'),{status:504});throw error}finally{clearTimeout(timer)}}
- async function userForToken(token){if(!base||!key||!token)return null;const response=await timedFetch(`${base}/auth/v1/user`,{headers:authHeaders(token)});if(response.ok)return response.json();if([401,403].includes(response.status))return null;return readJson(response)}
+ async function ownUserResponse(token,options={}){if(!base||!token||!authApiKeys.length)return null;let rejected=null;for(const apiKey of authApiKeys){const response=await timedFetch(`${base}/auth/v1/user`,{...options,headers:{...authHeaders(token,apiKey),...(options.headers||{})}});if(response.ok)return response;if(![401,403].includes(response.status))return readJson(response);rejected=response}return rejected}
+ async function userForToken(token){const response=await ownUserResponse(token);if(!response||!response.ok)return null;return response.json()}
  async function requestUser(req,{required=true}={}){const token=bearer(req),current=await userForToken(token);if(!current&&required)throw signInError(token);return{token,current}}
  async function listAccounts(){if(!configured)throw Object.assign(new Error('Supabase server persistence is not configured.'),{status:503});const data=await readJson(await timedFetch(`${base}/auth/v1/admin/users?per_page=1000`,{headers:serviceHeaders()}));return data.users||[]}
  async function accountById(id){if(!id)return null;try{return await readJson(await timedFetch(`${base}/auth/v1/admin/users/${id}`,{headers:serviceHeaders()}))}catch{return null}}
  async function hostAccount({fallbackCurrent=null}={}){if(cachedHostId){const cached=await accountById(cachedHostId);if(cached)return cached;cachedHostId=null}const users=await listAccounts();let account=users.find(item=>item?.user_metadata?.atlas_admin?.masterUserId===item.id)||users.find(item=>item?.user_metadata?.atlas_admin)||users.find(item=>item?.user_metadata?.atlas_problem_spaces);if(!account&&fallbackCurrent)account=users.find(item=>item.id===fallbackCurrent.id)||fallbackCurrent;if(account)cachedHostId=account.id;return account||null}
  async function updateAccount(accountId,metadata){return readJson(await timedFetch(`${base}/auth/v1/admin/users/${accountId}`,{method:'PUT',headers:serviceHeaders(),body:JSON.stringify({user_metadata:metadata})}))}
- async function updateOwn(token,metadata){return readJson(await timedFetch(`${base}/auth/v1/user`,{method:'PUT',headers:authHeaders(token),body:JSON.stringify({data:metadata})}))}
+ async function updateOwn(token,metadata){const response=await ownUserResponse(token,{method:'PUT',body:JSON.stringify({data:metadata})});if(!response)throw Object.assign(new Error('Supabase user authentication is not configured.'),{status:503});return readJson(response)}
  async function readHost({fallbackCurrent=null}={}){if(!configured)return null;return hostAccount({fallbackCurrent})}
  async function updateHost(updater,{fallbackCurrent=null}={}){if(!configured)throw Object.assign(new Error('Supabase server persistence is not configured.'),{status:503});return serial('host',async()=>{let account=await hostAccount({fallbackCurrent});if(!account&&fallbackCurrent)account=fallbackCurrent;if(!account)throw Object.assign(new Error('Create or sign in to an Atlas Harbor account before initializing shared Problem Space storage.'),{status:409});const metadata=await updater(structuredClone(account.user_metadata||{}),account);const saved=await updateAccount(account.id,metadata);return saved.user||saved})}
  async function readGlobal(space,{fallbackCurrent=null,defaults={}}={}){if(!configured)return structuredClone(defaults);const account=await hostAccount({fallbackCurrent});return{...structuredClone(defaults),...(account?.user_metadata?.atlas_problem_spaces?.[space]||{})}}

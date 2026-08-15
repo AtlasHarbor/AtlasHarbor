@@ -67,6 +67,8 @@ test('workspace PUT performs one server auth read and one canonical metadata upd
  });
  const authCalls=mock.calls.filter(call=>call.path==='/auth/v1/user');
  assert.deepEqual(authCalls.map(call=>call.method),['GET','PUT']);
+ assert.ok(authCalls.every(call=>call.headers.apikey==='sb_secret_test'));
+ assert.ok(authCalls.every(call=>call.headers.Authorization==='Bearer user-token'));
  const patch=JSON.parse(authCalls[1].body).data;
  assert.deepEqual(Object.keys(patch).map(key=>key.startsWith('atlas_workspace_record_v2_')), [true]);
  assert.equal('atlas_problem_spaces'in patch,false);

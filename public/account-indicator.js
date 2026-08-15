@@ -2,7 +2,7 @@ import'./problem-nav.js';
 import'./workspace-enhancements.js';
 import'./publishing-links.js';
 import'./baseball-profile-enhancements.js';
-import{user,configurationStatus,authenticatedFetch}from'./supabase-client.js';
+import{user,configurationStatus}from'./supabase-client.js';
 
 const style=document.createElement('style');
 style.textContent=`.atlas-account-indicator{position:fixed;right:16px;bottom:16px;z-index:1000;display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:999px;background:#fffdf7;border:1px solid #d8d2c4;box-shadow:0 8px 25px #173b3230;color:#173b32;text-decoration:none;font:700 11px system-ui}.atlas-account-dot{width:9px;height:9px;border-radius:50%;background:#c95a4c}.atlas-account-indicator.ok .atlas-account-dot{background:#64a35d}.atlas-account-indicator.warn .atlas-account-dot{background:#e3a33d}`;
@@ -70,9 +70,7 @@ async function mountBaseballWorkspace(){
 if(location.pathname.startsWith('/baseball/'))mountBaseballWorkspace();
 if(location.pathname.startsWith('/dropshipping'))import('./dropshipping-category-patch.js');
 
-const status=await configurationStatus();let current=user(),accountError='';
-if(status.ok&&current)try{const response=await authenticatedFetch('/api/workspaces/status',{headers:{Accept:'application/json'},cache:'no-store'}),data=await response.json().catch(()=>({}));if(!response.ok||!data.signedIn)throw new Error(data.error||'Your account session could not be verified. Sign in again.');current=user()}catch(error){current=null;accountError=error.message||'Your account session could not be verified.'}
+const status=await configurationStatus(),current=user();
 if(!status.ok){link.classList.add('warn');link.querySelector('span:last-child').textContent='Setup needed';link.title=status.error||'Open Account for setup help'}
 else if(current){link.classList.add('ok');link.querySelector('span:last-child').textContent='Logged in';link.title='Open account settings'}
-else if(accountError){link.classList.add('warn');link.querySelector('span:last-child').textContent=/sign in|session/i.test(accountError)?'Sign in again':'Account check';link.title=accountError}
 else{link.classList.add('ok');link.querySelector('span:last-child').textContent='Sign in';link.title='Open account'}
