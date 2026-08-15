@@ -67,3 +67,37 @@ test('an upstream authentication outage is not collapsed into a sign-in error',a
   return true;
  });
 });
+
+test('server authentication uses its secret app key while preserving the user bearer for reads and bounded patches',async()=>{
+ const serverEnv={...env,SUPABASE_SECRET_KEY:'sb_secret_test'};
+ let account={id:'user-1',user_metadata:{unrelated:{large:'x'.repeat(10000)}}};
+ const calls=[];
+ const fetchImpl=async(url,options={})=>{
+  calls.push({method:options.method||'GET',headers:options.headers,body:options.body});
+  assert.equal(options.headers.apikey,'sb_secret_test');
+  assert.equal(options.headers.Authorization,'Bearer browser-user-jwt');
+  if((options.method||'GET')==='PUT'){
+   const patch=JSON.parse(options.body).data;
+   account={...account,user_metadata:{...account.user_metadata,...patch}};
+   return json({user:account});
+  }
+  return json(account);
+ };
+ const storage=createProblemSpaceStorage({env:serverEnv,fetchImpl});
+ await storage.patchUser(request('browser-user-jwt'),()=>({atlas_workspace_record_v2_player:{title:'Saved'}}));
+ assert.deepEqual(calls.map(call=>call.method),['GET','PUT']);
+ assert.ok(calls[1].body.length<200);
+ assert.doesNotMatch(calls[1].body,/unrelated/);
+});
+
+test('server authentication falls back to the publishable app key when the configured secret is rejected',async()=>{
+ const serverEnv={...env,SUPABASE_SECRET_KEY:'sb_secret_stale'},seen=[];
+ const storage=createProblemSpaceStorage({env:serverEnv,fetchImpl:async(url,options={})=>{
+  seen.push(options.headers.apikey);
+  assert.equal(options.headers.Authorization,'Bearer user-token');
+  return options.headers.apikey==='sb_secret_stale'?json({message:'Invalid API key'},403):json({id:'user-1',user_metadata:{}});
+ }});
+ const result=await storage.requestUser(request('user-token'));
+ assert.equal(result.current.id,'user-1');
+ assert.deepEqual(seen,['sb_secret_stale','sb_publishable_test']);
+});
