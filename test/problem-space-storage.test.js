@@ -59,6 +59,7 @@ test('an invalid bearer is reported as an expired account session instead of a m
  const storage=createProblemSpaceStorage({env,fetchImpl:async()=>json({message:'invalid JWT'},401)});
  await assert.rejects(storage.requestUser(request('expired-token')),error=>{
   assert.equal(error.status,401);
+  assert.equal(error.code,'AUTH_REMOTE_REJECTED');
   assert.match(error.message,/session expired or is invalid/i);
   return true;
  });
@@ -155,9 +156,9 @@ test('verified sessions fall back to the admin account list when direct account 
 
 test('a forged asymmetric bearer is rejected before any account read',async()=>{
  const trusted=signedToken(),forged=signedToken({keyPair:crypto.generateKeyPairSync('ec',{namedCurve:'P-256'}),kid:'test-signing-key'}),calls=[];
- const storage=createProblemSpaceStorage({env:{...env,SUPABASE_SECRET_KEY:'sb_secret_test'},fetchImpl:async url=>{const path=new URL(url).pathname;calls.push(path);if(path==='/auth/v1/.well-known/jwks.json')return json({keys:[trusted.jwk]});throw new Error('a forged token must not reach account storage')}});
- await assert.rejects(storage.requestUser(request(forged.token)),error=>error.status===401);
- assert.deepEqual(calls,['/auth/v1/.well-known/jwks.json']);
+ const storage=createProblemSpaceStorage({env:{...env,SUPABASE_SECRET_KEY:'sb_secret_test'},fetchImpl:async url=>{const path=new URL(url).pathname;calls.push(path);if(path==='/auth/v1/.well-known/jwks.json')return json({keys:[trusted.jwk]});if(path==='/rest/v1/__atlas_session_verification_never_create__')return json({code:'PGRST301',message:'No suitable key or wrong key type'},401);throw new Error('a forged token must not reach account storage')}});
+ await assert.rejects(storage.requestUser(request(forged.token)),error=>error.status===401&&error.code==='AUTH_TOKEN_REJECTED');
+ assert.deepEqual(calls,['/auth/v1/.well-known/jwks.json','/rest/v1/__atlas_session_verification_never_create__']);
 });
 
 test('expired, wrong-project, and wrong-role sessions are rejected before account storage',async()=>{
@@ -171,4 +172,26 @@ test('expired, wrong-project, and wrong-role sessions are rejected before accoun
   await assert.rejects(storage.requestUser(request(fixture.token)),error=>error.status===401);
   assert.deepEqual(calls,['/auth/v1/.well-known/jwks.json']);
  }
+});
+
+test('a gateway-verified non-JWKS session bypasses the failing user endpoint',async()=>{
+ const subject='22222222-2222-4222-8222-222222222222',now=Math.floor(Date.now()/1000),header=Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url'),payload=Buffer.from(JSON.stringify({iss:`${env.SUPABASE_URL}/auth/v1`,aud:'authenticated',role:'authenticated',sub:subject,iat:now,exp:now+3600})).toString('base64url'),token=`${header}.${payload}.legacy-signature`,calls=[],account={id:subject,user_metadata:{}};
+ const storage=createProblemSpaceStorage({env:{...env,SUPABASE_SECRET_KEY:'sb_secret_test'},fetchImpl:async(url,options={})=>{
+  const parsed=new URL(url),path=parsed.pathname,method=options.method||'GET';calls.push({path,method,headers:options.headers});
+  if(path==='/rest/v1/__atlas_session_verification_never_create__'){
+   assert.equal(options.headers.apikey,'sb_publishable_test');
+   if(options.headers.Authorization===`Bearer ${token}`)return json({code:'PGRST205',message:"Could not find the table 'public.__atlas_session_verification_never_create__' in the schema cache"},404);
+   return json({code:'PGRST301',message:'No suitable key or wrong key type'},401);
+  }
+  if(path===`/auth/v1/admin/users/${subject}`)return json(account);
+  if(path==='/auth/v1/user')throw new Error('the broken user endpoint must not be required');
+  return json({},404);
+ }});
+ const result=await storage.requestUser(request(token));
+ assert.equal(result.current.id,subject);
+ assert.deepEqual(calls.map(call=>[call.path,call.method]),[
+  ['/rest/v1/__atlas_session_verification_never_create__','GET'],
+  ['/rest/v1/__atlas_session_verification_never_create__','GET'],
+  [`/auth/v1/admin/users/${subject}`,'GET']
+ ]);
 });
