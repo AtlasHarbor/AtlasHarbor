@@ -8,19 +8,6 @@ const style=document.createElement('style');
 style.textContent=`.atlas-account-indicator{position:fixed;right:16px;bottom:16px;z-index:1000;display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:999px;background:#fffdf7;border:1px solid #d8d2c4;box-shadow:0 8px 25px #173b3230;color:#173b32;text-decoration:none;font:700 11px system-ui}.atlas-account-dot{width:9px;height:9px;border-radius:50%;background:#c95a4c}.atlas-account-indicator.ok .atlas-account-dot{background:#64a35d}.atlas-account-indicator.warn .atlas-account-dot{background:#e3a33d}.atlas-player-workspace-jump{position:fixed;left:16px;bottom:16px;z-index:1000;display:grid;place-items:center;width:52px;height:52px;padding:0;border:1px solid #173b32;border-radius:50%;background:#173b32;color:#fff;box-shadow:0 10px 28px #173b3240;cursor:pointer}.atlas-player-workspace-jump:hover{background:#245347;transform:translateY(-2px)}.atlas-player-workspace-jump:focus-visible{outline:3px solid #ef8a57;outline-offset:3px}.atlas-player-workspace-jump-arrow{font:800 28px/1 system-ui;transform:translateY(-1px)}.atlas-player-workspace-jump-label{position:absolute;left:62px;padding:7px 10px;border-radius:999px;background:#173b32;color:#fff;white-space:nowrap;font:700 11px system-ui;opacity:0;pointer-events:none;transform:translateX(-4px);transition:.16s}.atlas-player-workspace-jump:hover .atlas-player-workspace-jump-label,.atlas-player-workspace-jump:focus-visible .atlas-player-workspace-jump-label{opacity:1;transform:none}@media(max-width:620px){.atlas-player-workspace-jump{left:12px;bottom:12px;width:48px;height:48px}.atlas-player-workspace-jump-label{display:none}}`;
 document.head.append(style);
 
-const guidance='Write what you think will happen, why, and what evidence would change your view.';
-function fixGuidance(root=document){
- root.querySelectorAll?.('textarea').forEach(el=>{
-  if(el.value.trim()===guidance){el.value='';el.placeholder=guidance}
-  else if(!el.placeholder&&/what you think will happen/i.test(el.getAttribute('aria-label')||''))el.placeholder=guidance;
- });
-}
-fixGuidance();
-window.addEventListener('atlas-workspace-loaded',event=>{
- const host=event.detail?.host;
- queueMicrotask(()=>fixGuidance(host||document));
-});
-
 const link=document.createElement('a');
 link.className='atlas-account-indicator';
 link.href='/account';
@@ -72,7 +59,6 @@ async function mountBaseballWorkspace(){
     await mountWorkspace(host,{type:'baseball_team',id:team[1],title:data.team?.name||document.querySelector('h1')?.textContent||'Baseball team',context:data.team});
    }
    host.dataset.mounted='true';
-   fixGuidance(host);
   }catch(e){if(e.name!=='AbortError')host.innerHTML=`<section class="workspace"><p>Publishing workspace unavailable: ${e.message}</p></section>`}finally{delete host.dataset.mounting}
  })();
  return baseballWorkspacePromise;

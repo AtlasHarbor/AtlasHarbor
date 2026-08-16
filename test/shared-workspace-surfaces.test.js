@@ -28,3 +28,13 @@ test('all mounted surfaces persist through the one parameterized Atlas Harbor wo
  assert.match(server,/workspaceMetadataKey\(resourceType,resourceId\)/);
  assert.doesNotMatch(workspace,/supabase\.co|\/auth\/v1\/user/);
 });
+
+test('new shared workspaces start blank and render writing guidance outside the editable post',()=>{
+ const workspace=read('../public/workspace.js'),indicator=read('../public/account-indicator.js');
+ assert.match(workspace,/const editorGuidance='Write what you think will happen, why, and what evidence would change your view\.'/);
+ assert.match(workspace,/if\(!row\|\|plainHtml\(editor\.innerHTML\)===editorGuidance\)editor\.innerHTML=''/);
+ assert.match(workspace,/editorHelp\.className='workspace-status workspace-editor-help'/);
+ assert.match(workspace,/editor\.before\(editorHelp\)/);
+ assert.match(workspace,/editor\.setAttribute\('aria-describedby',editorHelp\.id\)/);
+ assert.doesNotMatch(indicator,/fixGuidance|const guidance='Write what you think will happen/);
+});
