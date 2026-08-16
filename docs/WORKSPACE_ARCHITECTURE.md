@@ -23,9 +23,9 @@ Atlas Harbor uses these browser paths:
 1. Same-origin Atlas Harbor workspace API: `/api/workspaces/:resourceType/:resourceId`.
 2. The already-authenticated user metadata carried in the signed-in session, only to display the last server-confirmed record while a read request is unavailable.
 
-On Baseball report pages, browser transport recovery for the same-origin API is `fetch` → XHR → form navigation. The final transport applies only to authenticated workspace `PUT` requests and posts to `/api/workspaces-form/:resourceType/:resourceId`; the server delegates both routes to the same canonical save function. It is not another persistence layer.
+Every shared analytical editor installs browser transport recovery for the same-origin API in this order: `fetch` → XHR → form navigation. The final transport applies only to authenticated workspace `PUT` requests and posts to `/api/workspaces-form/:resourceType/:resourceId`; the server delegates both routes to the same canonical save function. It is not another persistence layer. Baseball alone adds a read-only first-player rule that may open an empty editor after all GET transports fail and the authenticated session contains no matching record; the first save still uses the shared API.
 
-The session snapshot is not writable workspace storage. A successful API save refreshes it only as a last-confirmed read cache. Workspace browser code must never call Supabase `/auth/v1/user` to load or save workspace metadata. Password sign-in, sign-up, and refresh call the same-origin `/api/account/session/...` endpoints; the server talks to Supabase Auth and sets a signed, short-lived HttpOnly session cookie. Persistence stays behind the Atlas Harbor API.
+The session snapshot is not writable workspace storage. A successful API save refreshes it only as a last-confirmed read cache. Workspace browser code must never call Supabase `/auth/v1/user` to load or save workspace metadata. Password sign-in, sign-up, and refresh call the same-origin `/api/account/session/...` endpoints; the server talks to Supabase Auth and sets a signed, short-lived HttpOnly session cookie. If email confirmation is enabled upstream and signup returns a new user without a session, the server confirms that exact new UUID with the Admin API and immediately performs the password grant. Signup must return a usable session in the same request; confirmation email is never a workspace-access gate. Persistence stays behind the Atlas Harbor API.
 
 Authenticated API calls share one refresh operation per page and refresh access tokens before they expire. A request that receives `401` retries once with the newest session token. A stale or failed concurrent refresh must never clear a newer session written by another caller. The account indicator is informational and must not add a second blocking session preflight; the same-origin workspace request is authoritative for workspace access.
 
@@ -199,6 +199,7 @@ Do not:
 - encode an entire publication into a share token
 - render `/published/undefined`
 - send `sb_secret_...` as a bearer token
+- return a sessionless signup that tells a new user to wait for email confirmation
 - delete legacy data during a read or opportunistic migration
 - let an optional provider failure erase already loaded public or private content
 
@@ -221,9 +222,11 @@ Regression tests must verify:
 - one server workspace write performs one authenticated-user read and one canonical metadata update
 - concurrent access-token refreshes collapse into one request and cannot erase a newer session
 - sign-in and refresh stay behind the same-origin Atlas Harbor account-session API
+- signup immediately activates the exact newly created account and returns a server session even when upstream email confirmation is enabled
 - signed HttpOnly server sessions reject tampering, expire with the access session, and can save without a bearer header
+- one server session saves the canonical resource types used by Baseball, Legal, Economics, Life Sciences, Propositions, Lead Discovery, and Logistics Planner
 - same-origin authenticated requests send both credential transports while cross-origin Supabase/provider requests never receive `X-Atlas-Session`
-- workspace authentication errors are private, non-cacheable, and vary on both accepted credential headers
+- workspace authentication errors are private, non-cacheable, and vary on Cookie plus both accepted compatibility credential headers
 - the Account page exposes session verification and a prominent logout/re-authentication control
 - the account indicator remains informational and does not add a second blocking workspace-status request
 - asymmetric user JWTs are verified against cached project JWKS before server-only account access

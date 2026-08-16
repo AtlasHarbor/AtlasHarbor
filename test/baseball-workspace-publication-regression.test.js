@@ -89,6 +89,10 @@ test('workspace auth is established through a signed same-origin server session'
  assert.match(supabaseClient,/signIn=.*auth\('sign-in'/);
  assert.match(supabaseClient,/\/api\/account\/session\/refresh/);
  assert.doesNotMatch(supabaseClient,/auth\('token\?grant_type=password'/);
+ assert.match(sessionApi,/email_confirm:true/);
+ assert.match(sessionApi,/await confirmSignup\(userId\)/);
+ assert.match(accountJs,/Account created and signed in/);
+ assert.doesNotMatch(accountJs,/Check email if confirmation is enabled/);
 });
 
 test('messaging failure never tells ordinary users to run SQL',()=>{

@@ -5,12 +5,22 @@ import fs from 'node:fs';
 const read=path=>fs.readFileSync(new URL(path,import.meta.url),'utf8');
 
 test('Baseball player pages mount the shared publishable database workspace',()=>{
- const js=read('../public/account-indicator.js');
+ const js=read('../public/account-indicator.js'),workspace=read('../public/workspace.js');
  assert.match(js,/type:'baseball_player'/);
  assert.match(js,/mountWorkspace/);
  assert.match(js,/workspace\.css/);
- assert.match(js,/installWorkspaceTransportFallback/);
+ assert.match(workspace,/installWorkspaceTransportFallback\(\)/);
  assert.match(js,/prospect-players/);
+});
+
+test('Baseball player pages provide a fixed accessible jump to the analysis editor',()=>{
+ const js=read('../public/account-indicator.js');
+ assert.match(js,/atlas-player-workspace-jump/);
+ assert.match(js,/aria-label','Jump to player analysis/);
+ assert.match(js,/if\(player\)installPlayerWorkspaceJump\(host\)/);
+ assert.match(js,/host\.scrollIntoView/);
+ assert.match(js,/#ws-editor,#ws-retry-db,a\[href="\/account"\]/);
+ assert.match(js,/prefers-reduced-motion/);
 });
 
 test('Baseball workspace transport can open a first note and save it without a device-only draft',()=>{

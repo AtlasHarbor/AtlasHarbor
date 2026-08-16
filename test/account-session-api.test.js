@@ -21,7 +21,30 @@ test('Atlas Harbor server-session cookies reject tampering and expiry',()=>{
  assert.equal(expired.verify(value),null);
 });
 
-test('server-proxied sign-in establishes a cookie that loads and saves a workspace without bearer re-verification',async()=>{
+test('sign-up immediately confirms the new account and starts its server session',async()=>{
+ const calls=[];
+ const fetchImpl=async(url,options={})=>{
+  const parsed=new URL(url),method=options.method||'GET',body=JSON.parse(options.body||'{}');calls.push({path:parsed.pathname,grant:parsed.searchParams.get('grant_type'),method,body,headers:options.headers});
+  if(parsed.pathname==='/auth/v1/signup')return json({user:{id:subject,email:'new@example.com',identities:[{id:'identity-1'}]},session:null});
+  if(parsed.pathname===`/auth/v1/admin/users/${subject}`&&method==='PUT')return json({user:{id:subject,email_confirmed_at:new Date(now).toISOString()}});
+  if(parsed.pathname==='/auth/v1/token'&&parsed.searchParams.get('grant_type')==='password')return json(session);
+  throw new Error(`Unexpected request: ${method} ${url}`);
+ };
+ const sessionCookie=createAccountSessionCookie({env}),app=express();app.use(express.json());app.use(createAccountSessionRouter({env,fetchImpl,sessionCookie}));
+ const server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));
+ try{
+  const base=`http://127.0.0.1:${server.address().port}`,response=await fetch(`${base}/api/account/session/sign-up`,{method:'POST',headers:{Origin:base,'Content-Type':'application/json'},body:JSON.stringify({email:'new@example.com',password:'correct horse battery staple'})}),data=await response.json();
+  assert.equal(response.status,201);
+  assert.equal(data.access_token,session.access_token);
+  assert.match(response.headers.get('set-cookie'),/^atlas_harbor_session=/);
+  assert.deepEqual(calls.map(call=>[call.method,call.path,call.grant]),[['POST','/auth/v1/signup',null],['PUT',`/auth/v1/admin/users/${subject}`,null],['POST','/auth/v1/token','password']]);
+  assert.deepEqual(calls[1].body,{email_confirm:true});
+  assert.equal(calls[1].headers.apikey,env.SUPABASE_SECRET_KEY);
+  assert.equal(calls[1].headers.Authorization,undefined);
+ }finally{await new Promise(resolve=>server.close(resolve))}
+});
+
+test('server-proxied sign-in establishes one cookie that saves every shared Problem Space without bearer re-verification',async()=>{
  let account={id:subject,user_metadata:{}},passwordGrant=0,userEndpointCalls=0;
  const fetchImpl=async(url,options={})=>{
   const parsed=new URL(url),method=options.method||'GET';
@@ -57,12 +80,28 @@ test('server-proxied sign-in establishes a cookie that loads and saves a workspa
   assert.equal(status.status,200);
   assert.equal(statusData.signedIn,true);
   assert.equal(statusData.sessionVerification,'server-session-cookie');
-  const save=await fetch(`${base}/api/workspaces/baseball_player/605141`,{method:'PUT',headers:{Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({resource_title:'Mookie Betts',title:'Server session save',body:'<p>Saved once.</p>',intent:'save'})}),saved=await save.json();
-  assert.equal(save.status,200);
-  assert.equal(saved.workspace.resource_id,'605141');
-  assert.equal(saved.workspace.title,'Server session save');
+  const resources=[
+   {type:'baseball_player',id:'605141',title:'Mookie Betts analysis'},
+   {type:'baseball_game',id:'777001',title:'Baseball game analysis'},
+   {type:'baseball_team',id:'119',title:'Baseball team analysis'},
+   {type:'legal_case',id:'ny-kalshi-enforcement-2026',title:'Legal case analysis',publish:true},
+   {type:'economics_story',id:'digital-iron-curtain',title:'Economics analysis'},
+   {type:'life_science_problem',id:'biomarker-response',title:'Life Sciences analysis'},
+   {type:'go_to_market_report',id:'partner-proposal',title:'Proposition analysis'},
+   {type:'lead_project',id:'qualified-leads',title:'Lead Discovery analysis'},
+   {type:'logistics_project',id:'resilient-lanes',title:'Logistics Planner analysis'}
+  ];
+  for(const resource of resources){
+   const save=await fetch(`${base}/api/workspaces/${resource.type}/${resource.id}`,{method:'PUT',headers:{Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({resource_title:resource.title,title:resource.title,body:`<p>${resource.title}</p>`,is_shared:Boolean(resource.publish),intent:resource.publish?'publish':'save'})}),saved=await save.json();
+   assert.equal(save.status,200,`${resource.type} save failed: ${JSON.stringify(saved)}`);
+   assert.equal(saved.workspace.resource_type,resource.type);
+   assert.equal(saved.workspace.resource_id,resource.id);
+   if(resource.publish)assert.match(saved.workspace.share_token,/^[A-Za-z0-9_-]{24}$/);
+  }
   assert.equal(userEndpointCalls,0);
-  assert.equal(Object.keys(account.user_metadata).filter(key=>key.startsWith('atlas_workspace_record_v2_')).length,1);
+  const records=Object.entries(account.user_metadata).filter(([key])=>key.startsWith('atlas_workspace_record_v2_')).map(([,value])=>value);
+  assert.equal(records.length,resources.length);
+  assert.deepEqual(new Set(records.map(record=>record.resource_type)),new Set(resources.map(resource=>resource.type)));
   const loggedOut=await fetch(`${base}/api/account/session`,{method:'DELETE',headers:{Cookie:cookie}});
   assert.equal(loggedOut.status,204);
   assert.match(loggedOut.headers.get('set-cookie'),/Max-Age=0/);
