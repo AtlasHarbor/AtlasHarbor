@@ -71,7 +71,7 @@ A signed-in analytical workspace may reach the same canonical account record thr
 
 These are transports, not separate stores.
 
-Workspace recovery does not depend on `fetch('/api/config')` and does not call Supabase persistence endpoints from the browser. Authentication may still use the public Supabase URL and publishable key; analysis persistence remains behind Atlas Harbor's same-origin API.
+Workspace recovery does not depend on `fetch('/api/config')` and does not call Supabase persistence endpoints from the browser. Password sign-in, sign-up, and token refresh go through `/api/account/session/...`; Atlas Harbor exchanges the credential with Supabase Auth server-side and establishes a short-lived signed HttpOnly session cookie. Analysis persistence remains behind Atlas Harbor's same-origin API.
 
 Baseball additionally installs `workspace-transport-fallback.js`. It first retries a failed browser `fetch()` to `/api/workspaces/...` using `XMLHttpRequest`. If both scripted transports fail during an authenticated `PUT`, it submits the same payload and access token through a hidden same-origin form to `/api/workspaces-form/...`. Every path invokes the same server save function and writes the same canonical account record; none creates a Baseball-specific or device-only store. This matters for a player's **first** analysis, because there may be no matching session-metadata row to recover yet.
 
@@ -189,11 +189,23 @@ The account object and access token were present in browser storage, so refreshi
 
 **Fix:** Atlas Harbor mirrors the same JWT in `X-Atlas-Session` for same-origin authenticated API calls only. The server feeds either accepted header into the exact same cryptographic/session verifier; this is not a database bypass or a second auth model. Fetch, XHR, and form navigation preserve the header, and every workspace response—including `401`—is private, non-cacheable, and varies on both credential headers. An explicit `AUTH_TOKEN_MISSING` from fetch or XHR now advances to the next canonical API transport, allowing a save to use the token-bearing form body instead of stopping at the broken header boundary. Account settings now put a workspace session check and **Log out and sign in again** control near the top instead of burying sign-out below all AI settings.
 
+### 12. A valid browser token still failed every server verifier and made one save take multiple retries
+
+Symptom:
+
+```text
+Database save unavailable through the Atlas Harbor API: Atlas Harbor could not verify your account session.
+```
+
+The workspace API rejected authentication before reading or writing the player record. The browser then repeated the same rejected identity through fetch, XHR, form navigation, and one refresh retry, making a small save look like a payload timeout. Existing posts could still appear from the last confirmed account snapshot, which hid that the failure occurred before persistence.
+
+**Fix:** password sign-in, sign-up, and refresh now terminate at the same-origin Atlas Harbor account-session API. A successful Supabase Auth response establishes a signed, short-lived, HttpOnly, SameSite server session. Workspace reads and writes resolve that server-verified account subject directly with the backend credential instead of re-proving the browser bearer on every request. JWT/JWKS, PostgREST, mirrored-header, and form-token verification remain compatibility paths for existing sessions and non-browser API clients. Logout clears both the browser session and the HttpOnly Atlas Harbor session. The form adapter also preserves the server authentication code instead of collapsing it into an unclassified 401.
+
 ## Public-feed invariant
 
 **Logging in must never make `/published` show fewer public stories.**
 
-Public `workspace_notes` and legacy publication rows are queried with the anonymous/publishable Supabase role whether or not the viewer is signed in. The public list request itself must not carry viewer Authorization. Viewer identity is reserved for ownership controls and account recovery where needed.
+Public `workspace_notes` and legacy publication rows are queried with the anonymous/publishable Supabase role whether or not the viewer is signed in. The public list request itself must not carry viewer Authorization, the mirrored session header, or the Atlas Harbor session cookie. Viewer identity is reserved for ownership controls and account recovery where needed.
 
 Older `workspace_notes`, `legal_notes`, and virtual account-metadata records are read-only recovery inputs. They may be copied into the canonical account workspace, but new workspace writes must not create new virtual/device records.
 

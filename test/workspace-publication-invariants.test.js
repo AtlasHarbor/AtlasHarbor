@@ -14,4 +14,6 @@ test('attachment scope is part of the canonical workspace save and never perform
 
 test('server generates compact publication tokens and feed canonicalizes malformed legacy tokens',()=>{const workspace=read('../src/workspace-api.js'),feed=read('../src/published-feed.js');assert.match(workspace,/randomBytes\(18\)\.toString\('base64url'\)/);assert.match(feed,/token\.length>96/);assert.match(feed,/`pub-\$\{/);assert.match(feed,/atlas_virtual_tables\?\.workspace_notes/);assert.match(feed,/Vary','Authorization/)});
 
+test('the public publication list strips every viewer session transport',()=>{const router=read('../src/problem-router.js');assert.match(router,/delete req\.headers\.authorization/);assert.match(router,/delete req\.headers\['x-atlas-session'\]/);assert.match(router,/delete req\.headers\.cookie/)});
+
 test('workspace architecture explicitly prohibits local workspace copies and encoded publication tokens',()=>{const docs=read('../docs/WORKSPACE_ARCHITECTURE.md'),readme=read('../README.md');for(const text of[docs,readme]){assert.match(text,/one writable.*source of truth|One writable source of truth/i);assert.match(text,/never.*device-only|no device-only/i);assert.match(text,/published\/undefined|\/published\/undefined/);assert.match(text,/entire publication.*share token|entire article.*share_token/i)}});

@@ -5,7 +5,7 @@ import{supabaseSecretKey,supabaseServiceHeaders}from'./supabase-server-key.js';
 import {metadataWorkspaceRecords,normalizeWorkspaceRecord,normalizeLegacyLegalRecord,newestRecord,sameResource,workspaceMetadataKey} from './workspace-records.js';
 
 const text=(value,max=1000)=>String(value??'').trim().slice(0,max);
-const protectResponse=res=>{res.set('Cache-Control','private, no-store, max-age=0');res.vary('Authorization');res.vary('X-Atlas-Session')};
+const protectResponse=res=>{res.set('Cache-Control','private, no-store, max-age=0');res.vary('Authorization');res.vary('X-Atlas-Session');res.vary('Cookie')};
 const route=handler=>async(req,res)=>{protectResponse(res);try{await handler(req,res)}catch(error){console.error('Workspace API:',error);res.status(error.status||500).json({error:error.message||'Workspace request failed.',...(error.code?{code:error.code}:{})})}};
 const missingTable=(status,body)=>status===404||/Could not find the table|schema cache|PGRST205|relation .* does not exist/i.test(body||'');
 const safeScriptJson=value=>JSON.stringify(value).replace(/</g,'\\u003c');

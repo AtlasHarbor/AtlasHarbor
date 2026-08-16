@@ -15,6 +15,9 @@ const messages=fs.readFileSync(new URL('../public/messages.js',import.meta.url),
 const searchRouter=fs.readFileSync(new URL('../src/baseball-search-router.js',import.meta.url),'utf8');
 const bootstrap=fs.readFileSync(new URL('../src/test-account-bootstrap.js',import.meta.url),'utf8');
 const authScript=fs.readFileSync(new URL('../scripts/test-auth-api.js',import.meta.url),'utf8');
+const sessionApi=fs.readFileSync(new URL('../src/account-session-api.js',import.meta.url),'utf8');
+const sessionCookie=fs.readFileSync(new URL('../src/account-session-cookie.js',import.meta.url),'utf8');
+const supabaseClient=fs.readFileSync(new URL('../public/supabase-client.js',import.meta.url),'utf8');
 
 test('first Baseball analysis opens empty only after read transports fail and retains a canonical save path',()=>{
  assert.match(transport,/firstBaseballWorkspaceCanOpenEmpty/);
@@ -74,6 +77,18 @@ test('Account puts verified session recovery and logout before long-form setting
  assert.match(accountJs,/sessionCard\.hidden=!current/);
  assert.match(accountJs,/verify-session/);
  assert.match(accountJs,/addEventListener\('click',signOut\)/);
+});
+
+test('workspace auth is established through a signed same-origin server session',()=>{
+ assert.match(sessionApi,/\/api\/account\/session\/sign-in/);
+ assert.match(sessionApi,/token\?grant_type=password/);
+ assert.match(sessionCookie,/HttpOnly/);
+ assert.match(sessionCookie,/SameSite=Lax/);
+ assert.match(sessionCookie,/timingSafeEqual/);
+ assert.match(supabaseClient,/\/api\/account\/session\/\$\{path\}/);
+ assert.match(supabaseClient,/signIn=.*auth\('sign-in'/);
+ assert.match(supabaseClient,/\/api\/account\/session\/refresh/);
+ assert.doesNotMatch(supabaseClient,/auth\('token\?grant_type=password'/);
 });
 
 test('messaging failure never tells ordinary users to run SQL',()=>{

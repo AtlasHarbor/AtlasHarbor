@@ -162,6 +162,20 @@ test('verified sessions fall back to the admin account list when direct account 
  ]);
 });
 
+test('verified sessions accept the wrapped Admin get-user response used by current Supabase Auth',async()=>{
+ const fixture=signedToken(),serverEnv={...env,SUPABASE_SECRET_KEY:'sb_secret_test'},account={id:fixture.subject,user_metadata:{saved:true}},calls=[];
+ const storage=createProblemSpaceStorage({env:serverEnv,fetchImpl:async(url)=>{
+  const path=new URL(url).pathname;calls.push(path);
+  if(path==='/auth/v1/.well-known/jwks.json')return json({keys:[fixture.jwk]});
+  if(path===`/auth/v1/admin/users/${fixture.subject}`)return json({user:account});
+  throw new Error(`Unexpected request: ${path}`);
+ }});
+ const result=await storage.requestUser(request(fixture.token));
+ assert.equal(result.current.id,fixture.subject);
+ assert.equal(result.verification,'jwks');
+ assert.deepEqual(calls,['/auth/v1/.well-known/jwks.json',`/auth/v1/admin/users/${fixture.subject}`]);
+});
+
 test('a forged asymmetric bearer is rejected before any account read',async()=>{
  const trusted=signedToken(),forged=signedToken({keyPair:crypto.generateKeyPairSync('ec',{namedCurve:'P-256'}),kid:'test-signing-key'}),calls=[];
  const storage=createProblemSpaceStorage({env:{...env,SUPABASE_SECRET_KEY:'sb_secret_test'},fetchImpl:async url=>{const path=new URL(url).pathname;calls.push(path);if(path==='/auth/v1/.well-known/jwks.json')return json({keys:[trusted.jwk]});if(path==='/rest/v1/__atlas_session_verification_never_create__')return json({code:'PGRST301',message:'No suitable key or wrong key type'},401);throw new Error('a forged token must not reach account storage')}});
