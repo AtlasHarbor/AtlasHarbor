@@ -25,11 +25,13 @@ Atlas Harbor uses these browser paths:
 
 On Baseball report pages, browser transport recovery for the same-origin API is `fetch` → XHR → form navigation. The final transport applies only to authenticated workspace `PUT` requests and posts to `/api/workspaces-form/:resourceType/:resourceId`; the server delegates both routes to the same canonical save function. It is not another persistence layer.
 
-The session snapshot is not writable workspace storage. A successful API save refreshes it only as a last-confirmed read cache. Workspace browser code must never call Supabase `/auth/v1/user` to load or save workspace metadata. Authentication flows may still use Supabase Auth, but persistence stays behind the Atlas Harbor API.
+The session snapshot is not writable workspace storage. A successful API save refreshes it only as a last-confirmed read cache. Workspace browser code must never call Supabase `/auth/v1/user` to load or save workspace metadata. Password sign-in, sign-up, and refresh call the same-origin `/api/account/session/...` endpoints; the server talks to Supabase Auth and sets a signed, short-lived HttpOnly session cookie. Persistence stays behind the Atlas Harbor API.
 
 Authenticated API calls share one refresh operation per page and refresh access tokens before they expire. A request that receives `401` retries once with the newest session token. A stale or failed concurrent refresh must never clear a newer session written by another caller. The account indicator is informational and must not add a second blocking session preflight; the same-origin workspace request is authoritative for workspace access.
 
-Same-origin authenticated requests carry the user JWT in standard `Authorization: Bearer ...` and in `X-Atlas-Session`. The second header is a transport mirror, not another credential or persistence path: the server extracts one token and performs the exact same signature, claims, subject, and account verification. It is sent only to Atlas Harbor's own origin, never to Supabase or an external provider. Fetch, XHR, and form-navigation recovery preserve it, and protected workspace responses—including authentication errors—are `private, no-store` and vary on both credential headers. If fetch or XHR explicitly returns `AUTH_TOKEN_MISSING`, Baseball treats that as a credential-transport failure and continues through the existing recovery order; a save can therefore reach the canonical API through the token-bearing form body. This prevents an intermediary that omits `Authorization`, or reuses an anonymous error, from trapping a valid browser session.
+The preferred browser identity is the signed Atlas Harbor server-session cookie established by sign-in or refresh. It is HttpOnly, SameSite=Lax, expires with the Supabase access session, and contains only a signed account subject and expiry—not a workspace record or provider credential. Workspace responses are private, non-cacheable, and vary on Cookie as well as the compatibility credential headers.
+
+Existing sessions and non-browser clients may also carry the user JWT in standard `Authorization: Bearer ...` and in `X-Atlas-Session`. The second header is a transport mirror, not another credential or persistence path: the server extracts one token and performs the exact same signature, claims, subject, and account verification. It is sent only to Atlas Harbor's own origin, never to Supabase or an external provider. Fetch, XHR, and form-navigation recovery preserve it. If fetch or XHR explicitly returns `AUTH_TOKEN_MISSING`, Baseball treats that as a credential-transport failure and continues through the existing recovery order; a save can therefore reach the canonical API through the token-bearing form body.
 
 Account settings expose a prominent session card. It verifies the same workspace status endpoint and always offers **Log out and sign in again**, so a stale browser session can be deliberately replaced instead of leaving the user trapped behind a locally cached “logged in” indicator.
 
@@ -47,7 +49,7 @@ Critical account/workspace requests use the preserved native fetch transport whe
 
 **Being signed in must never change, reduce, filter, or otherwise alter the public publication list.**
 
-The list endpoint `GET /api/published-feed` is deliberately session-independent. The browser removes `Authorization` from that exact list request and sends it with omitted credentials. The server independently removes any viewer Authorization header before the published-feed router handles the list. This defense-in-depth rule makes the public list request the same whether a session exists or not.
+The list endpoint `GET /api/published-feed` is deliberately session-independent. The browser removes `Authorization` from that exact list request and sends it with omitted credentials. The server independently removes Authorization, the mirrored session header, and the Atlas Harbor session cookie before the published-feed router handles the list. This defense-in-depth rule makes the public list request the same whether a session exists or not.
 
 Public `workspace_notes` and legacy public rows are queried with the anonymous/publishable Supabase role. Do not forward the viewer's bearer token into the list request or into public table reads. Supabase RLS policies can differ between `anon` and `authenticated`; doing so previously caused signed-out users to see the correct feed while signed-in users saw an empty feed.
 
@@ -118,6 +120,12 @@ The JSON parser now accepts 1 MB and the form parser accepts 3 MB. Form parser f
 The browser still had a user and access token, but the workspace server returned `AUTH_TOKEN_MISSING`. Refreshing the JWT could not help because the failing boundary was browser-to-Atlas-Harbor transport, not Supabase token validity. Error responses also acquired `no-store` only after successful authentication, leaving missing-token responses without the protected cache policy.
 
 Same-origin authenticated requests now mirror the JWT in `X-Atlas-Session`; the server accepts that header only as input to the existing verifier. All workspace responses receive the private no-store and credential-vary policy before authentication begins. Request headers are merged consistently when fetch falls back to XHR or form navigation, and an explicit `AUTH_TOKEN_MISSING` response advances to the next transport just like a network failure.
+
+### Regression 8: repeated bearer verification blocked every save before persistence
+
+After workspace persistence moved behind Atlas Harbor, a browser could retain valid account data while the server rejected the bearer verification path. Each save then repeated the same authentication failure through all transports and refresh, even though the payload never reached the record update.
+
+Sign-in, sign-up, and refresh now establish a signed HttpOnly Atlas Harbor server session from the successful server-side Supabase Auth response. Workspace authorization resolves that signed subject with the backend account API and performs the same bounded per-resource metadata patch. Legacy bearer verification remains available for existing sessions and API clients, but it is no longer the mandatory hop for a newly authenticated browser. Logout clears both session representations, and form-navigation errors preserve their structured authentication code.
 
 ## Attachment scope
 
@@ -212,6 +220,8 @@ Regression tests must verify:
 - fetch, XHR, and form-navigation fallbacks target only the same-origin workspace API
 - one server workspace write performs one authenticated-user read and one canonical metadata update
 - concurrent access-token refreshes collapse into one request and cannot erase a newer session
+- sign-in and refresh stay behind the same-origin Atlas Harbor account-session API
+- signed HttpOnly server sessions reject tampering, expire with the access session, and can save without a bearer header
 - same-origin authenticated requests send both credential transports while cross-origin Supabase/provider requests never receive `X-Atlas-Session`
 - workspace authentication errors are private, non-cacheable, and vary on both accepted credential headers
 - the Account page exposes session verification and a prominent logout/re-authentication control

@@ -17,7 +17,7 @@ test('concurrent refresh callers share one rotating refresh-token request',async
  const next=savedSession({access_token:'new-access',refresh_token:'new-refresh'});
  const client=await loadClient(savedSession(),async url=>{
   if(url==='/api/config')return json(runtime);
-  if(String(url).includes('/auth/v1/token?grant_type=refresh_token')){refreshCalls++;startRefresh();await gate;return json(next)}
+  if(url==='/api/account/session/refresh'){refreshCalls++;startRefresh();await gate;return json(next)}
   throw new Error(`Unexpected request: ${url}`);
  });
  try{
@@ -36,7 +36,7 @@ test('freshAccessToken proactively refreshes an expired cached session',async()=
  let refreshCalls=0;
  const client=await loadClient(savedSession({expires_at:Math.floor(Date.now()/1000)-5}),async url=>{
   if(url==='/api/config')return json(runtime);
-  if(String(url).includes('/auth/v1/token?grant_type=refresh_token')){refreshCalls++;return json(savedSession({access_token:'proactive-access',refresh_token:'proactive-refresh'}))}
+  if(url==='/api/account/session/refresh'){refreshCalls++;return json(savedSession({access_token:'proactive-access',refresh_token:'proactive-refresh'}))}
   throw new Error(`Unexpected request: ${url}`);
  });
  try{
@@ -49,7 +49,7 @@ test('a stale failed refresh adopts a newer session instead of clearing it',asyn
  const newer=savedSession({access_token:'other-access',refresh_token:'other-refresh'});
  const client=await loadClient(savedSession(),async url=>{
   if(url==='/api/config')return json(runtime);
-  if(String(url).includes('/auth/v1/token?grant_type=refresh_token')){localStorage.setItem(SESSION_KEY,JSON.stringify(newer));throw new TypeError('network failed after another caller refreshed')}
+  if(url==='/api/account/session/refresh'){localStorage.setItem(SESSION_KEY,JSON.stringify(newer));throw new TypeError('network failed after another caller refreshed')}
   throw new Error(`Unexpected request: ${url}`);
  });
  try{
@@ -63,14 +63,26 @@ test('authenticatedFetch retries a rejected request with the refreshed bearer',a
  const seen=[];
  const client=await loadClient(savedSession(),async(url,options={})=>{
   if(url==='/api/config')return json(runtime);
-  if(String(url).includes('/auth/v1/token?grant_type=refresh_token'))return json(savedSession({access_token:'retry-access',refresh_token:'retry-refresh'}));
-  if(url==='/api/workspaces/status'){const headers=new Headers(options.headers);seen.push({authorization:headers.get('Authorization'),session:headers.get('X-Atlas-Session')});return seen.length===1?json({error:'expired'},401):json({ok:true,signedIn:true})}
+  if(url==='/api/account/session/refresh')return json(savedSession({access_token:'retry-access',refresh_token:'retry-refresh'}));
+  if(url==='/api/workspaces/status'){const headers=new Headers(options.headers);seen.push({authorization:headers.get('Authorization'),session:headers.get('X-Atlas-Session'),refreshRetry:options.atlasSessionRefreshRetry===true});return seen.length===1?json({error:'expired'},401):json({ok:true,signedIn:true})}
   throw new Error(`Unexpected request: ${url}`);
  });
  try{
   const response=await client.authenticatedFetch('/api/workspaces/status',{headers:{Accept:'application/json'}});
   assert.equal(response.status,200);
-  assert.deepEqual(seen,[{authorization:'Bearer old-access',session:'old-access'},{authorization:'Bearer retry-access',session:'retry-access'}]);
+  assert.deepEqual(seen,[{authorization:'Bearer old-access',session:'old-access',refreshRetry:false},{authorization:'Bearer retry-access',session:'retry-access',refreshRetry:true}]);
+ }finally{cleanup()}
+});
+
+test('sign-in and refresh stay behind the Atlas Harbor session API',async()=>{
+ const seen=[];
+ const client=await loadClient(null,async(url,options={})=>{seen.push({url,options});return json(savedSession())});
+ try{
+  await client.signIn('author@example.com','password');
+  await client.refreshSession();
+  assert.deepEqual(seen.map(item=>item.url),['/api/account/session/sign-in','/api/account/session/refresh']);
+  assert.ok(seen.every(item=>item.options.credentials==='same-origin'));
+  assert.ok(seen.every(item=>!String(item.url).includes('supabase.co')));
  }finally{cleanup()}
 });
 

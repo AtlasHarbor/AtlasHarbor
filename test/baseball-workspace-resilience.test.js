@@ -69,4 +69,6 @@ test('Baseball workspace refreshes authentication centrally without a second blo
  assert.match(client,/export async function freshAccessToken/);
  assert.match(client,/if\(refreshPromise\)return refreshPromise/);
  assert.match(client,/X-Atlas-Session/);
+ assert.match(client,/atlasSessionRefreshRetry:true/);
+ assert.match(read('../public/workspace-transport-fallback.js'),/missingResponse&&!init\.atlasSessionRefreshRetry/);
 });

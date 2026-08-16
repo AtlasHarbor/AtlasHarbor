@@ -49,6 +49,8 @@ npm run test:auth
 8. requests the same publication while authenticated;
 9. fails if the anonymous and authenticated reads do not resolve the same publication.
 
+The normal browser Account flow additionally proxies sign-in and refresh through `/api/account/session/...`, which establishes the signed HttpOnly server session used by workspace requests. Unit/integration coverage verifies that this cookie can load and save a first Baseball workspace without an Authorization header and that tampered or expired cookies are rejected. The REST smoke test intentionally retains bearer coverage for non-browser API compatibility.
+
 A successful run prints a JSON result containing the workspace ID, storage path, share token, publication title, and workspace service status.
 
 ## First-analysis browser recovery

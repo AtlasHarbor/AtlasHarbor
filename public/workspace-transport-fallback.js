@@ -93,7 +93,7 @@ function formWorkspaceRequest(input,init={}){
    if(event.origin!==location.origin||event.data?.type!=='atlas-workspace-form-result'||event.data?.requestId!==requestId)return;
    const data=event.data;finished=true;cleanup();
    if(data.ok&&data.workspace)rememberWorkspaceInSession(data.workspace);
-   resolve(new Response(JSON.stringify(data.ok?{workspace:data.workspace,storage:data.storage||'account-metadata',migratedFrom:data.migratedFrom||null}:{error:data.error||'Workspace form save failed.'}),{status:data.ok?200:(Number(data.status)||500),headers:{'Content-Type':'application/json','Cache-Control':'no-store','X-Atlas-Workspace-Recovery':'form-navigation'}}));
+   resolve(new Response(JSON.stringify(data.ok?{workspace:data.workspace,storage:data.storage||'account-metadata',migratedFrom:data.migratedFrom||null}:{error:data.error||'Workspace form save failed.',...(data.code?{code:data.code}:{})}),{status:data.ok?200:(Number(data.status)||500),headers:{'Content-Type':'application/json','Cache-Control':'no-store','X-Atlas-Workspace-Recovery':'form-navigation'}}));
   };
   frame.onload=()=>setTimeout(()=>{if(finished)return;try{const message=String(frame.contentDocument?.body?.innerText||'').trim();if(!message)return;finished=true;cleanup();reject(new TypeError(`Database form-navigation fallback failed: ${message.slice(0,240)}`))}catch{}},0);
   window.addEventListener('message',onMessage);
@@ -108,9 +108,10 @@ export function installWorkspaceTransportFallback(){
  const prior=(globalThis.__atlasNativeFetch||globalThis.fetch).bind(globalThis);
  globalThis.__atlasNativeFetch=async(input,init={})=>{
   if(!eligibleForXhrFallback(input))return prior(input,init);
-  let fetchError,xhrError;
-  try{const response=await prior(input,init);if(!await missingTokenResponse(response))return response;fetchError=new TypeError('Fetch reached the workspace API without the account token.')}catch(error){fetchError=error}
-  try{const response=await xhrRequest(input,init);if(!await missingTokenResponse(response))return response;xhrError=new TypeError('XHR reached the workspace API without the account token.')}catch(error){xhrError=error}
+  let fetchError,xhrError,missingResponse=null;
+  try{const response=await prior(input,init);if(!await missingTokenResponse(response))return response;missingResponse=response;fetchError=new TypeError('Fetch reached the workspace API without the account token.')}catch(error){fetchError=error}
+  try{const response=await xhrRequest(input,init);if(!await missingTokenResponse(response))return response;missingResponse=response;xhrError=new TypeError('XHR reached the workspace API without the account token.')}catch(error){xhrError=error}
+  if(missingResponse&&!init.atlasSessionRefreshRetry)return missingResponse;
   try{return await formWorkspaceRequest(input,init)}catch(formError){
    if(firstBaseballWorkspaceCanOpenEmpty(input,init))return emptyFirstWorkspaceResponse();
    const error=new TypeError(`Database service unavailable through fetch, XHR, and form navigation: ${formError.message}`);

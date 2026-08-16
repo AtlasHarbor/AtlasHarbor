@@ -78,7 +78,7 @@ test('workspace status reports the server-side JWKS verification strategy',async
   const response=await fetch(`${base}/api/workspaces/status`),data=await response.json();
   assert.equal(response.status,200);
   assert.equal(data.signedIn,false);
-  assert.equal(data.userSessionVerification,'jwks-or-postgrest-admin-with-auth-fallback');
+  assert.equal(data.userSessionVerification,'server-session-cookie-or-jwks-postgrest-auth-fallback');
   assert.equal(data.sessionVerification,'missing');
  });
 });
