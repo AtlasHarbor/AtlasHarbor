@@ -1,4 +1,6 @@
 import{user,ai,authenticatedFetch}from'./supabase-client.js';
+import{installWorkspaceTransportFallback}from'./workspace-transport-fallback.js';
+installWorkspaceTransportFallback();
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':'&quot;',"'":'&#39;'})[char]);
 const safeHtml=html=>{const template=document.createElement('template');template.innerHTML=html;for(const element of template.content.querySelectorAll('script,style,iframe,object,embed'))element.remove();for(const element of template.content.querySelectorAll('*'))for(const attribute of[...element.attributes])if(/^on/i.test(attribute.name)||attribute.name==='srcdoc')element.removeAttribute(attribute.name);return template.innerHTML};
 const cleanScenarios=value=>(Array.isArray(value)?value:[]).map(item=>({label:String(item?.label||''),date:String(item?.date||''),probability:item?.probability==null?'':String(item.probability)})).filter(item=>item.label||item.date||item.probability);

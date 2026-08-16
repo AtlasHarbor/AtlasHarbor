@@ -73,9 +73,33 @@ These are transports, not separate stores.
 
 Workspace recovery does not depend on `fetch('/api/config')` and does not call Supabase persistence endpoints from the browser. Password sign-in, sign-up, and token refresh go through `/api/account/session/...`; Atlas Harbor exchanges the credential with Supabase Auth server-side and establishes a short-lived signed HttpOnly session cookie. Analysis persistence remains behind Atlas Harbor's same-origin API.
 
-Baseball additionally installs `workspace-transport-fallback.js`. It first retries a failed browser `fetch()` to `/api/workspaces/...` using `XMLHttpRequest`. If both scripted transports fail during an authenticated `PUT`, it submits the same payload and access token through a hidden same-origin form to `/api/workspaces-form/...`. Every path invokes the same server save function and writes the same canonical account record; none creates a Baseball-specific or device-only store. This matters for a player's **first** analysis, because there may be no matching session-metadata row to recover yet.
+`workspace.js` installs `workspace-transport-fallback.js` for every shared analytical editor. It first retries a failed browser `fetch()` to `/api/workspaces/...` using `XMLHttpRequest`. If both scripted transports fail during an authenticated `PUT`, it submits the same payload and access token through a hidden same-origin form to `/api/workspaces-form/...`. Every path invokes the same server save function and writes the same canonical account record; none creates a Problem-Space-specific or device-only store. Baseball additionally has a read-only first-player recovery rule: if all GET transports fail and the authenticated session proves that no player record exists yet, the editor may open empty, but its first save must still reach the canonical API.
 
 If every database transport fails and no matching authenticated account record is already available, show a retryable database error. Do not fabricate an editable local copy.
+
+### Exact shared account and workspace-save flow
+
+This is the complete browser-to-database path. It applies to every analytical Problem Space; Baseball does not have a separate post database or authorization model.
+
+1. **Create account:** the browser posts the email and password to `POST /api/account/session/sign-up` on Atlas Harbor. Atlas Harbor calls Supabase Auth server-side. If the project returns a new user without a session because **Confirm email** is enabled, Atlas Harbor confirms that exact newly returned user ID with the server-only Admin API, immediately performs the password grant, and returns a usable session. A new user never has to click an email confirmation link.
+2. **Sign in or refresh:** the browser uses `POST /api/account/session/sign-in` or `/refresh`. Atlas Harbor performs the Supabase Auth exchange server-side and sets `atlas_harbor_session`, a signed, short-lived, `HttpOnly`, `SameSite=Lax`, production-`Secure` cookie. The cookie contains only the account UUID and access-session expiry.
+3. **Open a post editor:** every surface calls the same `mountWorkspace()` from `public/workspace.js` with a `resource.type` and `resource.id`.
+4. **Load or save:** `mountWorkspace()` calls `GET` or `PUT /api/workspaces/:resourceType/:resourceId` with same-origin credentials. The browser never calls Supabase Auth metadata or a Supabase table to persist the post.
+5. **Authorize on Atlas Harbor:** `createProblemSpaceStorage()` verifies the signed server cookie and loads that exact account with the backend secret. Existing JWT/JWKS, PostgREST, mirrored-header, and form-token verification remain compatibility paths, not the normal browser dependency.
+6. **Write one bounded record:** the server updates only `user_metadata[atlas_workspace_record_v2_<resource-key>]`. It does not resend the player page, every prior post, game progress, or unrelated Problem Space data.
+7. **Return the canonical row:** the same response supplies the saved draft or the published row and compact share token. The UI does not perform a second publication write.
+
+| Surface | Canonical `resource_type` values |
+| --- | --- |
+| Baseball Intelligence | `baseball_player`, `baseball_game`, `baseball_team` |
+| Legal Systems Tracker | `legal_case` |
+| Economics | `economics_story` |
+| Life Sciences | `life_science_problem` |
+| Propositions | `go_to_market_report` |
+| Lead Discovery | `lead_project` |
+| Logistics Planner | `logistics_project` |
+
+The server-session and workspace integration test saves all of these resource types through the same cookie and API. A change is incomplete if it fixes only a Baseball route or only an existing-record load.
 
 ## Contract B — logistics game career
 
@@ -201,6 +225,26 @@ The workspace API rejected authentication before reading or writing the player r
 
 **Fix:** password sign-in, sign-up, and refresh now terminate at the same-origin Atlas Harbor account-session API. A successful Supabase Auth response establishes a signed, short-lived, HttpOnly, SameSite server session. Workspace reads and writes resolve that server-verified account subject directly with the backend credential instead of re-proving the browser bearer on every request. JWT/JWKS, PostgREST, mirrored-header, and form-token verification remain compatibility paths for existing sessions and non-browser API clients. Logout clears both the browser session and the HttpOnly Atlas Harbor session. The form adapter also preserves the server authentication code instead of collapsing it into an unclassified 401.
 
+What we were editing in the wrong layer:
+
+- We treated a pre-write authentication failure like a database or payload failure. Raising parser limits cannot fix `AUTH_TOKEN_MISSING` or an unverified account session.
+- We kept adding bearer-verification and browser-transport fallbacks. Repeating the same rejected identity through fetch, XHR, form navigation, and refresh only made the error take longer.
+- We focused on Baseball because that is where the failure was observed. The editor and persistence route are shared by Legal and every other analytical Problem Space, so the durable fix belongs in the shared account/session and workspace layers.
+- We trusted “Logged in” browser state as proof that the server had a usable identity. Cached account data can display old posts even when a new server request cannot authenticate.
+- Earlier recovery work let browser code approach Supabase Auth metadata directly. Workspace persistence must never leave the Atlas Harbor API boundary.
+
+Use the structured code to choose the layer before editing:
+
+| Response | Failure stage | Correct investigation |
+| --- | --- | --- |
+| `413 Content Too Large` | Request parser, before authentication/save | Confirm JSON/form limits and the bounded one-record payload. |
+| `AUTH_TOKEN_MISSING` | Browser/CDN-to-Atlas-Harbor credential boundary | Check same-origin cookie/header delivery; do not change database code. |
+| `AUTH_TOKEN_REJECTED` or `AUTH_SESSION_UNVERIFIED` | Server identity verification | Check session expiry, cookie signature, issuer/claims, and backend account lookup. |
+| Auth succeeds but save returns `5xx` | Canonical account read/write | Inspect the one Admin user read and one partial metadata update. |
+| Existing post displays but a new post cannot save | Read-only session snapshot may be masking API failure | Test a first record through the authenticated API; never infer write health from cached display. |
+
+Permanent guardrail: a signup must return an access token and establish the server cookie in the same request. The Account page must never tell a newly created user to “check email if confirmation is enabled.”
+
 ## Public-feed invariant
 
 **Logging in must never make `/published` show fewer public stories.**
@@ -316,6 +360,7 @@ SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 SUPABASE_PUBLISHABLE_KEY=YOUR_SUPABASE_PUBLISHABLE_KEY
 SUPABASE_SECRET_KEY=YOUR_SUPABASE_SECRET_KEY
 SUPABASE_JWKS_URL=https://YOUR_PROJECT_REF.supabase.co/auth/v1/.well-known/jwks.json
+ATLAS_SESSION_SECRET=OPTIONAL_SEPARATE_LONG_RANDOM_COOKIE_SIGNING_SECRET
 PUBLIC_APP_URL=http://localhost:3000
 ADMIN_ENCRYPTION_KEY=YOUR_LONG_STABLE_RANDOM_SECRET
 COURTLISTENER_API_TOKEN=OPTIONAL_COURTLISTENER_TOKEN
@@ -324,6 +369,8 @@ GOOGLE_PLACES_API_KEY=OPTIONAL_SERVER_SIDE_GOOGLE_PLACES_KEY
 MAP_PROVIDER=openstreetmap
 MAP_TILE_URL=https://tile.openstreetmap.org/{z}/{x}/{y}.png
 ```
+
+`SUPABASE_SECRET_KEY` is required for canonical workspace persistence and for immediately activating a new email/password account when Supabase Confirm email is enabled. `ATLAS_SESSION_SECRET` is optional; when omitted, Atlas Harbor derives the cookie-signing key from the Supabase server secret. Neither secret is sent to the browser.
 
 ## Run locally
 
