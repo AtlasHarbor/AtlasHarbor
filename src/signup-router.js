@@ -19,6 +19,7 @@ const scrypt=(password,salt)=>new Promise((resolve,reject)=>crypto.scrypt(passwo
 
 function clean(value,max=500){return String(value??'').trim().slice(0,max)}
 function normalizeEmail(value){return clean(value,320).toLowerCase()}
+function consented(value){return value===true||['true','1','on','yes'].includes(String(value||'').toLowerCase())}
 function allowedOrigins(env){
  const configured=clean(env.SIGNUP_ALLOWED_ORIGINS,2000).split(',').map(x=>x.trim()).filter(Boolean);
  return new Set(configured.length?configured:['https://twpventures.com','https://www.twpventures.com','http://localhost:8888','http://localhost:3000','http://127.0.0.1:8888','http://127.0.0.1:3000']);
@@ -47,13 +48,7 @@ async function parse(response){
 function createStore(env,fetchImpl){
  const base=clean(env.SUPABASE_URL,500),publishable=clean(env.SUPABASE_PUBLISHABLE_KEY,1000),secret=supabaseSecretKey(env);
  const configured=Boolean(base&&publishable&&secret);
- const userHeaders=token=>({apikey:publishable,Authorization:`Bearer ${token}`,'Content-Type':'application/json'});
  const serviceHeaders=()=>supabaseServiceHeaders(secret);
- async function currentUser(token){
-  if(!configured||!token)return null;
-  const response=await fetchImpl(`${base}/auth/v1/user`,{headers:userHeaders(token)});
-  return response.ok?response.json():null;
- }
  async function masterAccount(){
   if(!configured)throw Object.assign(new Error('Signup storage is not configured.'),{status:503});
   const response=await fetchImpl(`${base}/auth/v1/admin/users?per_page=1000`,{headers:serviceHeaders()});
@@ -64,9 +59,9 @@ function createStore(env,fetchImpl){
  }
  async function saveRegistry(account,registry){
   const metadata={...(account.user_metadata||{}),atlas_signup_registry:registry};
-  await parse(fetchImpl(`${base}/auth/v1/admin/users/${account.id}`,{method:'PUT',headers:serviceHeaders(),body:JSON.stringify({user_metadata:metadata})}));
+  await parse(await fetchImpl(`${base}/auth/v1/admin/users/${account.id}`,{method:'PUT',headers:serviceHeaders(),body:JSON.stringify({user_metadata:metadata})}));
  }
- return{configured,currentUser,masterAccount,saveRegistry};
+ return{configured,masterAccount,saveRegistry};
 }
 function registryFor(account){
  const saved=account?.user_metadata?.atlas_signup_registry||{},apps={...(saved.apps||{})};
@@ -76,31 +71,53 @@ function registryFor(account){
 function withWriteLock(task){
  const run=writeQueue.then(task,task);writeQueue=run.catch(()=>{});return run;
 }
+function safeScriptJson(value){
+ return JSON.stringify(value).replace(/</g,'\\u003c').replace(/>/g,'\\u003e').replace(/&/g,'\\u0026');
+}
+
 export function createSignupRouter({env=process.env,fetchImpl=globalThis.fetch}={}){
  const router=express.Router(),store=createStore(env,fetchImpl),accountStorage=createProblemSpaceStorage({env,fetchImpl});
+
+ async function submitSignup(payload,req){
+  if(!rateAllowed(req))throw Object.assign(new Error('Too many signup attempts. Please try again later.'),{status:429});
+  const app=clean(payload?.app,80),definition=APP_DEFINITIONS[app],name=clean(payload?.name,120),email=normalizeEmail(payload?.email),source=clean(payload?.source,700),honeypot=clean(payload?.website,300),consent=consented(payload?.consent);
+  if(honeypot)return{ok:true,existing:false,app:definition?.name||'TWP app',appSlug:app,bot:true};
+  if(!definition)throw Object.assign(new Error('Unknown app signup list.'),{status:400});
+  if(!emailPattern.test(email))throw Object.assign(new Error('Enter a valid email address.'),{status:400});
+  if(!consent)throw Object.assign(new Error('Consent is required for launch updates.'),{status:400});
+  const result=await withWriteLock(async()=>{
+   const account=await store.masterAccount(),registry=registryFor(account),now=new Date().toISOString(),index=registry.signups.findIndex(item=>item.app_slug===app&&normalizeEmail(item.email)===email);
+   let existing=index>=0,row;
+   if(existing){row={...registry.signups[index],name:name||registry.signups[index].name,email,source:source||registry.signups[index].source,consent:true,updatedAt:now};registry.signups[index]=row}
+   else{
+    if(registry.signups.length>=MAX_SIGNUPS)throw Object.assign(new Error('The launch list is temporarily full. Please contact TWP Ventures directly.'),{status:507});
+    row={id:crypto.randomUUID(),app_slug:app,app_name:definition.name,name,email,source,consent:true,createdAt:now,updatedAt:now};registry.signups.unshift(row);
+   }
+   registry.apps[app]={...(registry.apps[app]||definition),...definition,updatedAt:now};
+   registry.updatedAt=now;await store.saveRegistry(account,registry);return{existing,row};
+  });
+  return{ok:true,existing:result.existing,app:definition.name,appSlug:definition.slug};
+ }
+
  router.options('/api/app-signups',(req,res)=>cors(req,res,env)?res.status(204).end():res.status(403).end());
  router.post('/api/app-signups',async(req,res)=>{
   if(!cors(req,res,env))return res.status(403).json({error:'This signup form is not allowed from this origin.'});
-  if(!rateAllowed(req))return res.status(429).json({error:'Too many signup attempts. Please try again later.'});
-  const app=clean(req.body?.app,80),definition=APP_DEFINITIONS[app],name=clean(req.body?.name,120),email=normalizeEmail(req.body?.email),source=clean(req.body?.source,700),honeypot=clean(req.body?.website,300),consent=req.body?.consent===true;
-  if(honeypot)return res.status(202).json({ok:true});
-  if(!definition)return res.status(400).json({error:'Unknown app signup list.'});
-  if(!emailPattern.test(email))return res.status(400).json({error:'Enter a valid email address.'});
-  if(!consent)return res.status(400).json({error:'Consent is required for launch updates.'});
   try{
-   const result=await withWriteLock(async()=>{
-    const account=await store.masterAccount(),registry=registryFor(account),now=new Date().toISOString(),index=registry.signups.findIndex(item=>item.app_slug===app&&normalizeEmail(item.email)===email);
-    let existing=index>=0,row;
-    if(existing){row={...registry.signups[index],name:name||registry.signups[index].name,email,source:source||registry.signups[index].source,consent:true,updatedAt:now};registry.signups[index]=row}
-    else{
-     if(registry.signups.length>=MAX_SIGNUPS)throw Object.assign(new Error('The launch list is temporarily full. Please contact TWP Ventures directly.'),{status:507});
-     row={id:crypto.randomUUID(),app_slug:app,app_name:definition.name,name,email,source,consent:true,createdAt:now,updatedAt:now};registry.signups.unshift(row);
-    }
-    registry.apps[app]={...(registry.apps[app]||definition),...definition,updatedAt:now};
-    registry.updatedAt=now;await store.saveRegistry(account,registry);return{existing,row};
-   });
-   return res.status(result.existing?200:201).json({ok:true,existing:result.existing,app:definition.name,appSlug:definition.slug});
-  }catch(error){console.error('app signup failed',error);return res.status(error.status||500).json({error:error.message||'Could not save signup.'})}
+   const result=await submitSignup(req.body||{},req);
+   return res.status(result.existing?200:201).json(result);
+  }catch(error){
+   console.error('app signup failed',error);
+   return res.status(error.status||500).json({error:error.message||'Could not save signup.'});
+  }
+ });
+
+ router.post('/api/app-signups-form',express.urlencoded({extended:false,limit:'32kb'}),async(req,res)=>{
+  const requestedOrigin=clean(req.body?.parentOrigin,500),allowed=allowedOrigins(env),targetOrigin=allowed.has(requestedOrigin)?requestedOrigin:'https://twpventures.com';
+  let payload;
+  try{payload=await submitSignup(req.body||{},req)}
+  catch(error){console.error('app signup form failed',error);payload={ok:false,error:error.message||'Could not save signup.'}}
+  res.set('Cache-Control','no-store');
+  res.type('html').send(`<!doctype html><meta charset="utf-8"><script>window.parent.postMessage(${safeScriptJson({type:'atlas-app-signup-result',...payload})},${safeScriptJson(targetOrigin)});<\/script>`);
  });
 
  async function verifyAdmin(req){
