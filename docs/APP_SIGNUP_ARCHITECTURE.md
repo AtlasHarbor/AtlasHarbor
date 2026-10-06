@@ -105,10 +105,10 @@ CORS is not authentication. It reduces accidental browser misuse, but a public s
 
 The API requires both:
 
-1. a valid signed-in Atlas Harbor user access token
+1. a valid signed-in Atlas Harbor account session. The preferred path is the signed HttpOnly Atlas Harbor server-session cookie, with the existing bearer/header verification retained as a compatibility fallback.
 2. the existing Atlas Harbor admin password
 
-The signed-in user must already have an admin role in `user_metadata.atlas_admin.roles`. This is the same identity model used by the current admin dashboard. The signup page reuses the existing browser session and `atlas-admin-password` session-storage value when the administrator has already unlocked the main admin dashboard.
+The signed-in user must already have an admin role in `user_metadata.atlas_admin.roles`. This is the same identity model used by the current admin dashboard. The `/signups` page must not require `accessToken()` to exist before contacting the server, because Atlas Harbor may have a valid server session even when the browser token cache is absent or stale. The signup page reuses the existing browser session and `atlas-admin-password` session-storage value when the administrator has already unlocked the main admin dashboard.
 
 The admin page groups signups by app, supports app filtering and name/email search, and exports the current filtered list as CSV in the browser.
 
