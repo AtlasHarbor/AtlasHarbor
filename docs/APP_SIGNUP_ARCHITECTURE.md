@@ -142,7 +142,9 @@ Keep RLS enabled and revoke direct `anon` and `authenticated` table access. The 
 
 ## Decision launch pages
 
-The initial client is TWP Ventures:
+The signup dashboard registers the current TWP app portfolio, including released apps with zero signups, so the administrator can see one consolidated app list. The current registry includes Slip and Jump, Bible with Original Names, Decision: IQ Improver & Mazes, and Pitch Recognition.
+
+The initial public signup client is TWP Ventures:
 
 - `https://twpventures.com/Decision-IQ-Improver/`
 - `https://twpventures.com/Decision-IQ-Improver/1/`
