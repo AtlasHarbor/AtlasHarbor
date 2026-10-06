@@ -1,6 +1,7 @@
 import express from 'express';
 import crypto from 'node:crypto';
 import {supabaseSecretKey,supabaseServiceHeaders} from './supabase-server-key.js';
+import {createProblemSpaceStorage} from './problem-space-storage.js';
 
 const APP_DEFINITIONS={
   'slip-and-jump':{slug:'slip-and-jump',name:'Slip and Jump',status:'released'},
@@ -76,7 +77,7 @@ function withWriteLock(task){
  const run=writeQueue.then(task,task);writeQueue=run.catch(()=>{});return run;
 }
 export function createSignupRouter({env=process.env,fetchImpl=globalThis.fetch}={}){
- const router=express.Router(),store=createStore(env,fetchImpl);
+ const router=express.Router(),store=createStore(env,fetchImpl),accountStorage=createProblemSpaceStorage({env,fetchImpl});
  router.options('/api/app-signups',(req,res)=>cors(req,res,env)?res.status(204).end():res.status(403).end());
  router.post('/api/app-signups',async(req,res)=>{
   if(!cors(req,res,env))return res.status(403).json({error:'This signup form is not allowed from this origin.'});
@@ -103,22 +104,21 @@ export function createSignupRouter({env=process.env,fetchImpl=globalThis.fetch}=
  });
 
  async function verifyAdmin(req){
-  const token=clean(req.get('authorization'),5000).replace(/^Bearer\s+/i,''),current=await store.currentUser(token);
-  if(!current)throw Object.assign(new Error('Sign in required.'),{status:401});
-  const config=current.user_metadata?.atlas_admin,role=config?.roles?.[current.id];
+  const {current,verification}=await accountStorage.requestUser(req);
+  const config=current?.user_metadata?.atlas_admin,role=config?.roles?.[current.id];
   if(!config||!role)throw Object.assign(new Error('Administrator required.'),{status:403});
   const provided=clean(req.get('x-admin-password'),1000);
   if(!provided)throw Object.assign(new Error('Admin password required.'),{status:401});
   const hash=await scrypt(provided,config.passwordSalt);
   if(hash!==config.passwordHash)throw Object.assign(new Error('Invalid admin password.'),{status:401});
-  return{current,role};
+  return{current,role,verification};
  }
  router.get('/api/admin/signups',async(req,res)=>{
   try{
    const admin=await verifyAdmin(req),account=await store.masterAccount(),registry=registryFor(account);
    const apps=Object.values(registry.apps).map(app=>({...app,count:registry.signups.filter(item=>item.app_slug===app.slug).length}));
    const signups=registry.signups.map(({id,app_slug,app_name,name,email,source,createdAt,updatedAt})=>({id,app_slug,app_name,name,email,source,createdAt,updatedAt}));
-   res.set('Cache-Control','no-store');return res.json({role:admin.role,storage:'supabase-master-account-metadata',apps,signups,updatedAt:registry.updatedAt});
+   res.set('Cache-Control','no-store');return res.json({role:admin.role,sessionVerification:admin.verification,storage:'supabase-master-account-metadata',apps,signups,updatedAt:registry.updatedAt});
   }catch(error){return res.status(error.status||500).json({error:error.message||'Could not load signups.'})}
  });
  return router;
