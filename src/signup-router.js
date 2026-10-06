@@ -3,7 +3,10 @@ import crypto from 'node:crypto';
 import {supabaseSecretKey,supabaseServiceHeaders} from './supabase-server-key.js';
 
 const APP_DEFINITIONS={
-  'decision-iq-improver':{slug:'decision-iq-improver',name:'Decision: IQ Improver & Mazes',status:'prelaunch'}
+  'slip-and-jump':{slug:'slip-and-jump',name:'Slip and Jump',status:'released'},
+  'bible-with-original-names':{slug:'bible-with-original-names',name:'Bible with Original Names',status:'released'},
+  'decision-iq-improver':{slug:'decision-iq-improver',name:'Decision: IQ Improver & Mazes',status:'prelaunch'},
+  'pitch-recognition':{slug:'pitch-recognition',name:'Pitch Recognition',status:'prelaunch'}
 };
 const MAX_SIGNUPS=2500;
 const WINDOW_MS=10*60*1000;
