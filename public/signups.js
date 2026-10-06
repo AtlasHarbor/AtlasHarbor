@@ -1,9 +1,10 @@
-import {accessToken,user} from './supabase-client.js';
+import {accessToken} from './supabase-client.js';
 const q=s=>document.querySelector(s);let password=sessionStorage.getItem('atlas-admin-password')||'',data=null;
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 async function load(){
- const token=accessToken();if(!token)throw new Error('Sign in to Atlas Harbor first, then return to /signups.');
- const response=await fetch('/api/admin/signups',{headers:{Authorization:`Bearer ${token}`,'X-Admin-Password':password},cache:'no-store'});
+ const token=accessToken(),headers={'X-Admin-Password':password};
+ if(token)headers.Authorization=`Bearer ${token}`;
+ const response=await fetch('/api/admin/signups',{credentials:'same-origin',headers,cache:'no-store'});
  const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||'Could not load signups.');data=body;render();return body;
 }
 function filtered(){
@@ -25,5 +26,5 @@ function csv(){
 }
 q('[data-unlock-form]').addEventListener('submit',async e=>{e.preventDefault();password=new FormData(e.currentTarget).get('password');q('[data-status]').textContent='Checking admin access...';try{await load();sessionStorage.setItem('atlas-admin-password',password)}catch(error){q('[data-status]').textContent=error.message}});
 q('[data-refresh]').onclick=()=>load().catch(error=>q('[data-dashboard-status]').textContent=error.message);q('[data-export]').onclick=csv;q('[data-app-filter]').onchange=renderRows;q('[data-search]').oninput=renderRows;
-if(!user())q('[data-auth-note]').innerHTML='You are not signed in. <a href="/account">Sign in to Atlas Harbor</a>, then return here.';
-if(password&&user())load().catch(()=>{password='';sessionStorage.removeItem('atlas-admin-password')});
+q('[data-auth-note]').innerHTML='If Atlas Harbor already shows you as logged in, enter the existing admin password below. <a href="/account">Open Account</a> only if you need to sign in again.';
+if(password)load().catch(()=>{password='';sessionStorage.removeItem('atlas-admin-password')});
