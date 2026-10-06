@@ -99,7 +99,7 @@ export function createSignupRouter({env=process.env,fetchImpl=globalThis.fetch}=
     registry.apps[app]={...(registry.apps[app]||definition),...definition,updatedAt:now};
     registry.updatedAt=now;await store.saveRegistry(account,registry);return{existing,row};
    });
-   return res.status(result.existing?200:201).json({ok:true,existing:result.existing});
+   return res.status(result.existing?200:201).json({ok:true,existing:result.existing,app:definition.name,appSlug:definition.slug});
   }catch(error){console.error('app signup failed',error);return res.status(error.status||500).json({error:error.message||'Could not save signup.'})}
  });
 
