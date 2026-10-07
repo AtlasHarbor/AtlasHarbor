@@ -46,6 +46,8 @@ Shape:
       "name": "Example",
       "email": "person@example.com",
       "source": "https://twpventures.com/Decision-IQ-Improver/1/",
+      "ip": "203.0.113.10",
+      "region": "City, Region, Country",
       "consent": true,
       "createdAt": "ISO timestamp",
       "updatedAt": "ISO timestamp"
@@ -83,6 +85,8 @@ The endpoint:
 - normalizes email addresses to lowercase
 - validates consent
 - deduplicates on app plus email
+- records the request IP address server-side
+- records a best-effort region only when the hosting/proxy request already supplies city/region/country headers; it does not send signup IPs to a third-party geolocation service
 - serializes writes in-process to reduce read-modify-write collisions
 - applies a small in-memory rate limit
 - accepts browser CORS requests only from the configured TWP origins
@@ -103,14 +107,13 @@ CORS is not authentication. It reduces accidental browser misuse, but a public s
 
 `/signups`
 
-The API requires both:
+The API requires a valid signed-in Atlas Harbor account session. The preferred path is the signed HttpOnly Atlas Harbor server-session cookie, with the existing bearer/header verification retained as a compatibility fallback.
 
-1. a valid signed-in Atlas Harbor account session. The preferred path is the signed HttpOnly Atlas Harbor server-session cookie, with the existing bearer/header verification retained as a compatibility fallback.
-2. the existing Atlas Harbor admin password
+Signup visibility is limited to the Atlas Harbor master-administrator identity already stored in `user_metadata.atlas_admin.masterUserId`. The signup dashboard deliberately does **not** require the separate admin password used by the broader admin control panel. This avoids putting an email allow-list in public browser code while still limiting the page to the one account that owns the Atlas Harbor admin configuration.
 
-The signed-in user must already have an admin role in `user_metadata.atlas_admin.roles`. This is the same identity model used by the current admin dashboard. The `/signups` page must not require `accessToken()` to exist before contacting the server, because Atlas Harbor may have a valid server session even when the browser token cache is absent or stale. The signup page reuses the existing browser session and `atlas-admin-password` session-storage value when the administrator has already unlocked the main admin dashboard.
+The `/signups` page contacts the server first, so a valid server session works even when the browser token cache is absent or stale. If there is no session, it presents the normal Atlas Harbor email/password sign-in form. If a different account is signed in, the API returns a generic unauthorized-account message without disclosing which account is allowed.
 
-The admin page groups signups by app, supports app filtering and name/email search, and exports the current filtered list as CSV in the browser.
+The admin page groups signups by app, lets each app card act as a filter, supports name/email/IP/region search, shows name, email, IP address, best-effort region, signup date, and source, and exports the current filtered list as CSV in the browser.
 
 ## Why this does not use the connected Supabase integration
 
@@ -135,6 +138,8 @@ Recommended table fields:
 - `source text`
 - `consent boolean`
 - `created_at timestamptz`
+- `ip text`
+- `region text`
 - `updated_at timestamptz`
 - unique constraint on normalized `app_slug + email`
 
