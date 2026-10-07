@@ -1,1 +1,55 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>App Signups | Atlas Harbor Admin</title><link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/signups.css"><script type="module" src="/signups.js"></script></head><body><header><a href="/admin">Atlas Harbor Admin</a><span>App launch signups</span></header><main><section class="hero"><p class="eyebrow">TWP Ventures</p><h1>Launch signups</h1><p>View people who asked for access or launch updates for TWP apps. Every signup is labeled with the specific app they chose. This page uses the same Atlas Harbor signed-in session and admin password as the main admin dashboard.</p></section><section class="unlock" data-unlock><h2>Unlock signups</h2><p data-auth-note>If Atlas Harbor already shows you as logged in, just enter the existing admin password.</p><form data-unlock-form><input type="password" name="password" placeholder="Admin password" autocomplete="current-password" required><button>Open signups</button></form><p class="status" data-status></p></section><section class="dashboard" data-dashboard hidden><div class="toolbar"><div><p class="eyebrow">Signup lists</p><h2 data-count>0 signups</h2></div><div><button data-refresh>Refresh</button><button data-export>Export CSV</button></div></div><div class="apps" data-apps></div><div class="filters"><label>App <select data-app-filter><option value="">All apps</option></select></label><label>Search <input data-search placeholder="Name or email"></label></div><div class="table-wrap"><table><thead><tr><th>App</th><th>Name</th><th>Email</th><th>Signed up</th><th>Source</th></tr></thead><tbody data-rows></tbody></table></div><p class="status" data-dashboard-status></p></section></main></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>App Signups | Atlas Harbor</title>
+  <link rel="icon" href="/favicon.svg">
+  <link rel="stylesheet" href="/signups.css">
+  <script type="module" src="/signups.js"></script>
+</head>
+<body>
+  <header><a href="/admin">Atlas Harbor</a><span>App signups</span></header>
+  <main>
+    <section class="hero">
+      <p class="eyebrow">TWP VENTURES</p>
+      <h1>App signups</h1>
+      <p>See launch and app-link requests across the TWP app portfolio. Access is tied to the authorized Atlas Harbor account session; there is no separate signup-dashboard password.</p>
+    </section>
+
+    <section class="unlock" data-auth-card hidden>
+      <h2>Sign in</h2>
+      <p data-auth-note>Sign in with the authorized Atlas Harbor account to view app signups.</p>
+      <form data-signin-form>
+        <label>Email<input type="email" name="email" autocomplete="email" required></label>
+        <label>Password<input type="password" name="password" autocomplete="current-password" required></label>
+        <button>Sign in</button>
+      </form>
+      <p class="status" data-auth-status aria-live="polite"></p>
+    </section>
+
+    <section class="dashboard" data-dashboard hidden>
+      <div class="toolbar">
+        <div><p class="eyebrow">SIGNUP LISTS</p><h2 data-count>0 signups</h2></div>
+        <div><button data-refresh>Refresh</button><button data-export>Export CSV</button><button class="secondary" data-signout>Sign out</button></div>
+      </div>
+
+      <div class="apps" data-apps></div>
+
+      <div class="filters">
+        <label>App <select data-app-filter><option value="">All apps</option></select></label>
+        <label>Search <input data-search placeholder="Name or email"></label>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>App</th><th>Name</th><th>Email</th><th>IP</th><th>Region</th><th>Signed up</th><th>Source</th></tr></thead>
+          <tbody data-rows></tbody>
+        </table>
+      </div>
+      <p class="status" data-dashboard-status></p>
+    </section>
+  </main>
+</body>
+</html>
