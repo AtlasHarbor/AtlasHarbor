@@ -15,10 +15,22 @@ const MAX_PER_WINDOW=12;
 const emailPattern=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const rateBuckets=new Map();
 let writeQueue=Promise.resolve();
-const scrypt=(password,salt)=>new Promise((resolve,reject)=>crypto.scrypt(password,salt,64,(error,key)=>error?reject(error):resolve(key.toString('hex'))));
 
 function clean(value,max=500){return String(value??'').trim().slice(0,max)}
 function normalizeEmail(value){return clean(value,320).toLowerCase()}
+function firstHeader(req,names=[]){for(const name of names){const value=clean(req.get?.(name),300);if(value)return value}return''}
+function clientIp(req){
+ const forwarded=firstHeader(req,['cf-connecting-ip','x-nf-client-connection-ip','x-real-ip','x-forwarded-for']);
+ const raw=(forwarded||clean(req.ip||req.socket?.remoteAddress||'',300)).split(',')[0].trim();
+ return clean(raw.replace(/^::ffff:/,''),120);
+}
+function clientRegion(req){
+ const city=firstHeader(req,['x-vercel-ip-city','cf-ipcity','x-client-city']);
+ const region=firstHeader(req,['x-vercel-ip-country-region','cf-region','x-client-region']);
+ const country=firstHeader(req,['x-vercel-ip-country','cf-ipcountry','x-country-code']);
+ const parts=[city,region,country].filter(Boolean);
+ return clean([...new Set(parts)].join(', '),180);
+}
 function consented(value){return value===true||['true','1','on','yes'].includes(String(value||'').toLowerCase())}
 function allowedOrigins(env){
  const configured=clean(env.SIGNUP_ALLOWED_ORIGINS,2000).split(',').map(x=>x.trim()).filter(Boolean);
@@ -80,7 +92,7 @@ export function createSignupRouter({env=process.env,fetchImpl=globalThis.fetch}=
 
  async function submitSignup(payload,req){
   if(!rateAllowed(req))throw Object.assign(new Error('Too many signup attempts. Please try again later.'),{status:429});
-  const app=clean(payload?.app,80),definition=APP_DEFINITIONS[app],name=clean(payload?.name,120),email=normalizeEmail(payload?.email),source=clean(payload?.source,700),honeypot=clean(payload?.website,300),consent=consented(payload?.consent);
+  const app=clean(payload?.app,80),definition=APP_DEFINITIONS[app],name=clean(payload?.name,120),email=normalizeEmail(payload?.email),source=clean(payload?.source,700),honeypot=clean(payload?.website,300),consent=consented(payload?.consent),ip=clientIp(req),region=clientRegion(req);
   if(honeypot)return{ok:true,existing:false,app:definition?.name||'TWP app',appSlug:app,bot:true};
   if(!definition)throw Object.assign(new Error('Unknown app signup list.'),{status:400});
   if(!emailPattern.test(email))throw Object.assign(new Error('Enter a valid email address.'),{status:400});
@@ -88,10 +100,10 @@ export function createSignupRouter({env=process.env,fetchImpl=globalThis.fetch}=
   const result=await withWriteLock(async()=>{
    const account=await store.masterAccount(),registry=registryFor(account),now=new Date().toISOString(),index=registry.signups.findIndex(item=>item.app_slug===app&&normalizeEmail(item.email)===email);
    let existing=index>=0,row;
-   if(existing){row={...registry.signups[index],name:name||registry.signups[index].name,email,source:source||registry.signups[index].source,consent:true,updatedAt:now};registry.signups[index]=row}
+   if(existing){row={...registry.signups[index],name:name||registry.signups[index].name,email,source:source||registry.signups[index].source,ip:ip||registry.signups[index].ip||'',region:region||registry.signups[index].region||'',consent:true,updatedAt:now};registry.signups[index]=row}
    else{
     if(registry.signups.length>=MAX_SIGNUPS)throw Object.assign(new Error('The launch list is temporarily full. Please contact TWP Ventures directly.'),{status:507});
-    row={id:crypto.randomUUID(),app_slug:app,app_name:definition.name,name,email,source,consent:true,createdAt:now,updatedAt:now};registry.signups.unshift(row);
+    row={id:crypto.randomUUID(),app_slug:app,app_name:definition.name,name,email,source,ip,region,consent:true,createdAt:now,updatedAt:now};registry.signups.unshift(row);
    }
    registry.apps[app]={...(registry.apps[app]||definition),...definition,updatedAt:now};
    registry.updatedAt=now;await store.saveRegistry(account,registry);return{existing,row};
@@ -120,22 +132,19 @@ export function createSignupRouter({env=process.env,fetchImpl=globalThis.fetch}=
   res.type('html').send(`<!doctype html><meta charset="utf-8"><script>window.parent.postMessage(${safeScriptJson({type:'atlas-app-signup-result',...payload})},${safeScriptJson(targetOrigin)});<\/script>`);
  });
 
- async function verifyAdmin(req){
+ async function verifySignupViewer(req){
   const {current,verification}=await accountStorage.requestUser(req);
-  const config=current?.user_metadata?.atlas_admin,role=config?.roles?.[current.id];
-  if(!config||!role)throw Object.assign(new Error('Administrator required.'),{status:403});
-  const provided=clean(req.get('x-admin-password'),1000);
-  if(!provided)throw Object.assign(new Error('Admin password required.'),{status:401});
-  const hash=await scrypt(provided,config.passwordSalt);
-  if(hash!==config.passwordHash)throw Object.assign(new Error('Invalid admin password.'),{status:401});
-  return{current,role,verification};
+  const config=current?.user_metadata?.atlas_admin||{},role=config?.roles?.[current.id]||null;
+  const isMaster=String(config?.masterUserId||'')===String(current?.id||'')||role==='master_admin';
+  if(!isMaster)throw Object.assign(new Error('This signed-in account does not have access to app signups.'),{status:403});
+  return{current,role:role||'master_admin',verification};
  }
  router.get('/api/admin/signups',async(req,res)=>{
   try{
-   const admin=await verifyAdmin(req),account=await store.masterAccount(),registry=registryFor(account);
+   const admin=await verifySignupViewer(req),account=await store.masterAccount(),registry=registryFor(account);
    const apps=Object.values(registry.apps).map(app=>({...app,count:registry.signups.filter(item=>item.app_slug===app.slug).length}));
-   const signups=registry.signups.map(({id,app_slug,app_name,name,email,source,createdAt,updatedAt})=>({id,app_slug,app_name,name,email,source,createdAt,updatedAt}));
-   res.set('Cache-Control','no-store');return res.json({role:admin.role,sessionVerification:admin.verification,storage:'supabase-master-account-metadata',apps,signups,updatedAt:registry.updatedAt});
+   const signups=registry.signups.map(({id,app_slug,app_name,name,email,source,ip,region,createdAt,updatedAt})=>({id,app_slug,app_name,name,email,source,ip:ip||'',region:region||'',createdAt,updatedAt}));
+   res.set('Cache-Control','private, no-store, max-age=0');return res.json({role:admin.role,sessionVerification:admin.verification,storage:'supabase-master-account-metadata',apps,signups,updatedAt:registry.updatedAt});
   }catch(error){return res.status(error.status||500).json({error:error.message||'Could not load signups.'})}
  });
  return router;
