@@ -18,13 +18,14 @@ function fixture(){
  async function fakeFetch(url,opts={}){
   const uri=new URL(url),table=uri.pathname.split('/').pop(),m=opts.method||'GET',body=opts.body?JSON.parse(opts.body):{};
   const query=uri.searchParams,id=query.get('id')?.replace(/^eq\./,''),author=query.get('author_id')?.replace(/^eq\./,'');
+  const projected=row=>{const select=query.get('select');if(!select||select==='*')return row;return Object.fromEntries(select.split(',').filter(k=>Object.hasOwn(row,k)).map(k=>[k,row[k]]))};
   if(table==='movement_requests'){
-   if(m==='POST'){const row={...body,id:crypto.randomUUID(),status:'discussion',prayer_count:0,no_money_yes:0,no_money_no:0,no_money_unsure:0,amount_spent:0,beneficiaries_verified:0,created_at:new Date().toISOString()};rows.push(row);return json([row]);}
+   if(m==='POST'){const row={...body,id:crypto.randomUUID(),status:'discussion',prayer_count:0,no_money_yes:0,no_money_no:0,no_money_unsure:0,amount_spent:0,beneficiaries_verified:0,created_at:new Date().toISOString()};rows.push(row);return json([projected(row)]);}
    if(m==='PATCH'){const row=rows.find(x=>x.id===id&&(!author||x.author_id===author));if(!row)return json([]);
       if(body.status)history.push({previous_status:row.status,new_status:body.status});
-      Object.assign(row,body);return json([row]);}
+      Object.assign(row,body);return json([projected(row)]);}
    let selected=rows.filter(x=>(!id||x.id===id)&&(!author||x.author_id===author));
-   if(query.get('limit')==='0')selected=[];return json(selected);
+   if(query.get('limit')==='0')selected=[];return json(selected.map(projected));
   }
   if(table==='movement_ideas'){
    if(m==='POST'){const idea={id:crypto.randomUUID(),...body,created_at:new Date().toISOString()};ideas.push(idea);return json([idea]);}
