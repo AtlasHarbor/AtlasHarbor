@@ -20,7 +20,7 @@ export const minBeneficiaries = amount => amount > 0 ? Math.max(3,Math.ceil(3 * 
 const clip=(v,n=1000)=>String(v??'').trim().slice(0,n);
 const uuid=v=>/^[a-f0-9]{8}-[a-f0-9-]{27,40}$/i.test(String(v||''));
 const email=v=>!v||/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
-const publicRequestColumns='id,title,description,display_name,location_label,verse_ref,verse_url,how_help_others,repeatable_step,requested_amount,beneficiaries_target,status,prayer_count,amount_spent,beneficiaries_verified,outcome_summary,created_at';
+const publicRequestColumns='id,title,description,display_name,location_label,verse_ref,verse_url,how_help_others,repeatable_step,requested_amount,beneficiaries_target,status,prayer_count,no_money_yes,no_money_no,no_money_unsure,amount_spent,beneficiaries_verified,outcome_summary,created_at';
 const publicIdeaColumns='id,request_id,display_name,body,kind,created_at';
 export function validateMovementRequest(input={}){
  const title=clip(input.title,140),description=clip(input.description,3000),verse_ref=clip(input.verse_ref,48);
@@ -106,6 +106,26 @@ export function createMovementRouter({env=process.env,fetchImpl=globalThis.fetch
    const rows=await db('movement_requests?select=id,prayer_count&id=eq.'+req.params.id+'&limit=1');
    if(!rows?.length)return res.status(404).json({error:'Request not found.'});
    res.json({count:rows[0].prayer_count,added:Boolean(created?.length)});
+ }));
+ router.post('/requests/:id/votes',errors(async(req,res)=>{
+   throttle(req,'vote',30);
+   if(!uuid(req.params.id))return res.status(400).json({error:'Invalid request ID.'});
+   if(!visitorSalt||visitorSalt.length<24)throw Object.assign(new Error('Community voting is not configured.'),{status:503});
+   const visitorId=clip(req.body?.visitor_id,80),answer=clip(req.body?.answer,12);
+   if(!uuid(visitorId)||!['yes','no','unsure'].includes(answer))return res.status(400).json({error:'Invalid vote.'});
+   const visitor_digest=crypto.createHmac('sha256',visitorSalt).update(visitorId).digest('hex');
+   const created=await db('movement_votes?on_conflict=request_id,visitor_digest&select=request_id',{
+      method:'POST',headers:{Prefer:'resolution=ignore-duplicates,return=representation'},
+      body:JSON.stringify({request_id:req.params.id,visitor_digest,answer})});
+   const rows=await db('movement_requests?select=id,no_money_yes,no_money_no,no_money_unsure&id=eq.'+req.params.id+'&limit=1');
+   if(!rows?.length)return res.status(404).json({error:'Request not found.'});
+   res.json({counts:{yes:rows[0].no_money_yes,no:rows[0].no_money_no,unsure:rows[0].no_money_unsure},added:Boolean(created?.length)});
+ }));
+ router.get('/admin/requests/:id/history',errors(async(req,res)=>{
+   adminRequired(req);
+   if(!uuid(req.params.id))return res.status(400).json({error:'Invalid request ID.'});
+   const events=await db('movement_review_events?select=*&request_id=eq.'+req.params.id+'&order=created_at.asc&limit=200');
+   res.json({events});
  }));
  router.get('/admin/requests',errors(async(req,res)=>{
    adminRequired(req);
