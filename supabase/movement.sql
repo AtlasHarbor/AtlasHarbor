@@ -56,5 +56,6 @@ alter table public.movement_prayers enable row level security;
 revoke all on public.movement_requests,public.movement_ideas,public.movement_prayers from anon,authenticated;
 grant select,insert,update,delete on public.movement_requests,public.movement_ideas,public.movement_prayers to service_role;
 revoke all on function public.movement_increment_prayer_count() from public,anon,authenticated;
+grant execute on function public.movement_increment_prayer_count() to service_role;
 -- Service-only reads/writes, with public output allowlisted by the Atlas API.
 notify pgrst,'reload schema';
