@@ -1,0 +1,31 @@
+name: Verify Project Doesn't Work
+
+on:
+  push:
+    branches: [feature/project-doesnt-work]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/movement.js'
+      - 'src/problem-router.js'
+      - 'public/movement/**'
+      - 'supabase/movement.sql'
+      - 'test/movement*'
+      - '.github/workflows/movement-verify.yml'
+permissions:
+  contents: read
+jobs:
+  movement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Syntax validation
+        run: npm run check
+      - name: Isolated movement API, schema and business rules
+        run: node --test test/movement.test.js test/movement-api.test.js test/movement-schema.test.js
