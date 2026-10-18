@@ -141,7 +141,7 @@ export function createMovementRouter({env=process.env,fetchImpl=globalThis.fetch
      beneficiaries_verified=Number(req.body?.beneficiaries_verified||0);
    if(['approved','active','completed'].includes(status)&&!video_verified)return res.status(400).json({error:'A recorded Way Partners video review is required before money-related approval.'});
    if(!Number.isFinite(amount_spent)||amount_spent<0||!Number.isSafeInteger(beneficiaries_verified)||beneficiaries_verified<0)return res.status(400).json({error:'Invalid actual costs or people helped.'});
-   if((status==='active'||status==='completed')&&amount_spent>0&&beneficiaries_verified<minBeneficiaries(amount_spent))return res.status(400).json({error:'Reported beneficiaries do not meet the three-per-$100 standard.'});
+   if(status==='completed'&&amount_spent>0&&beneficiaries_verified<minBeneficiaries(amount_spent))return res.status(400).json({error:'Reported beneficiaries do not meet the three-per-$100 standard.'});
    const payload={status,video_verified,amount_spent,beneficiaries_verified,decision_note:clip(req.body?.decision_note,1800),
      outcome_summary:clip(req.body?.outcome_summary,2000),updated_at:new Date().toISOString()};
    const row=await db('movement_requests?id=eq.'+req.params.id+'&select='+publicRequestColumns,{
