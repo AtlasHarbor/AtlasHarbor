@@ -1,32 +1,44 @@
-# Project Doesn't Work — feature prototype
+# Project Doesn't Work — Atlas Harbor implementation
 
-This branch adds an independent public discussion and accountability service. No canonical Scripture changes, donations or payouts.
+## Purpose
+People helping people. Help can be a referral, service, shared resource, skill, time, useful action or an appropriate funded intervention. The outward-facing site does not lead with a money target.
 
-## Staged setup
-1. Deploy this Atlas branch to its own HTTPS staging URL.
-2. Verify the Atlas environment SUPABASE_URL and SUPABASE_SECRET_KEY are for the intended writable Supabase project.
-3. Apply supabase/movement.sql to that Supabase project. The existing startup migration checks site_admin only and DOES NOT automatically apply movement.sql.
-4. Set MOVEMENT_VISITOR_SALT to a private 24+ character random string and MOVEMENT_ADMIN_TOKEN to a separate secret.
-5. In the Way website's Netlify feature-branch preview environment, set ATLAS_HARBOR_API_ORIGIN to the actual Atlas staging HTTPS origin (no trailing path).
-6. Deploy the website feature branch and open /projects/doesnt-work/. Test its same-origin /projects/doesnt-work/api/health endpoint.
-7. Submit a request with a verified TWV verse, submit a no-money idea, pray twice in one browser, and verify a single count; repeat from another browser profile and verify another possible count. Verify public GET response omits contact_email and decision_note.
-8. Through a trusted operator client (never browser source), test the separate Atlas /api/movement/admin/requests route with x-movement-admin-token. The admin approval path cannot initiate payments.
+### What is implemented on this feature branch
+- Atlas-hosted public page: `/movement/`.
+- Public reads: `GET /api/movement/health`, `/verses`, `/requests`, `/requests/:id`.
+- Public participation: `POST /api/movement/requests/:id/prayers`, `/votes`. One count per browser-generated UUID per request; visitor IDs are HMAC-hashed on the server. These counts are *not* verified distinct people.
+- Atlas account actions: `POST /api/movement/requests`, `/requests/:id/ideas`; `GET /api/movement/mine`; `PATCH /api/movement/requests/:id` for the author's still-open draft.
+- Reviewer actions: `GET /api/movement/admin/requests`, `/admin/requests/:id/history`, `PATCH /admin/requests/:id`. These routes require a private operator token, and are never exposed through the Way Version Netlify relay.
+- Verified TWV verse-picker URLs. Faith is voluntary and is not an eligibility test.
+- No payment collection, PayPal transfer, wallet, balance, self-disbursement, or automatic grant approval. Funding, if added, remains separate and requires real Way Partners video vetting and regulated providers.
 
-## API
-GET /api/movement/health, /verses, /requests, /requests/:id.
-POST /api/movement/requests, /requests/:id/ideas, /requests/:id/prayers, /requests/:id/votes.
-GET /api/movement/admin/requests, GET /api/movement/admin/requests/:id/history and PATCH /api/movement/admin/requests/:id require private token and cannot be relayed through the public Netlify function.
+## Identity
+The existing Atlas Harbor sign-up route `POST /api/account/session/sign-up` immediately creates a usable session. When Supabase returns a new user without a session because email confirmation is enabled, the existing Atlas server confirms that newly created account and signs it in. No confirmation link is required before posting. **This creates account access, not proof that an email address or real-world identity has been verified.** Funding reviews require independent identity validation.
 
-## Data
-Browser → Netlify rewrite → movement-proxy serverless function → Atlas HTTPS API → server-only Supabase key → five RLS tables (movement_requests, movement_ideas, movement_prayers, movement_votes, movement_review_events). No browser Supabase secret, no metadata-workspace fallback, no fabricated sample posts.
+The new Movement frontend imports Atlas's existing `supabase-client.js` and reuses its sign-in / sign-up / session refresh functions. Sensitive Supabase service keys are never present in browser code. Posts and ideas get an `author_id` assigned server-side after validating the Atlas session. Anonymous posting is not enabled; anonymous viewing and low-friction prayer/vote counts are.
 
-## Principle
-Every $100 spent should empower at least three distinct people who can go on to help others. Zero-dollar solutions may help one or more people. The current conservative validation minimum for any positive amount is max(3, ceil(3 × amount / 100)); define fractional thresholds formally before launch.
+## Database
+Apply `supabase/movement.sql` to the actual Atlas production/staging Supabase project. There are five independent RLS-protected tables: `movement_requests`, `movement_ideas`, `movement_prayers`, `movement_votes`, `movement_review_events`. Account-metadata workspaces are not modified. The migration uses server-only data access and a separate review audit.
 
-## Important limits
-- The existing Atlas analysis workspaces are not the fundraising ledger.
-- The Supabase schema must be installed before the API will work.
-- Prayer de-duplication is per browser UUID in localStorage, hashed server-side and constrained in the database; browsers or profiles can still double-count people. A prayer count is not a verified count of real people or prayers.
-- Public posting uses lightweight rate limiting and validation; this is not sufficient anti-spam, moderation, safety screening, or bot protection for a major launch.
-- All monetary transfers, payment-provider checks, identity verification and mandatory Way Partners video interviews are manual, out of band. Nothing in the API moves funds.
-- Use Node test runner with npm test in the Atlas repo. Do browser and database verification only after staging is configured.
+The existing `AUTO_MIGRATE` startup logic only concerns `site_admin`; it does NOT install this Movement schema. Applying it to an unidentified database, or to the inactive Supabase project that was the only one visible to the connected account, would not establish that the live Atlas server uses it.
+
+## Live activation checklist
+1. Identify the actual Atlas Harbor production host/deployment provider and read its configured `SUPABASE_URL`; match that project's ID to an accessible writable Supabase project. Do not guess a URL or project.
+2. Apply the reviewed SQL migration `supabase/movement.sql` to that project; verify all five tables, RLS, triggers, and PostgREST service-role reads/writes.
+3. Configure server-only `MOVEMENT_VISITOR_SALT` (random, 24+ characters) and `MOVEMENT_ADMIN_TOKEN` (random, 32+ characters) on that host. The existing Atlas session and Supabase secrets must also be working. Never commit private values.
+4. Deploy the current Atlas feature branch or merge the vetted PR `#32` to the production deployment branch, depending on hosting provider. Verify `GET /api/movement/health` returns `ok: true` (the endpoint queries the database, not just an environment flag).
+5. Exercise the real signup → create → list → reply → pray twice from same browser → vote twice → owner edit → admin review → review-history read path. Confirm `contact_email` does not appear in public reads and requests without valid login cannot post.
+6. Test a rejected/failing project outcome, not only success. Verify nothing can initiate a real transfer.
+7. Put spam reporting, moderation and safe removal workflows in place before inviting the public at scale.
+
+## Way Version preview
+The Way website change remains on its separate feature branch. It keeps public browsing, prayers, and non-money feasibility voting possible through an allowlisted Netlify server relay. New posts, comments, and sign-in are directed to the ONE Atlas account experience, not to a duplicate cross-domain session.
+
+Configure **Netlify** `ATLAS_HARBOR_API_ORIGIN` with the Atlas HTTPS origin *when known*. The relay's `GET /projects/doesnt-work/api/link` provides the connected community URL. Netlify preview deploys should not assume a specific domain or leak Atlas server credentials.
+
+## Verification status (18 October 2026)
+- `npm run check`: passed in GitHub Actions on Movement branch.
+- Movement-specific Node tests (validation, HTTP mock PostgREST, SQL structure): passed in focused GitHub Actions workflow.
+- Full Atlas test suite: 20 failures on branch, the same 20 failures already observed on existing main (unrelated baseball, game and legacy contract tests); these are existing repository test debt, not grounds to claim a clean full suite.
+- Actual Supabase table migration/live hostname verification: **not completed**. The connected Supabase project available here reported **INACTIVE**, and its relationship to the live Atlas server was not established.
+- Therefore **no verified live end-to-end backend or payment integration**; do not state that it is production ready or deployed.
