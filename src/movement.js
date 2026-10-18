@@ -39,10 +39,10 @@ export function validateMovementRequest(input={}){
    display_name:clip(input.display_name,80)||'Community member',contact_email:contact_email||null,
    location_label:clip(input.location_label,100),requested_amount,beneficiaries_target};
 }
-export function createMovementRouter({env=process.env,fetchImpl=globalThis.fetch}={}){
+export function createMovementRouter({env=process.env,fetchImpl=globalThis.fetch,storage=null}={}){
  const router=express.Router(),base=String(env.SUPABASE_URL||'').replace(/\/$/,''),secret=supabaseSecretKey(env);
  const ready=Boolean(base&&secret),visitorSalt=env.MOVEMENT_VISITOR_SALT;
- const accountStore=createProblemSpaceStorage({env,fetchImpl});
+ const accountStore=storage||createProblemSpaceStorage({env,fetchImpl});
  const limiter=new Map();
  function noCache(res){res.set('Cache-Control','no-store');res.set('X-Content-Type-Options','nosniff')}
  function sameOrigin(req){const origin=String(req.get('origin')||'');if(origin){try{if(new URL(origin).host!==req.get('host'))throw Error('Cross-site write refused.')}catch{throw Object.assign(new Error('Cross-site write refused.'),{status:403})}}}
