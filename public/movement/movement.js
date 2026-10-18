@@ -65,6 +65,7 @@ async function load(){
   if(!health.ok)throw Error('The discussion service is not ready.');
   const data=await api('/requests');requests=data.requests||[];
   tell('#connection','Open for discussion. There are no automatic payouts or fundraising links.');render();
+  const deepLink=new URLSearchParams(location.search).get('request');if(/^[a-f0-9-]{36}$/i.test(deepLink||''))openThread(deepLink);
  }catch(e){tell('#connection','The community database is not ready: '+e.message,true);
   $('#requests').innerHTML='<div class="empty"><h3>Community service is unavailable.</h3><p>We cannot save conversations yet. Please return when Atlas Harbor storage has been configured.</p></div>';
  }
