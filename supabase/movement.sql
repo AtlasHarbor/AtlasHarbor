@@ -59,6 +59,13 @@ revoke all on function public.movement_increment_prayer_count() from public,anon
 grant execute on function public.movement_increment_prayer_count() to service_role;
 -- Service-only reads/writes, with public output allowlisted by the Atlas API.
 
+
+-- Authentication identity; all public drafts belong to an Atlas account.
+alter table public.movement_requests add column if not exists author_id uuid;
+alter table public.movement_ideas add column if not exists author_id uuid;
+create index if not exists movement_requests_author_idx on public.movement_requests(author_id,created_at desc);
+create index if not exists movement_ideas_author_idx on public.movement_ideas(author_id,created_at desc);
+
 -- Community preference: one anonymous-browser vote per need (not a binding grant ballot).
 alter table public.movement_requests add column if not exists no_money_yes integer not null default 0;
 alter table public.movement_requests add column if not exists no_money_no integer not null default 0;
@@ -71,7 +78,7 @@ create table if not exists public.movement_votes (
  primary key(request_id,visitor_digest)
 );
 create or replace function public.movement_increment_vote_count() returns trigger
-language plpgsql security invoker set search_path=public as $
+language plpgsql security invoker set search_path=public as $movement$
 begin
  update public.movement_requests set
   no_money_yes=no_money_yes+case when new.answer='yes' then 1 else 0 end,
@@ -79,7 +86,7 @@ begin
   no_money_unsure=no_money_unsure+case when new.answer='unsure' then 1 else 0 end
  where id=new.request_id;
  return new;
-end; $;
+end; $movement$;
 drop trigger if exists movement_vote_counter on public.movement_votes;
 create trigger movement_vote_counter after insert on public.movement_votes
 for each row execute function public.movement_increment_vote_count();
@@ -103,7 +110,7 @@ create table if not exists public.movement_review_events (
  created_at timestamptz not null default now()
 );
 create or replace function public.movement_record_review() returns trigger
-language plpgsql security invoker set search_path=public as $
+language plpgsql security invoker set search_path=public as $movement$
 begin
  if old.status is distinct from new.status
     or old.video_verified is distinct from new.video_verified
@@ -116,7 +123,7 @@ begin
    values(new.id,old.status,new.status,new.video_verified,new.amount_spent,new.beneficiaries_verified,new.outcome_summary,new.decision_note);
  end if;
  return new;
-end; $;
+end; $movement$;
 drop trigger if exists movement_review_audit on public.movement_requests;
 create trigger movement_review_audit after update on public.movement_requests
 for each row execute function public.movement_record_review();
