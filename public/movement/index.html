@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Project Doesn't Work — People helping people</title>
+<meta name="description" content="What if helping was something we figured out together? Share a need, offer a practical idea, or pray for someone.">
+<link rel="stylesheet" href="/movement/movement.css"><link rel="icon" href="/favicon.svg"></head>
+<body>
+<a class="skip" href="#community">Skip to the community</a>
+<header class="header"><div class="head-inner">
+<a class="brand" href="/movement/"><span class="brand-mark">↗</span><span>PROJECT<br>DOESN'T WORK</span></a>
+<nav aria-label="Site"><a href="#how">How it works</a><a href="#community">The community</a><a href="#way">What inspires us</a></nav>
+<div class="header-actions"><span class="account-state" id="accountState">Anyone can join</span><button id="accountButton" class="head-button" type="button">Join / sign in</button></div>
+</div></header>
+<main>
+<section class="hero"><div class="wrap hero-grid"><div>
+<div class="eyebrow"><span class="spark">✳</span> AN OPEN COMMUNITY FOR PRACTICAL GOOD</div>
+<h1>People helping<br><em>people.</em><br>It's that simple.</h1>
+<p class="lead">Have a problem? Put it here. Have an idea? Share it. Sometimes the best answer isn't money at all. We're here to figure out what makes a real difference—and helps someone pass it on.</p>
+<div class="buttons"><a class="button dark" href="#community">See what people need <span>↗</span></a><button class="button light" id="heroPost" type="button">Ask for help <span>+</span></button></div>
+<p class="quiet">Anywhere in the world. Any background, belief, or none. Everyone can help.</p>
+</div><aside class="hero-aside" aria-label="What this is about"><span class="little-label">A BETTER QUESTION</span><p>What would actually <em>help?</em></p><div class="aside-foot"><span>01 / listen</span><span>02 / think together</span><span>03 / do something useful</span></div></aside>
+</div></section>
+<div class="marquee"><span>START WITH PEOPLE</span><b>✳</b><span>GOOD IDEAS DON'T NEED A BUDGET</span><b>✳</b><span>DO SOMETHING THAT KEEPS HELPING</span></div>
+<section class="section" id="how"><div class="wrap"><div class="section-header"><div><span class="eyebrow">THE IDEA</span><h2>Less fundraising.<br>More figuring it out.</h2></div><p>Nothing gets better just because we made a nice page about it. The point is to get something useful going and see whether it truly helped.</p></div>
+<div class="principles"><article><span>01</span><h3>Tell us what's going on.</h3><p>Describe a real obstacle or an idea. No pitch deck required. Pick a Bible passage if one speaks to the situation.</p></article><article><span>02</span><h3>Let people think with you.</h3><p>Pray if you want to. Share knowledge, make an introduction, volunteer, or offer another approach. Ask whether money is even necessary.</p></article><article><span>03</span><h3>Turn a good idea into help.</h3><p>If a practical plan needs money, Way Partners verifies it with a video conversation first. We follow through, report what happened, and learn even when it fails.</p></article></div>
+</div></section>
+<section id="community" class="section community"><div class="wrap">
+<div class="section-header"><div><span class="eyebrow">REAL CONVERSATIONS</span><h2>What could we<br>help with?</h2></div><div class="community-aside"><p>A good suggestion can do more than a donation. Browse a need and get involved.</p><button class="button dark" id="communityPost" type="button">Start a conversation ↗</button></div></div>
+<div class="toolbar"><div class="tabs" role="group" aria-label="Filter discussions"><button class="on" data-filter="all">All requests</button><button data-filter="no-money">No-money ideas</button><button data-filter="funding">May need funding</button></div><span id="total">—</span></div>
+<p class="connection" id="connection" role="status">Connecting to Atlas Harbor…</p>
+<div class="requests" id="requests" aria-live="polite"></div>
+</div></section>
+<section class="section" id="way"><div class="wrap way-grid"><div><span class="eyebrow">WHERE THE IDEA COMES FROM</span><h2>Love isn't<br>just a word.</h2><p>We come at this through the wisdom of Scripture, especially the way Yeshua treated people: notice a real need, cross the usual boundaries, do the useful thing. This space belongs to everyone, not only people who read or believe the Bible.</p>
+<a class="way-link" href="https://thewayversion.com/the-way-version/" target="_blank" rel="noopener">Explore The Way Version ↗</a>
+</div><div class="verse-list"><a href="https://thewayversion.com/app/share/james-2-16" target="_blank" rel="noopener"><small>JAMES 2:16</small><strong>What good are kind words when someone still needs the basics?</strong><span>Read the passage ↗</span></a><a href="https://thewayversion.com/app/share/luke-10-37" target="_blank" rel="noopener"><small>LUKE 10:37</small><strong>“Go and do likewise.”</strong><span>Read the passage ↗</span></a><a href="https://thewayversion.com/app/share/ecclesiastes-4-10" target="_blank" rel="noopener"><small>ECCLESIASTES 4:10</small><strong>When someone falls, another can help them up.</strong><span>Read the passage ↗</span></a></div></div></section>
+</main>
+<footer><div class="wrap footer"><div><strong>PROJECT DOESN'T WORK</strong><p>Keep doing good. Keep asking if it worked.</p></div><div><a href="https://thewayversion.com/">The Way Version</a> <a href="/account">Atlas account</a></div><small>We're here to learn, not to promise results. No donation or payment processing is enabled. Prayer counts reflect clicks, not verified individual prayers.</small></div></footer>
+<dialog id="authDialog" class="modal"><div class="modal-top"><h2>Join the conversation.</h2><button type="button" class="x" data-close="authDialog" aria-label="Close">×</button></div><p>Sign up and start posting right away. No email confirmation step.</p>
+<form id="authForm" class="form"><label>Email<input id="authEmail" type="email" autocomplete="email" required></label><label>Password<input id="authPassword" type="password" minlength="6" autocomplete="new-password" required></label>
+<div class="form-actions"><button type="submit" class="button dark" name="action" value="signup">Create account</button><button type="submit" class="button light" name="action" value="signin">Sign in instead</button></div><p id="authFeedback" role="status"></p></form></dialog>
+<dialog id="postDialog" class="modal wide"><div class="modal-top"><h2>Tell us what could help.</h2><button type="button" class="x" data-close="postDialog" aria-label="Close">×</button></div><p>Keep it real. Tell people what the obstacle is, and what might become possible if it's solved. Funding isn't automatic.</p>
+<form id="postForm" class="form">
+<label>A short title<input name="title" minlength="8" maxlength="140" required placeholder="e.g. Three neighbors want to repair wheelchairs"></label>
+<label>What's happening?<textarea name="description" rows="4" minlength="30" maxlength="3000" required placeholder="Tell the story without sharing anyone's private information."></textarea></label>
+<label>How could this help you or someone else help people?<textarea name="how_help_others" rows="3" minlength="25" maxlength="1500" required placeholder="What might you be able to do for others?"></textarea></label>
+<label>What could keep going afterward?<textarea name="repeatable_step" rows="2" minlength="15" maxlength="1000" required placeholder="A skill, shared tool, connection, ongoing service…"></textarea></label>
+<label>Choose a passage to reflect on<select name="verse_ref" id="versePicker" required><option value="">See ideas from The Way Version</option></select></label><div class="scripture-hint" id="verseHint">A reference is an invitation to reflect, not a test of belief.</div>
+<div class="form-row"><label>Display name<input name="display_name" maxlength="80" placeholder="Your name or nickname"></label><label>Where? (optional)<input name="location_label" maxlength="100" placeholder="City, region, or anywhere"></label></div>
+<details><summary>Does the idea need money? (optional)</summary><p>Most conversations can begin without it. If you think funding would remove the obstacle, give an estimate and the number of people equipped.</p><div class="form-row"><label>Possible cost in USD<input name="requested_amount" type="number" min="0" step=".01" value="0"></label><label>People directly equipped<input name="beneficiaries_target" type="number" min="1" step="1" value="1"></label></div></details>
+<label>Private email for Way Partners follow-up (optional)<input name="contact_email" type="email" maxlength="160" autocomplete="email"></label>
+<label class="checkbox"><input type="checkbox" required><span>I have the right to share this story and won't publish private details about anyone else.</span></label>
+<button class="button dark submit" type="submit">Post for discussion ↗</button><p id="postFeedback" role="status"></p></form></dialog>
+<dialog id="threadDialog" class="modal wide"><div class="modal-top"><h2 id="threadTitle">Conversation</h2><button type="button" class="x" data-close="threadDialog" aria-label="Close">×</button></div><div id="thread"></div></dialog>
+<script type="module" src="/movement/movement.js"></script></body></html>
