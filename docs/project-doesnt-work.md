@@ -14,11 +14,11 @@ This branch adds an independent public discussion and accountability service. No
 
 ## API
 GET /api/movement/health, /verses, /requests, /requests/:id.
-POST /api/movement/requests, /requests/:id/ideas, /requests/:id/prayers.
-GET /api/movement/admin/requests and PATCH /api/movement/admin/requests/:id require private token and cannot be relayed through the public Netlify function.
+POST /api/movement/requests, /requests/:id/ideas, /requests/:id/prayers, /requests/:id/votes.
+GET /api/movement/admin/requests, GET /api/movement/admin/requests/:id/history and PATCH /api/movement/admin/requests/:id require private token and cannot be relayed through the public Netlify function.
 
 ## Data
-Browser → Netlify rewrite → movement-proxy serverless function → Atlas HTTPS API → server-only Supabase key → three RLS tables (movement_requests, movement_ideas, movement_prayers). No browser Supabase secret, no metadata-workspace fallback, no fabricated sample posts.
+Browser → Netlify rewrite → movement-proxy serverless function → Atlas HTTPS API → server-only Supabase key → five RLS tables (movement_requests, movement_ideas, movement_prayers, movement_votes, movement_review_events). No browser Supabase secret, no metadata-workspace fallback, no fabricated sample posts.
 
 ## Principle
 Every $100 spent should empower at least three distinct people who can go on to help others. Zero-dollar solutions may help one or more people. The current conservative validation minimum for any positive amount is max(3, ceil(3 × amount / 100)); define fractional thresholds formally before launch.
