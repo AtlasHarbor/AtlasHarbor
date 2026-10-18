@@ -1,6 +1,7 @@
 import express from 'express';
 import crypto from 'node:crypto';
 import {supabaseSecretKey,supabaseServiceHeaders} from './supabase-server-key.js';
+import {createProblemSpaceStorage} from './problem-space-storage.js';
 
 export const MOVEMENT_VERSES = Object.freeze({
  'Hebrews 10:24':'hebrews-10-24',
@@ -41,8 +42,11 @@ export function validateMovementRequest(input={}){
 export function createMovementRouter({env=process.env,fetchImpl=globalThis.fetch}={}){
  const router=express.Router(),base=String(env.SUPABASE_URL||'').replace(/\/$/,''),secret=supabaseSecretKey(env);
  const ready=Boolean(base&&secret),visitorSalt=env.MOVEMENT_VISITOR_SALT;
+ const accountStore=createProblemSpaceStorage({env,fetchImpl});
  const limiter=new Map();
- function noCache(res){res.set('Cache-Control','no-store')}
+ function noCache(res){res.set('Cache-Control','no-store');res.set('X-Content-Type-Options','nosniff')}
+ function sameOrigin(req){const origin=String(req.get('origin')||'');if(origin){try{if(new URL(origin).host!==req.get('host'))throw Error('Cross-site write refused.')}catch{throw Object.assign(new Error('Cross-site write refused.'),{status:403})}}}
+ async function signedIn(req){sameOrigin(req);const{current}=await accountStore.requestUser(req);if(!current?.id)throw Object.assign(new Error('Sign in to Atlas Harbor to post.'),{status:401});return current}
  function errors(fn){return async(req,res)=>{noCache(res);try{await fn(req,res)}catch(error){console.error('Movement:',error.message);res.status(error.status||503).json({error:error.status&&error.status<500?error.message:'Movement data is temporarily unavailable.'})}}}
  function throttle(req,category,limit=12){
    const address=req.ip||req.socket.remoteAddress||'unknown',now=Date.now(),key=category+':'+address;
@@ -55,16 +59,16 @@ export function createMovementRouter({env=process.env,fetchImpl=globalThis.fetch
  async function db(path,options={}){
    if(!ready)throw Object.assign(new Error('Movement database has not been configured.'),{status:503});
    const headers={...supabaseServiceHeaders(secret),...(options.headers||{})};
-   const response=await fetchImpl(base+'/rest/v1/'+path,{...options,headers});
+   const response=await fetchImpl(base+'/rest/v1/'+path,{...options,headers,signal:AbortSignal.timeout(8000)});
    const body=await response.text(),data=body?(()=>{try{return JSON.parse(body)}catch{return body}})():null;
-   if(!response.ok){const error=new Error(data?.message||'Database error');error.status=response.status;throw error}
+   if(!response.ok){const error=new Error(response.status===404?'Community tables are not installed.':(data?.message||'Database error'));error.status=response.status===404?503:response.status;throw error}
    return data;
  }
- const admin=req=>Boolean(env.MOVEMENT_ADMIN_TOKEN)&&crypto.timingSafeEqual(
+ const admin=req=>String(env.MOVEMENT_ADMIN_TOKEN||'').length>=32&&crypto.timingSafeEqual(
    Buffer.from(crypto.createHash('sha256').update(clip(req.get('x-movement-admin-token'),250)).digest()),
    Buffer.from(crypto.createHash('sha256').update(env.MOVEMENT_ADMIN_TOKEN).digest()));
  function adminRequired(req){if(!admin(req))throw Object.assign(new Error('Administrator authorization required.'),{status:403})}
- router.get('/health',errors(async(_req,res)=>res.json({ok:true,dbConfigured:ready,prayersConfigured:Boolean(visitorSalt),paymentsEnabled:false,mode:'community-discussion'})));
+ router.get('/health',errors(async(_req,res)=>{if(!ready||!visitorSalt||visitorSalt.length<24)return res.status(503).json({ok:false,dbConfigured:ready,prayersConfigured:Boolean(visitorSalt&&visitorSalt.length>=24),paymentsEnabled:false});await db('movement_requests?select=id&limit=0');res.json({ok:true,dbConfigured:true,prayersConfigured:true,accountsRequiredForPosts:true,paymentsEnabled:false,mode:'community-discussion'})}));
  router.get('/verses',errors(async(_req,res)=>res.json({verses:Object.entries(MOVEMENT_VERSES).map(([reference,slug])=>({reference,url:'https://thewayversion.com/app/share/'+slug}))})));
  router.get('/requests',errors(async(req,res)=>{
    const rows=await db('movement_requests?select='+publicRequestColumns+'&order=created_at.desc&limit=60');
@@ -81,16 +85,18 @@ export function createMovementRouter({env=process.env,fetchImpl=globalThis.fetch
  }));
  router.post('/requests',errors(async(req,res)=>{
    throttle(req,'request',4);
-   const row=validateMovementRequest(req.body);
+   const account=await signedIn(req);
+   const row={...validateMovementRequest(req.body),author_id:account.id};
    const created=await db('movement_requests?select='+publicRequestColumns,{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(row)});
    res.status(201).json({request:created?.[0]});
  }));
  router.post('/requests/:id/ideas',errors(async(req,res)=>{
    throttle(req,'idea',14);
+   const account=await signedIn(req);
    if(!uuid(req.params.id))return res.status(400).json({error:'Invalid request ID.'});
    const body=clip(req.body?.body,1500),kind=clip(req.body?.kind,30);
    if(body.length<12||!['no-money','community-action','possible-funding'].includes(kind))return res.status(400).json({error:'Add a specific, useful idea and select its type.'});
-   const created=await db('movement_ideas?select='+publicIdeaColumns,{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({request_id:req.params.id,display_name:clip(req.body?.display_name,80)||'Community member',body,kind})});
+   const created=await db('movement_ideas?select='+publicIdeaColumns,{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({request_id:req.params.id,author_id:account.id,display_name:clip(req.body?.display_name,80)||'Community member',body,kind})});
    res.status(201).json({idea:created?.[0]});
  }));
  router.post('/requests/:id/prayers',errors(async(req,res)=>{
@@ -121,6 +127,15 @@ export function createMovementRouter({env=process.env,fetchImpl=globalThis.fetch
    if(!rows?.length)return res.status(404).json({error:'Request not found.'});
    res.json({counts:{yes:rows[0].no_money_yes,no:rows[0].no_money_no,unsure:rows[0].no_money_unsure},added:Boolean(created?.length)});
  }));
+ router.get('/mine',errors(async(req,res)=>{const account=await signedIn(req);const rows=await db('movement_requests?select='+publicRequestColumns+'&author_id=eq.'+account.id+'&order=created_at.desc&limit=100');res.json({requests:rows})}));
+ router.patch('/requests/:id',errors(async(req,res)=>{const account=await signedIn(req);if(!uuid(req.params.id))return res.status(400).json({error:'Invalid request ID.'});
+   const owned=await db('movement_requests?select=id,status&id=eq.'+req.params.id+'&author_id=eq.'+account.id+'&limit=1');
+   if(!owned?.length)return res.status(404).json({error:'Your request was not found.'});
+   if(owned[0].status!=='discussion')return res.status(409).json({error:'This request is under review. Contact Way Partners to update it.'});
+   const row=validateMovementRequest(req.body);
+   const changed=await db('movement_requests?select='+publicRequestColumns+'&id=eq.'+req.params.id+'&author_id=eq.'+account.id,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({...row,updated_at:new Date().toISOString()})});
+   res.json({request:changed?.[0]});
+ }));
  router.get('/admin/requests/:id/history',errors(async(req,res)=>{
    adminRequired(req);
    if(!uuid(req.params.id))return res.status(400).json({error:'Invalid request ID.'});
@@ -141,7 +156,7 @@ export function createMovementRouter({env=process.env,fetchImpl=globalThis.fetch
      beneficiaries_verified=Number(req.body?.beneficiaries_verified||0);
    if(['approved','active','completed'].includes(status)&&!video_verified)return res.status(400).json({error:'A recorded Way Partners video review is required before money-related approval.'});
    if(!Number.isFinite(amount_spent)||amount_spent<0||!Number.isSafeInteger(beneficiaries_verified)||beneficiaries_verified<0)return res.status(400).json({error:'Invalid actual costs or people helped.'});
-   if(status==='completed'&&amount_spent>0&&beneficiaries_verified<minBeneficiaries(amount_spent))return res.status(400).json({error:'Reported beneficiaries do not meet the three-per-$100 standard.'});
+   // A project may be completed unsuccessfully. Never censor failed outcomes to meet a target.
    const payload={status,video_verified,amount_spent,beneficiaries_verified,decision_note:clip(req.body?.decision_note,1800),
      outcome_summary:clip(req.body?.outcome_summary,2000),updated_at:new Date().toISOString()};
    const row=await db('movement_requests?id=eq.'+req.params.id+'&select='+publicRequestColumns,{
